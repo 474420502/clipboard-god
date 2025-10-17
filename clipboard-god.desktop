@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Clipboard God
+Comment=A powerful clipboard manager built with Electron and React
+Exec=/home/eson/workspace/clipboard-god/node_modules/electron/dist/electron /home/eson/workspace/clipboard-god
+Icon=/home/eson/workspace/clipboard-god/assets/icon.png
+Type=Application
+Categories=Utility;
+Terminal=false
+StartupWMClass=clipboard-god
+Keywords=clipboard;manager;electron;

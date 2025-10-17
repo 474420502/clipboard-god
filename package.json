@@ -1,0 +1,32 @@
+{
+  "name": "clipboard-god",
+  "version": "1.0.0",
+  "description": "A powerful clipboard manager built with Electron and React",
+  "main": "main.js",
+  "keywords": [
+    "electron",
+    "react",
+    "clipboard",
+    "manager"
+  ],
+  "author": "Eson",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "electron-screenshots": "^0.5.27",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.2.5",
+    "@vitejs/plugin-react": "^4.2.0",
+    "electron": "^38.3.0",
+    "vite": "^5.0.0",
+    "vite-plugin-electron": "^0.28.0"
+  }
+}

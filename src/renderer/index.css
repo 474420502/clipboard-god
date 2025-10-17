@@ -1,0 +1,535 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.header {
+    background-color: #2c3e50;
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.toolbar button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 10px;
+    transition: all 0.2s ease;
+}
+
+.toolbar button:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.instructions {
+    background-color: #ecf0f1;
+    padding: 15px 20px;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.instructions strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.instructions ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.instructions li {
+    margin-bottom: 3px;
+}
+
+.test-section {
+    padding: 15px 20px;
+    border-bottom: 1px solid #ddd;
+    background-color: #fff;
+}
+
+.test-section button {
+    background-color: #9b59b6;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.test-section button:hover {
+    background-color: #8e44ad;
+}
+
+.search-box {
+    padding: 15px 20px;
+    background-color: white;
+    border-bottom: 1px solid #ddd;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+#searchInput {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#searchInput:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.history-list {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    max-height: calc(100vh - 250px);
+    overflow-y: auto;
+    animation: slideUpList 0.4s ease-out;
+}
+
+@keyframes slideUpList {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.history-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(5px);
+}
+
+.history-item.selected {
+    background-color: #e3f2fd;
+}
+
+.item-icon {
+    width: 36px;
+    height: 36px;
+    margin-right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+.history-item:hover .item-icon {
+    transform: scale(1.1);
+}
+
+.number {
+    /* 简单的数字标签，靠左一个小间距即可 */
+    position: relative;
+    margin-right: 2px;
+    color: #555;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1;
+}
+
+/* 保持兼容性：如果有两位或三位数，尺寸不必改变，仅让文本缩小一点 */
+.number.small { font-size: 12px; }
+.number.xsmall { font-size: 11px; }
+
+.text-icon { 
+    background-color: #3498db; 
+    color: white; 
+    padding: 2px; 
+    border-radius: 2px; 
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.image-icon { 
+    background-color: #2ecc71; 
+    color: white; 
+    padding: 2px; 
+    border-radius: 2px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.shortcut-hint {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: #e74c3c;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.item-content {
+    flex-grow: 1;
+    word-break: break-word;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 50px);
+    transition: all 0.2s;
+}
+
+.text-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.text-content .text-preview {
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.text-content.expanded .text-preview {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.expand-btn {
+    background: transparent;
+    border: none;
+    color: #3498db;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    margin-left: 8px;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+.expand-btn:hover {
+    transform: scale(1.2);
+}
+
+.history-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    display: block;
+    transition: transform 0.2s;
+}
+
+.history-thumb:hover {
+    transform: scale(1.05);
+}
+
+.custom-tooltip {
+    font-size: 13px;
+    line-height: 1.3;
+    animation: fadeIn 0.2s;
+}
+.custom-tooltip-copy {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    float: right;
+    transition: background-color 0.2s;
+}
+.custom-tooltip-copy:hover { 
+    background: #2980b9; 
+}
+
+/* Settings overlay / sidebar */
+.settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    display: flex;
+    justify-content: flex-end;
+    z-index: 3000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.settings-sidebar {
+    width: 320px;
+    max-width: 90%;
+    height: 100%;
+    background: #fff;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+.settings-header { 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    padding: 16px; 
+    border-bottom: 1px solid #eee; 
+}
+
+.settings-body { 
+    padding: 16px; 
+    overflow: auto; 
+    flex: 1; 
+}
+
+.settings-footer { 
+    padding: 12px; 
+    border-top: 1px solid #eee; 
+    text-align: right; 
+}
+
+.settings-close { 
+    background: transparent; 
+    border: none; 
+    font-size: 18px; 
+    cursor: pointer; 
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.settings-close:hover {
+    background-color: #f0f0f0;
+}
+
+.setting-row { 
+    margin-bottom: 12px; 
+}
+
+.small { 
+    color: #666; 
+    font-size: 12px; 
+    margin-top: 6px; 
+}
+
+.btn-primary { 
+    background: #3498db; 
+    color: white; 
+    border: none; 
+    padding: 8px 12px; 
+    border-radius: 4px; 
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-primary:hover { 
+    background: #2980b9; 
+}
+
+.image-content {
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #7f8c8d;
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* 截图选择器样式 */
+.screenshot-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.screenshot-panel {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 80%;
+    max-height: 80%;
+    overflow-y: auto;
+    animation: zoomIn 0.3s ease-out;
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.screenshot-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.screenshot-item {
+    cursor: pointer;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.screenshot-item:hover {
+    border-color: #3498db;
+    transform: translateY(-5px);
+}
+
+.screenshot-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.screenshot-buttons {
+    text-align: center;
+}
+
+.screenshot-buttons button {
+    margin: 0 5px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.screenshot-buttons .btn-primary {
+    background-color: #3498db;
+    color: white;
+}
+
+.screenshot-buttons .btn-primary:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+.screenshot-buttons .btn-secondary {
+    background-color: #95a5a6;
+    color: white;
+}
+
+.screenshot-buttons .btn-secondary:hover {
+    background-color: #7f8c8d;
+    transform: translateY(-2px);
+}
