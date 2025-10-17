@@ -1,60 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onPasteRequest }) {
+function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true }) {
   const [isAdvancedSearch, setIsAdvancedSearch] = useState(false);
   const [searchType, setSearchType] = useState('all'); // 'all', 'text', 'image'
   const [sortBy, setSortBy] = useState('time'); // 'time', 'length'
-  const [suggestedPaste, setSuggestedPaste] = useState(null); // { index, label }
+  const inputRef = useRef(null);
 
   const handleChange = (e) => {
     try {
       if (typeof setSearchTerm === 'function') {
-        const v = e.target.value;
-        setSearchTerm(v);
-
-        // detect numeric-only input (possibly with whitespace) and suggest default paste
-        const trimmed = v.trim();
-        if (/^\d+$/.test(trimmed)) {
-          // numeric input; compute index (convert '1'..'9' to 0..8). For multi-digit, show as number selection
-          const num = parseInt(trimmed, 10);
-          if (!Number.isNaN(num) && num > 0) {
-            // label like "Paste #N"; index is num-1
-            setSuggestedPaste({ index: num - 1, label: `Paste #${num}` });
-          } else {
-            setSuggestedPaste(null);
-          }
-        } else {
-          setSuggestedPaste(null);
-        }
+        setSearchTerm(e.target.value);
       } else {
         console.error('setSearchTerm is not a function');
       }
     } catch (error) {
       console.error('Failed to handle search term change:', error);
-    }
-  };
-
-  // handle Enter to trigger paste when suggestedPaste exists
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && suggestedPaste) {
-      // try to use parent callback first, otherwise try electronAPI directly
-      try {
-        if (typeof onPasteRequest === 'function') {
-          onPasteRequest(suggestedPaste.index);
-        } else if (window.electronAPI && typeof window.electronAPI.pasteItemByIndex === 'function') {
-          // some implementations may expose paste by index
-          window.electronAPI.pasteItemByIndex(suggestedPaste.index);
-        } else {
-          // fallback: send filtered index to main via pasteItem with index-only envelope
-          if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
-            window.electronAPI.pasteItem({ __index: suggestedPaste.index });
-          } else {
-            console.warn('No paste API available to execute suggested paste');
-          }
-        }
-      } catch (err) {
-        console.error('Failed to execute suggested paste:', err);
-      }
     }
   };
 
@@ -79,24 +39,39 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onPasteRequest
       });
     }
   };
+  // If not visible, don't render anything
+  useEffect(() => {
+    if (visible && inputRef.current) {
+      try {
+        inputRef.current.focus();
+        // put caret at end
+        const val = inputRef.current.value || '';
+        inputRef.current.setSelectionRange(val.length, val.length);
+      } catch (err) {
+        // ignore focus errors
+      }
+    }
+  }, [visible]);
+
+  if (!visible) return null;
 
   return (
     <div className="search-box">
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <input 
-          type="text" 
-          id="searchInput" 
-          placeholder="Search clipboard history..." 
+        <input
+          ref={inputRef}
+          type="text"
+          id="searchInput"
+          placeholder="Search clipboard history..."
           value={searchTerm || ''}
           onChange={handleChange}
-          onKeyDown={handleKeyDown}
           style={{ flex: 1 }}
         />
-        <button 
+        <button
           onClick={toggleAdvancedSearch}
-          style={{ 
-            background: 'transparent', 
-            border: '1px solid #ddd', 
+          style={{
+            background: 'transparent',
+            border: '1px solid #ddd',
             borderRadius: '4px',
             padding: '10px',
             cursor: 'pointer'
@@ -105,12 +80,12 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onPasteRequest
           ⚙️
         </button>
       </div>
-      
+
       {isAdvancedSearch && (
-        <div style={{ 
-          marginTop: '10px', 
-          padding: '10px', 
-          backgroundColor: '#f8f9fa', 
+        <div style={{
+          marginTop: '10px',
+          padding: '10px',
+          backgroundColor: '#f8f9fa',
           borderRadius: '4px',
           animation: 'fadeIn 0.3s ease-in'
         }}>
@@ -123,7 +98,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onPasteRequest
                 <option value="image">Image</option>
               </select>
             </div>
-            
+
             <div>
               <label style={{ marginRight: '5px' }}>Sort by:</label>
               <select value={sortBy} onChange={handleSortChange}>
@@ -131,8 +106,8 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onPasteRequest
                 <option value="length">Length</option>
               </select>
             </div>
-            
-            <button 
+
+            <button
               className="btn-primary"
               onClick={handleAdvancedSearch}
               style={{ marginLeft: 'auto' }}
@@ -140,33 +115,6 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onPasteRequest
               Apply
             </button>
           </div>
-        </div>
-      )}
-
-      {/* suggested default action when numeric input detected */}
-      {suggestedPaste && (
-        <div style={{ marginTop: '8px', color: '#666', fontSize: '13px' }}>
-          <span>{suggestedPaste.label}</span>
-          <button
-            onClick={() => {
-              try {
-                if (typeof onPasteRequest === 'function') {
-                  onPasteRequest(suggestedPaste.index);
-                } else if (window.electronAPI && typeof window.electronAPI.pasteItemByIndex === 'function') {
-                  window.electronAPI.pasteItemByIndex(suggestedPaste.index);
-                } else if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
-                  window.electronAPI.pasteItem({ __index: suggestedPaste.index });
-                } else {
-                  console.warn('No paste API available to execute suggested paste');
-                }
-              } catch (err) {
-                console.error('Failed to execute suggested paste:', err);
-              }
-            }}
-            style={{ marginLeft: '10px', padding: '4px 8px', cursor: 'pointer' }}
-          >
-            Paste
-          </button>
         </div>
       )}
     </div>

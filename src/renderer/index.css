@@ -20,7 +20,7 @@ html {
 }
 
 .search-box {
-    padding: 15px 20px;
+    padding: 2px 2px;
     background-color: white;
     border-bottom: 1px solid #ddd;
     animation: slideUp 0.3s ease-out;

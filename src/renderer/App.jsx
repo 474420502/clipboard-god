@@ -12,6 +12,7 @@ function App() {
     type: 'all',
     sortBy: 'time'
   });
+  const [searchVisible, setSearchVisible] = useState(false); // hidden by default
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
     previewLength: 120,
@@ -202,6 +203,72 @@ function App() {
     }
   }, [filteredHistory]);
 
+  // Global typing / search show handler
+  useEffect(() => {
+    const handler = (event) => {
+      // ignore when focus is on editable elements
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        return;
+      }
+
+      // ignore modifier combos
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      // ESC: hide search first, otherwise hide window
+      if (event.key === 'Escape') {
+        if (searchVisible) {
+          setSearchVisible(false);
+          setSearchTerm('');
+          event.preventDefault();
+        } else {
+          try {
+            window.electronAPI.hideWindow();
+          } catch (err) { }
+        }
+        return;
+      }
+
+      // Printable single-character keys
+      if (event.key && event.key.length === 1) {
+        // If it's a digit 1-9, treat as quick-paste and do not open search
+        if (event.key >= '1' && event.key <= '9') {
+          const index = parseInt(event.key, 10) - 1;
+          if (filteredHistory[index]) {
+            try {
+              window.electronAPI.pasteItem(filteredHistory[index]);
+            } catch (error) {
+              console.error('Failed to paste item:', error);
+            }
+            event.preventDefault();
+          }
+          return;
+        }
+
+        // Otherwise show the search and append the typed character
+        setSearchVisible(true);
+        setSearchTerm((prev) => (prev || '') + event.key);
+
+        // focus the input after DOM updates
+        setTimeout(() => {
+          const el = document.getElementById('searchInput');
+          if (el) {
+            try {
+              el.focus();
+              const val = el.value || '';
+              el.setSelectionRange(val.length, val.length);
+            } catch (err) { }
+          }
+        }, 0);
+
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [filteredHistory, searchVisible]);
+
   const handleScreenshot = () => {
     try {
       window.electronAPI.startScreenshot();
@@ -226,32 +293,23 @@ function App() {
     setSearchOptions(options);
   };
 
-  // Paste request by index (from SearchBar suggested paste)
-  const handlePasteRequest = (index) => {
-    // index is relative to the filteredHistory displayed
-    if (index >= 0 && filteredHistory && filteredHistory[index]) {
-      try {
-        window.electronAPI.pasteItem(filteredHistory[index]);
-      } catch (error) {
-        console.error('Failed to paste item from paste request:', error);
-      }
-    } else {
-      console.warn('Paste request index out of range:', index);
-    }
-  };
-
   return (
     <div className="app-container">
       <SearchBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        visible={searchVisible}
         onAdvancedSearch={handleAdvancedSearch}
-        onPasteRequest={handlePasteRequest}
       />
       <HistoryList
         history={filteredHistory}
         previewLength={settings.previewLength}
         customTooltip={settings.customTooltip}
+      />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={handleCloseSettings}
+        onSave={handleSaveSettings}
       />
     </div>
   );
