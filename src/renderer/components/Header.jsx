@@ -26,12 +26,8 @@ function Header({ onScreenshot, onOpenSettings }) {
   };
 
   return (
-    <div className="header">
-      <h1>Clipboard God</h1>
-      <div className="toolbar">
-        <button id="screenshotBtn" onClick={handleScreenshot}>Screenshot</button>
-        <button id="settingsBtn" onClick={handleOpenSettings}>Settings</button>
-      </div>
+    <div >
+
     </div>
   );
 }

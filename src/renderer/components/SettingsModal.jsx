@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
 
 function SettingsModal({ isOpen, onClose, onSave }) {
+  const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
     previewLength: 120,
-    customTooltip: false,
-    globalShortcut: 'CommandOrControl+Alt+V'
+    useCustomTooltip: false,
+    globalShortcut: 'CommandOrControl+Alt+V',
+    screenshotShortcut: 'CommandOrControl+Shift+S',
+    theme: 'light'
   });
+
+  const tabs = [
+    { id: 'general', label: '通用', icon: '⚙️' },
+    { id: 'appearance', label: '外观', icon: '🎨' },
+    { id: 'shortcuts', label: '快捷键', icon: '⌨️' }
+  ];
 
   // 从主进程获取设置
   useEffect(() => {
@@ -15,8 +24,10 @@ function SettingsModal({ isOpen, onClose, onSave }) {
           if (savedSettings) {
             setSettings({
               previewLength: savedSettings.previewLength || 120,
-              customTooltip: savedSettings.customTooltip || false,
-              globalShortcut: savedSettings.globalShortcut || 'CommandOrControl+Alt+V'
+              useCustomTooltip: savedSettings.useCustomTooltip || false,
+              globalShortcut: savedSettings.globalShortcut || 'CommandOrControl+Alt+V',
+              screenshotShortcut: savedSettings.screenshotShortcut || 'CommandOrControl+Shift+S',
+              theme: savedSettings.theme || 'light'
             });
           }
         })
@@ -74,7 +85,7 @@ function SettingsModal({ isOpen, onClose, onSave }) {
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <aside
+      <div
         className="settings-sidebar"
         role="dialog"
         aria-modal="true"
@@ -82,7 +93,7 @@ function SettingsModal({ isOpen, onClose, onSave }) {
         onClick={(e) => e.stopPropagation()} // 防止点击模态框内部时关闭
       >
         <header className="settings-header">
-          <h3 id="settingsTitle">Settings</h3>
+          <h3 id="settingsTitle">设置</h3>
           <button
             id="closeSettingsBtn"
             className="settings-close"
@@ -93,48 +104,97 @@ function SettingsModal({ isOpen, onClose, onSave }) {
           </button>
         </header>
         <div className="settings-body">
-          <div className="setting-row">
-            <label htmlFor="previewLengthInput">Preview length (characters)</label>
-            <input
-              id="previewLengthInput"
-              type="number"
-              min="20"
-              max="500"
-              value={settings.previewLength}
-              onChange={(e) => handleChange('previewLength', parseInt(e.target.value) || 120)}
-            />
-            <div className="small">Set how many characters to show in the list preview. Longer previews take more space.</div>
-          </div>
-
-          <div className="setting-row">
-            <label>
-              <input
-                id="customTooltipToggle"
-                type="checkbox"
-                checked={settings.customTooltip}
-                onChange={(e) => handleChange('customTooltip', e.target.checked)}
-              />
-              Use custom tooltip (hover to view & copy)
-            </label>
-            <div className="small">When enabled, hovering a text item shows a nicer tooltip with copy button.</div>
-          </div>
-
-          <div className="setting-row">
-            <label htmlFor="globalShortcutInput">Global shortcut</label>
-            <input
-              id="globalShortcutInput"
-              type="text"
-              value={settings.globalShortcut}
-              onChange={(e) => handleChange('globalShortcut', e.target.value)}
-            />
-            <div className="small">Shortcut to show/hide the clipboard window. Use Ctrl+Alt+V (Windows/Linux) or Cmd+Alt+V (macOS). Common alternatives: Ctrl+Shift+V, F12</div>
+          <nav className="settings-nav">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span className="nav-icon">{tab.icon}</span>
+                <span className="nav-label">{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="settings-content">
+            {activeTab === 'general' && (
+              <div className="settings-section">
+                <h4>通用设置</h4>
+                <div className="setting-row">
+                  <label htmlFor="previewLengthInput">预览长度 (字符)</label>
+                  <input
+                    id="previewLengthInput"
+                    type="number"
+                    min="20"
+                    max="500"
+                    value={settings.previewLength}
+                    onChange={(e) => handleChange('previewLength', parseInt(e.target.value) || 120)}
+                  />
+                  <div className="small">设置列表预览中显示的字符数。较长的预览占用更多空间。</div>
+                </div>
+                <div className="setting-row">
+                  <label>
+                    <input
+                      id="customTooltipToggle"
+                      type="checkbox"
+                      checked={settings.useCustomTooltip}
+                      onChange={(e) => handleChange('useCustomTooltip', e.target.checked)}
+                    />
+                    使用自定义工具提示 (悬停查看并复制)
+                  </label>
+                  <div className="small">启用后，悬停文本项会显示更美观的工具提示及复制按钮。</div>
+                </div>
+              </div>
+            )}
+            {activeTab === 'appearance' && (
+              <div className="settings-section">
+                <h4>外观设置</h4>
+                <div className="setting-row">
+                  <label htmlFor="themeSelect">主题</label>
+                  <select
+                    id="themeSelect"
+                    value={settings.theme}
+                    onChange={(e) => handleChange('theme', e.target.value)}
+                  >
+                    <option value="light">浅色</option>
+                    <option value="dark">深色</option>
+                  </select>
+                  <div className="small">选择应用程序的主题风格。</div>
+                </div>
+              </div>
+            )}
+            {activeTab === 'shortcuts' && (
+              <div className="settings-section">
+                <h4>快捷键设置</h4>
+                <div className="setting-row">
+                  <label htmlFor="globalShortcutInput">全局快捷键</label>
+                  <input
+                    id="globalShortcutInput"
+                    type="text"
+                    value={settings.globalShortcut}
+                    onChange={(e) => handleChange('globalShortcut', e.target.value)}
+                  />
+                  <div className="small">显示/隐藏剪贴板窗口的快捷键。使用 Ctrl+Alt+V (Windows/Linux) 或 Cmd+Alt+V (macOS)。常见替代：Ctrl+Shift+V, F12</div>
+                </div>
+                <div className="setting-row">
+                  <label htmlFor="screenshotShortcutInput">截图快捷键</label>
+                  <input
+                    id="screenshotShortcutInput"
+                    type="text"
+                    value={settings.screenshotShortcut}
+                    onChange={(e) => handleChange('screenshotShortcut', e.target.value)}
+                  />
+                  <div className="small">触发截图功能的快捷键。使用 Ctrl+Shift+S (Windows/Linux) 或 Cmd+Shift+S (macOS)。</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <footer className="settings-footer">
-          <button id="saveSettingsBtn" className="btn-primary" onClick={handleSave}>Save</button>
-          <button id="cancelSettingsBtn" onClick={handleCancel}>Cancel</button>
+          <button id="saveSettingsBtn" className="btn-primary" onClick={handleSave}>保存</button>
+          <button id="cancelSettingsBtn" onClick={handleCancel}>取消</button>
         </footer>
-      </aside>
+      </div>
     </div>
   );
 }

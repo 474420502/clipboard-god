@@ -11,7 +11,11 @@ const DEFAULT_CONFIG = {
   // 粘贴快捷键
   pasteShortcut: 'numbers',
   // 全局快捷键
-  globalShortcut: 'CommandOrControl+Alt+V'
+  globalShortcut: 'CommandOrControl+Alt+V',
+  // 截图快捷键
+  screenshotShortcut: 'CommandOrControl+Shift+S',
+  // 主题
+  theme: 'light'
 };
 
 // 获取配置文件路径

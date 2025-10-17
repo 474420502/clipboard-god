@@ -8,32 +8,22 @@ const mainProcess = new MainProcess();
 function createWindow() {
     mainProcess.createWindow();
 
-    // 在开发模式下加载 Vite 开发服务器的 URL
+    // 加载文件
     if (process.env.VITE_DEV_SERVER_URL) {
         mainProcess.mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     } else {
-        // 生产模式下加载构建后的 HTML
         mainProcess.mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
     }
 }
 
 app.whenReady().then(() => {
-    createWindow();
+    mainProcess.initialize();
 
-    if (mainProcess.trayManager) {
-        mainProcess.trayManager.createTray(mainProcess.mainWindow);
-    }
-
-    if (mainProcess.registerGlobalShortcuts) {
-        mainProcess.registerGlobalShortcuts();
-    }
-
-    if (mainProcess.startClipboardMonitoring) {
-        mainProcess.startClipboardMonitoring();
-    }
-
-    if (mainProcess.setupIpcHandlers) {
-        mainProcess.setupIpcHandlers();
+    // 加载文件
+    if (process.env.VITE_DEV_SERVER_URL) {
+        mainProcess.mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    } else {
+        mainProcess.mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
     }
 });
 

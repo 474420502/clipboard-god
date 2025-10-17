@@ -1,4 +1,4 @@
-const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer } = require('electron');
+const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu } = require('electron');
 const path = require('path');
 const ClipboardManager = require('./clipboardManager');
 const TrayManager = require('./trayManager');
@@ -67,16 +67,16 @@ class MainProcess {
       }
     });
 
-    // 加载 UI 界面
-    this.mainWindow.loadFile('index.html');
-
     // 当用户点击关闭按钮时，隐藏窗口而不是退出应用
     this.mainWindow.on('close', (event) => {
       // 阻止默认的关闭行为
-      event.preventDefault();
-      // 隐藏窗口
-      this.mainWindow.hide();
-      safeConsole.log('主窗口已隐藏');
+      if (!this.trayManager.ClickQuit) {
+        event.preventDefault();
+        this.mainWindow.hide();
+        safeConsole.log('主窗口已隐藏 (close 事件)');
+      } else {
+        safeConsole.log('主窗口关闭，应用退出');
+      }
     });
 
     // 当窗口关闭时，取消引用窗口对象（仅在真正退出应用时发生）
@@ -117,6 +117,32 @@ class MainProcess {
 
     // 检查快捷键是否注册成功
     safeConsole.log('全局快捷键是否注册:', globalShortcut.isRegistered(shortcut));
+  }
+
+  // 注册截图快捷键
+  registerScreenshotShortcut() {
+    // 先注销已注册的截图快捷键
+    if (this._registeredScreenshotShortcut) {
+      globalShortcut.unregister(this._registeredScreenshotShortcut);
+    }
+
+    // 从配置中获取截图快捷键设置
+    const shortcut = Config.get('screenshotShortcut') || 'CommandOrControl+Shift+S';
+    this._registeredScreenshotShortcut = shortcut;
+
+    const ret = globalShortcut.register(shortcut, () => {
+      safeConsole.log(`截图快捷键 ${shortcut} 被触发`);
+      if (this.mainWindow && this.screenshotManager) {
+        this.screenshotManager.startScreenshot();
+      }
+    });
+
+    if (!ret) {
+      safeConsole.log('截图快捷键注册失败');
+    }
+
+    // 检查快捷键是否注册成功
+    safeConsole.log('截图快捷键是否注册:', globalShortcut.isRegistered(shortcut));
   }
 
   // 启动剪贴板监控
@@ -162,6 +188,11 @@ class MainProcess {
       // 如果快捷键设置发生变化，重新注册快捷键
       if (values.globalShortcut && values.globalShortcut !== Config.get('globalShortcut')) {
         this.registerGlobalShortcuts();
+      }
+
+      // 如果截图快捷键设置发生变化，重新注册截图快捷键
+      if (values.screenshotShortcut && values.screenshotShortcut !== Config.get('screenshotShortcut')) {
+        this.registerScreenshotShortcut();
       }
 
       safeConsole.log('设置保存结果:', result);
@@ -249,11 +280,67 @@ class MainProcess {
 
   // 初始化应用
   initialize() {
+
     this.createWindow();
     this.trayManager.createTray(this.mainWindow);
     this.registerGlobalShortcuts();
+    this.registerScreenshotShortcut();
     this.startClipboardMonitoring();
     this.setupIpcHandlers();
+    // 构建应用顶部菜单（将截图/设置从主窗口移到菜单）
+    this.buildAppMenu();
+  }
+
+  // 构建应用菜单并挂载行为
+  buildAppMenu() {
+    try {
+      const template = [
+        {
+          label: '功能',
+          submenu: [
+            {
+              label: '截图',
+              accelerator: 'CmdOrCtrl+Shift+S',
+              click: () => {
+                safeConsole.log('菜单: 截图 被点击');
+                // 如果主进程已有 screenshotManager，直接触发；否则让渲染进程处理
+                if (this.screenshotManager) {
+                  this.screenshotManager.startScreenshot();
+                } else if (this.mainWindow && this.mainWindow.webContents) {
+                  this.mainWindow.webContents.send('take-screenshot');
+                }
+              }
+            },
+            {
+              label: '设置',
+              accelerator: 'CmdOrCtrl+,',
+              click: () => {
+                safeConsole.log('菜单: 设置 被点击');
+                if (this.mainWindow && this.mainWindow.webContents) {
+                  this.mainWindow.webContents.send('open-settings');
+                }
+              }
+            },
+            {
+              label: 'Toggle Developer Tools',
+              accelerator: 'CmdOrCtrl+Shift+I',
+              click: () => {
+                safeConsole.log('菜单: Toggle Developer Tools 被点击');
+                if (this.mainWindow) {
+                  this.mainWindow.webContents.toggleDevTools();
+                }
+              }
+            }
+          ]
+        },
+      ];
+
+      const menu = Menu.buildFromTemplate(template);
+      Menu.setApplicationMenu(menu);
+      safeConsole.log('应用菜单已构建');
+    } catch (error) {
+      safeConsole.error('构建应用菜单失败:', error);
+    }
   }
 
   // 清理资源
@@ -261,6 +348,9 @@ class MainProcess {
     // 清理资源
     if (this._registeredShortcut) {
       globalShortcut.unregister(this._registeredShortcut);
+    }
+    if (this._registeredScreenshotShortcut) {
+      globalShortcut.unregister(this._registeredScreenshotShortcut);
     }
     globalShortcut.unregisterAll();
     this.clipboardManager.stopMonitoring();

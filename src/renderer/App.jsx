@@ -109,6 +109,32 @@ function App() {
     };
   }, []);
 
+  // 监听从菜单触发的动作（主进程发送）
+  useEffect(() => {
+    if (!window.electronAPI || !window.electronAPI.ipcRenderer) return;
+
+    const openSettingsHandler = () => setIsSettingsOpen(true);
+    const takeScreenshotHandler = () => {
+      try {
+        window.electronAPI.startScreenshot();
+      } catch (err) {
+        console.error('菜单触发截图失败:', err);
+      }
+    };
+
+    window.electronAPI.ipcRenderer.on('open-settings', openSettingsHandler);
+    window.electronAPI.ipcRenderer.on('take-screenshot', takeScreenshotHandler);
+
+    return () => {
+      try {
+        window.electronAPI.ipcRenderer.removeAllListeners('open-settings');
+        window.electronAPI.ipcRenderer.removeAllListeners('take-screenshot');
+      } catch (err) {
+        console.warn('清理菜单 ipc 监听器失败:', err);
+      }
+    };
+  }, []);
+
   // 高级搜索和过滤逻辑
   const applyFilters = useCallback(() => {
     let result = [...history];
@@ -202,17 +228,6 @@ function App() {
 
   return (
     <div className="app-container">
-      <Header
-        onScreenshot={handleScreenshot}
-        onOpenSettings={handleOpenSettings}
-      />
-      <div className="instructions">
-        <strong>使用说明:</strong>
-        <ul>
-          <li>按数字键 1-9 快速粘贴项目</li>
-          <li>使用 Ctrl+Shift+V 打开/关闭窗口</li>
-        </ul>
-      </div>
       <SearchBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -222,11 +237,6 @@ function App() {
         history={filteredHistory}
         previewLength={settings.previewLength}
         customTooltip={settings.customTooltip}
-      />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={handleCloseSettings}
-        onSave={handleSaveSettings}
       />
     </div>
   );
