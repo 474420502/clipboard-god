@@ -226,12 +226,27 @@ function App() {
     setSearchOptions(options);
   };
 
+  // Paste request by index (from SearchBar suggested paste)
+  const handlePasteRequest = (index) => {
+    // index is relative to the filteredHistory displayed
+    if (index >= 0 && filteredHistory && filteredHistory[index]) {
+      try {
+        window.electronAPI.pasteItem(filteredHistory[index]);
+      } catch (error) {
+        console.error('Failed to paste item from paste request:', error);
+      }
+    } else {
+      console.warn('Paste request index out of range:', index);
+    }
+  };
+
   return (
     <div className="app-container">
       <SearchBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         onAdvancedSearch={handleAdvancedSearch}
+        onPasteRequest={handlePasteRequest}
       />
       <HistoryList
         history={filteredHistory}
