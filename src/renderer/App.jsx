@@ -134,14 +134,20 @@ function App() {
   useEffect(() => {
     if (!window.electronAPI) return;
 
-    const settingsUpdatedHandler = (updated) => {
+    const settingsUpdatedHandler = (payload) => {
       try {
-        if (!updated || typeof updated !== 'object') return;
+        if (!payload || typeof payload !== 'object') return;
+
+        // Extract config from payload
+        const updated = payload.config || payload;
+
         // normalize payload
         const mapped = {};
         if (typeof updated.previewLength !== 'undefined') mapped.previewLength = updated.previewLength;
         if (typeof updated.customTooltip !== 'undefined') mapped.customTooltip = updated.customTooltip;
-        if (typeof updated.useNumberShortcuts !== 'undefined') mapped.useNumberShortcuts = updated.useNumberShortcuts;
+        if (typeof updated.useNumberShortcuts !== 'undefined') {
+          mapped.useNumberShortcuts = updated.useNumberShortcuts;
+        }
         if (typeof updated.globalShortcut !== 'undefined') mapped.globalShortcut = updated.globalShortcut;
         if (typeof updated.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = updated.screenshotShortcut;
         if (typeof updated.theme !== 'undefined') mapped.theme = updated.theme;
@@ -150,9 +156,7 @@ function App() {
       } catch (err) {
         console.error('Failed to apply settings-updated:', err);
       }
-    };
-
-    window.electronAPI.onSettingsUpdated(settingsUpdatedHandler);
+    }; window.electronAPI.onSettingsUpdated(settingsUpdatedHandler);
     return () => {
       try {
         window.electronAPI.cleanupListeners();
@@ -277,24 +281,8 @@ function App() {
 
       // Printable single-character keys
       if (event.key && event.key.length === 1) {
-        // If it's a digit 1-9 and number shortcuts are enabled, treat as quick-paste and do not open search
-        if (event.key >= '1' && event.key <= '9') {
-          if (settings.useNumberShortcuts) {
-            const index = parseInt(event.key, 10) - 1;
-            if (filteredHistory[index]) {
-              try {
-                window.electronAPI.pasteItem(filteredHistory[index]);
-              } catch (error) {
-                console.error('Failed to paste item:', error);
-              }
-              event.preventDefault();
-            }
-            return;
-          }
-          // if number shortcuts are disabled, fallthrough and open search with the digit
-        }
-
-        // Otherwise show the search and append the typed character
+        // Number keys are handled by useNumberShortcuts hook
+        // Just show the search and append the typed character
         setSearchVisible(true);
         setSearchTerm((prev) => (prev || '') + event.key);
 

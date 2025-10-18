@@ -44,3 +44,4 @@ app.on('will-quit', () => {
         mainProcess.cleanup();
     }
 });
+

@@ -11,7 +11,9 @@ export default function useNumberShortcuts(filteredHistory, enabled, pasteFn) {
     const historyRef = useRef(filteredHistory);
     const pasteRef = useRef(pasteFn);
 
-    useEffect(() => { enabledRef.current = enabled; }, [enabled]);
+    useEffect(() => {
+        enabledRef.current = enabled;
+    }, [enabled]);
     useEffect(() => { historyRef.current = filteredHistory; }, [filteredHistory]);
     useEffect(() => { pasteRef.current = pasteFn; }, [pasteFn]);
 
