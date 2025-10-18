@@ -183,6 +183,8 @@ function App() {
       setSearchTerm('');
       // Note: Keep current selectedIndex when window is reopened
       // setSelectedIndex(0); // Removed: don't reset selection on window reopen
+      // Re-enable keyboard navigation mode when window is reopened
+      setKeyboardNavigationMode(true);
       // also blur active element to ensure focus state is clean
       try {
         const active = document.activeElement;
