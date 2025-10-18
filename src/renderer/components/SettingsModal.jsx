@@ -4,7 +4,6 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(initialSettings || {
     previewLength: 120,
-    customTooltip: false,
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
@@ -23,7 +22,6 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     if (initialSettings && typeof initialSettings === 'object') {
       const mapped = {
         previewLength: initialSettings.previewLength,
-        customTooltip: initialSettings.customTooltip,
         useNumberShortcuts: typeof initialSettings.useNumberShortcuts !== 'undefined' ? initialSettings.useNumberShortcuts : true,
         globalShortcut: initialSettings.globalShortcut,
         screenshotShortcut: initialSettings.screenshotShortcut,
@@ -45,8 +43,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
       if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
         // 将 renderer 的字段映射回主进程期望的字段名
         const payload = {
-          ...settings,
-          customTooltip: settings.customTooltip
+          ...settings
         };
 
         window.electronAPI.setSettings(payload)
@@ -56,7 +53,6 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 // main returns config with main naming; map to renderer shape
                 const mapped = {
                   previewLength: res.config.previewLength,
-                  customTooltip: res.config.customTooltip,
                   useNumberShortcuts: typeof res.config.useNumberShortcuts !== 'undefined' ? res.config.useNumberShortcuts : res.config.useNumberShortcuts,
                   globalShortcut: res.config.globalShortcut,
                   screenshotShortcut: res.config.screenshotShortcut,
@@ -149,18 +145,6 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     onChange={(e) => handleChange('previewLength', parseInt(e.target.value) || 120)}
                   />
                   <div className="small">设置列表预览中显示的字符数。较长的预览占用更多空间。</div>
-                </div>
-                <div className="setting-row">
-                  <label>
-                    <input
-                      id="customTooltipToggle"
-                      type="checkbox"
-                      checked={settings.customTooltip}
-                      onChange={(e) => handleChange('customTooltip', e.target.checked)}
-                    />
-                    使用自定义工具提示 (悬停查看并复制)
-                  </label>
-                  <div className="small">启用后，悬停文本项会显示更美观的工具提示及复制按钮。</div>
                 </div>
                 <div className="setting-row">
                   <label>
