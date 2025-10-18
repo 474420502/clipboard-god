@@ -10,6 +10,8 @@ const DEFAULT_CONFIG = {
   useCustomTooltip: false,
   // 粘贴快捷键
   pasteShortcut: 'numbers',
+  // 是否使用数字快捷键
+  useNumberShortcuts: true,
   // 全局快捷键
   globalShortcut: 'CommandOrControl+Alt+V',
   // 截图快捷键
@@ -38,15 +40,25 @@ const getConfigPath = () => {
 class Config {
   constructor() {
     this.configPath = getConfigPath();
-    this.config = this.load();
+    // 启动时同步加载一份到内存（主进程启动时做一次）
+    this.config = this._loadSync();
+    // 用于串行化所有写入操作，避免并发写覆盖
+    this._writeLock = Promise.resolve();
   }
 
-  // 加载配置
-  load() {
+  // 同步加载（仅在启动或强制重读时使用）
+  _loadSync() {
     try {
       if (fs.existsSync(this.configPath)) {
+
         const data = fs.readFileSync(this.configPath, 'utf8');
-        return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+        if (!data) {
+          return { ...DEFAULT_CONFIG };
+        }
+        const jdata = JSON.parse(data);
+        if (jdata) {
+          return { ...DEFAULT_CONFIG, ...jdata };
+        }
       }
     } catch (error) {
       console.error('加载配置文件失败:', error);
@@ -54,36 +66,58 @@ class Config {
     return { ...DEFAULT_CONFIG };
   }
 
-  // 保存配置
-  save() {
+  // 原子写入：写入临时文件然后重命名
+  async _saveAtomic() {
+    const tmp = `${this.configPath}.tmp`;
+    const data = JSON.stringify(this.config, null, 2);
     try {
-      fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
+      await fs.promises.writeFile(tmp, data, 'utf8');
+      await fs.promises.rename(tmp, this.configPath);
       return true;
-    } catch (error) {
-      console.error('保存配置文件失败:', error);
-      return false;
+    } catch (err) {
+      console.error('保存配置文件失败:', err);
+      // 清理临时文件（忽略错误）
+      try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) { }
+      throw err;
     }
   }
 
-  // 获取配置项
+  // 将写入操作排队，确保顺序执行
+  _enqueueWrite(fn) {
+    const next = this._writeLock.then(() => fn());
+    // 捕获错误，防止链断裂
+    this._writeLock = next.catch(() => { });
+    return next;
+  }
+
+  // 获取配置项（同步，从内存读取）
   get(key) {
     return this.config[key];
   }
 
-  // 设置配置项
-  set(key, value) {
+  // 设置单个配置项（异步保存）。保留同步返回的旧API不强制，但推荐使用异步返回值
+  async set(key, value) {
     this.config[key] = value;
-    return this.save();
+    await this._enqueueWrite(() => this._saveAtomic());
+    return true;
   }
 
-  // 批量设置配置项
-  setMany(values) {
+  // 批量设置配置项并持久化，返回 Promise<{ success, config, error? }>
+  async setMany(values) {
     Object.assign(this.config, values);
-    return this.save();
+    try {
+      await this._enqueueWrite(() => this._saveAtomic());
+      return { success: true, config: { ...this.config } };
+    } catch (err) {
+      return { success: false, error: err.message, config: { ...this.config } };
+    }
   }
 
-  // 获取所有配置
-  getAll() {
+  // 获取所有配置（内存快照）。如果需要强制从磁盘读取，传 forceReload = true
+  getAll(forceReload = false) {
+    if (forceReload) {
+      this.config = this._loadSync();
+    }
     return { ...this.config };
   }
 }

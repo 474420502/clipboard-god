@@ -1,5 +1,6 @@
 const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const ClipboardManager = require('./clipboardManager');
 const TrayManager = require('./trayManager');
 const PasteHandler = require('./pasteHandler');
@@ -52,6 +53,10 @@ class MainProcess {
     this._registeredShortcut = null;
     // 当正在执行粘贴操作时，短暂抑制任何会显示主窗口的自动行为
     this._suppressShow = false;
+    // config file watcher state
+    this._configWatcher = null;
+    this._configWatchTimer = null;
+    this._lastConfigSnapshot = null;
   }
 
   // 创建主窗口
@@ -183,20 +188,46 @@ class MainProcess {
 
     ipcMain.handle('set-settings', async (event, values) => {
       safeConsole.log('保存设置:', values);
-      const result = Config.setMany(values);
 
-      // 如果快捷键设置发生变化，重新注册快捷键
-      if (values.globalShortcut && values.globalShortcut !== Config.get('globalShortcut')) {
-        this.registerGlobalShortcuts();
+      // 获取保存前的旧配置以便比较哪些设置发生了变化
+      const oldConfig = Config.getAll();
+
+      // 使用异步 API 持久化配置
+      const result = await Config.setMany(values); // { success, config }
+      const newConfig = result.config || Config.getAll();
+
+      // 计算变更的键
+      const changedKeys = Object.keys(values).filter(k => oldConfig[k] !== newConfig[k]);
+
+      // 根据变更执行必要的操作
+      try {
+        if (changedKeys.includes('globalShortcut')) {
+          // 直接调用实例方法，确保 this 上下文正确
+          this.registerGlobalShortcuts();
+        }
+        if (changedKeys.includes('screenshotShortcut')) {
+          this.registerScreenshotShortcut();
+        }
+      } catch (err) {
+        safeConsole.warn('重新注册快捷键时出错:', err);
       }
 
-      // 如果截图快捷键设置发生变化，重新注册截图快捷键
-      if (values.screenshotShortcut && values.screenshotShortcut !== Config.get('screenshotShortcut')) {
-        this.registerScreenshotShortcut();
+      // 将变更集与新配置一并发送到渲染进程，若保存失败则包含 error
+      try {
+        if (this.mainWindow && this.mainWindow.webContents) {
+          this.mainWindow.webContents.send('settings-updated', {
+            success: !!result.success,
+            changedKeys,
+            config: newConfig,
+            error: result.error || null
+          });
+        }
+      } catch (err) {
+        safeConsole.warn('Failed to send settings-updated to renderer:', err);
       }
 
-      safeConsole.log('设置保存结果:', result);
-      return result;
+      safeConsole.log('设置保存结果:', result.success, '变更键:', changedKeys, '新配置:', newConfig);
+      return result; // { success, config }
     });
 
     // 粘贴项目
@@ -234,7 +265,7 @@ class MainProcess {
         setTimeout(() => {
           this._suppressShow = false;
           if (this.mainWindow) this.mainWindow.__suppressShow = false;
-        }, 500);
+        }, 200);
 
         // 等待一小段时间以确保焦点切换回前一个应用
         setTimeout(() => {
@@ -280,6 +311,19 @@ class MainProcess {
 
   // 初始化应用
   initialize() {
+    // 在初始化时强制从磁盘读取最新配置，保证使用磁盘上的设置
+    try {
+      Config.getAll(true);
+    } catch (err) {
+      safeConsole.warn('在初始化时重新加载配置失败:', err);
+    }
+
+    // 保存当前快照以便后续检测外部变更
+    try {
+      this._lastConfigSnapshot = Config.getAll();
+    } catch (err) {
+      this._lastConfigSnapshot = null;
+    }
 
     this.createWindow();
     this.trayManager.createTray(this.mainWindow);
@@ -290,6 +334,8 @@ class MainProcess {
     // 构建应用顶部菜单（将截图/设置从主窗口移到菜单）
     this.buildAppMenu();
   }
+
+
 
   // 构建应用菜单并挂载行为
   buildAppMenu() {
@@ -355,6 +401,16 @@ class MainProcess {
     globalShortcut.unregisterAll();
     this.clipboardManager.stopMonitoring();
     this.trayManager.destroyTray();
+
+    // 关闭配置文件监控
+    if (this._configWatcher) {
+      try { this._configWatcher.close(); } catch (_) { }
+      this._configWatcher = null;
+    }
+    if (this._configWatchTimer) {
+      try { clearTimeout(this._configWatchTimer); } catch (_) { }
+      this._configWatchTimer = null;
+    }
 
     // 在退出应用时关闭主窗口
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {

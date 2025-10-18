@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function HistoryItem({ item, index, previewLength = 120, customTooltip = false }) {
+function HistoryItem({ item, index, previewLength = 120, customTooltip = false, showShortcuts = true }) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
@@ -49,22 +49,22 @@ function HistoryItem({ item, index, previewLength = 120, customTooltip = false }
 
   const isText = item.type === 'text';
   const isImage = item.type === 'image';
-  const shortcut = index < 9 ? <span className="shortcut-hint">{index + 1}</span> : null;
+  const shortcut = (showShortcuts && index < 9) ? <span className="shortcut-hint">{index + 1}</span> : null;
   const imagePath = item.image_thumb || item.image_path;
   const displayText = isText ? truncateText(item.content, previewLength) : '';
 
   return (
-    <li 
-      className="history-item" 
-      onClick={handlePaste} 
+    <li
+      className="history-item"
+      onClick={handlePaste}
       title={isText && !customTooltip ? item.content : (isText ? 'Click to paste text' : 'Click to paste image')}
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
       {customTooltip && showTooltip && isText && (
-        <div 
-          className="custom-tooltip" 
+        <div
+          className="custom-tooltip"
           style={{
             position: 'fixed',
             left: tooltipPosition.x + 10,
@@ -83,7 +83,7 @@ function HistoryItem({ item, index, previewLength = 120, customTooltip = false }
           <div>{item.content}</div>
         </div>
       )}
-      
+
       <div className="item-icon">
         {isText && <span className="text-icon">T</span>}
         {isImage && imagePath && <img src={`file://${imagePath}`} alt="thumbnail" className="history-thumb" onError={(e) => {

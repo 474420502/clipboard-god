@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import HistoryList from './components/HistoryList';
-import Header from './components/Header';
 import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
 
@@ -16,8 +15,35 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
     previewLength: 120,
-    customTooltip: false
+    customTooltip: false,
+    useNumberShortcuts: true,
+    globalShortcut: 'CommandOrControl+Alt+V',
+    screenshotShortcut: 'CommandOrControl+Shift+S',
+    theme: 'light'
   });
+
+  // 在 App 挂载时，从主进程加载设置并作为单一来源
+  useEffect(() => {
+    if (!window.electronAPI || typeof window.electronAPI.getSettings !== 'function') return;
+    window.electronAPI.getSettings()
+      .then((cfg) => {
+        if (cfg && typeof cfg === 'object') {
+          // 主进程使用 useCustomTooltip 命名，renderer 使用 customTooltip，为兼容性做映射
+          const mapped = {
+            previewLength: cfg.previewLength,
+            customTooltip: typeof cfg.useCustomTooltip !== 'undefined' ? cfg.useCustomTooltip : cfg.customTooltip,
+            useNumberShortcuts: typeof cfg.useNumberShortcuts !== 'undefined' ? cfg.useNumberShortcuts : cfg.useNumberShortcuts,
+            globalShortcut: cfg.globalShortcut,
+            screenshotShortcut: cfg.screenshotShortcut,
+            theme: cfg.theme
+          };
+          setSettings(prev => ({ ...prev, ...mapped }));
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load settings from main process:', err);
+      });
+  }, []);
 
   // 设置 IPC 监听器
   useEffect(() => {
@@ -130,8 +156,42 @@ function App() {
       try {
         window.electronAPI.ipcRenderer.removeAllListeners('open-settings');
         window.electronAPI.ipcRenderer.removeAllListeners('take-screenshot');
+        window.electronAPI.ipcRenderer.removeAllListeners('settings-updated');
       } catch (err) {
         console.warn('清理菜单 ipc 监听器失败:', err);
+      }
+    };
+  }, []);
+
+  // 监听主进程广播的设置变更（比如快捷键开关）并应用
+  useEffect(() => {
+    if (!window.electronAPI || !window.electronAPI.ipcRenderer) return;
+
+    const settingsUpdatedHandler = (_event, updated) => {
+      try {
+        if (!updated || typeof updated !== 'object') return;
+        // normalize payload: main process uses useCustomTooltip, renderer uses customTooltip
+        const mapped = {};
+        if (typeof updated.previewLength !== 'undefined') mapped.previewLength = updated.previewLength;
+        if (typeof updated.useCustomTooltip !== 'undefined') mapped.customTooltip = updated.useCustomTooltip;
+        if (typeof updated.customTooltip !== 'undefined') mapped.customTooltip = updated.customTooltip;
+        if (typeof updated.useNumberShortcuts !== 'undefined') mapped.useNumberShortcuts = updated.useNumberShortcuts;
+        if (typeof updated.globalShortcut !== 'undefined') mapped.globalShortcut = updated.globalShortcut;
+        if (typeof updated.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = updated.screenshotShortcut;
+        if (typeof updated.theme !== 'undefined') mapped.theme = updated.theme;
+
+        setSettings(prev => ({ ...prev, ...mapped }));
+      } catch (err) {
+        console.error('Failed to apply settings-updated:', err);
+      }
+    };
+
+    window.electronAPI.ipcRenderer.on('settings-updated', settingsUpdatedHandler);
+    return () => {
+      try {
+        window.electronAPI.ipcRenderer.removeAllListeners('settings-updated');
+      } catch (err) {
+        // ignored
       }
     };
   }, []);
@@ -191,7 +251,7 @@ function App() {
       return;
     }
 
-    if (event.key >= '1' && event.key <= '9') {
+    if (settings.useNumberShortcuts && event.key >= '1' && event.key <= '9') {
       const index = parseInt(event.key, 10) - 1;
       if (filteredHistory[index]) {
         try {
@@ -231,18 +291,21 @@ function App() {
 
       // Printable single-character keys
       if (event.key && event.key.length === 1) {
-        // If it's a digit 1-9, treat as quick-paste and do not open search
+        // If it's a digit 1-9 and number shortcuts are enabled, treat as quick-paste and do not open search
         if (event.key >= '1' && event.key <= '9') {
-          const index = parseInt(event.key, 10) - 1;
-          if (filteredHistory[index]) {
-            try {
-              window.electronAPI.pasteItem(filteredHistory[index]);
-            } catch (error) {
-              console.error('Failed to paste item:', error);
+          if (settings.useNumberShortcuts) {
+            const index = parseInt(event.key, 10) - 1;
+            if (filteredHistory[index]) {
+              try {
+                window.electronAPI.pasteItem(filteredHistory[index]);
+              } catch (error) {
+                console.error('Failed to paste item:', error);
+              }
+              event.preventDefault();
             }
-            event.preventDefault();
+            return;
           }
-          return;
+          // if number shortcuts are disabled, fallthrough and open search with the digit
         }
 
         // Otherwise show the search and append the typed character
@@ -286,7 +349,7 @@ function App() {
   };
 
   const handleSaveSettings = (newSettings) => {
-    setSettings(newSettings);
+    setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
   const handleAdvancedSearch = (options) => {
@@ -305,11 +368,20 @@ function App() {
         history={filteredHistory}
         previewLength={settings.previewLength}
         customTooltip={settings.customTooltip}
+        showShortcuts={!!settings.useNumberShortcuts}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
         onSave={handleSaveSettings}
+        initialSettings={{
+          previewLength: settings.previewLength,
+          useCustomTooltip: settings.customTooltip || settings.useCustomTooltip,
+          useNumberShortcuts: settings.useNumberShortcuts,
+          globalShortcut: settings.globalShortcut,
+          screenshotShortcut: settings.screenshotShortcut,
+          theme: settings.theme
+        }}
       />
     </div>
   );

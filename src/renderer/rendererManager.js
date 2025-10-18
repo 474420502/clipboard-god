@@ -10,6 +10,7 @@ class RendererManager {
     // preview length for text items (can be adjusted)
     this.previewLength = 120;
     this.useCustomTooltip = false;
+    this.useNumberShortcuts = true;
     this.pasteShortcut = 'numbers'; // 'numbers' or 'ctrl-quote'
 
     // settings UI elements (将在DOM加载完成后初始化)
@@ -17,6 +18,7 @@ class RendererManager {
     this.settingsOverlay = null;
     this.previewLengthInput = null;
     this.customTooltipToggle = null;
+    this.numberShortcutsToggle = null; // 添加数字快捷键开关元素
     this.saveSettingsBtn = null;
     this.closeSettingsBtn = null;
 
@@ -43,11 +45,15 @@ class RendererManager {
 
       // load settings
       ipcRenderer.invoke('get-settings').then(cfg => {
+        console.log('获取设置 ipcRenderer.invoke:', cfg);
         if (cfg && cfg.previewLength) this.previewLength = cfg.previewLength;
         if (cfg && typeof cfg.useCustomTooltip !== 'undefined') this.useCustomTooltip = cfg.useCustomTooltip;
+        if (cfg && typeof cfg.useNumberShortcuts !== 'undefined') this.useNumberShortcuts = cfg.useNumberShortcuts;
         if (cfg && cfg.pasteShortcut) this.pasteShortcut = cfg.pasteShortcut;
         if (this.previewLengthInput) this.previewLengthInput.value = this.previewLength;
         if (this.customTooltipToggle) this.customTooltipToggle.checked = this.useCustomTooltip;
+        // 确保数字快捷键设置也被正确加载
+        if (this.numberShortcutsToggle) this.numberShortcutsToggle.checked = this.useNumberShortcuts;
       }).catch(() => { });
     });
   }
@@ -57,6 +63,7 @@ class RendererManager {
     this.settingsOverlay = document.getElementById('settingsOverlay');
     this.previewLengthInput = document.getElementById('previewLengthInput');
     this.customTooltipToggle = document.getElementById('customTooltipToggle');
+    this.numberShortcutsToggle = document.getElementById('numberShortcutsToggle'); // 初始化数字快捷键开关元素
     this.saveSettingsBtn = document.getElementById('saveSettingsBtn');
     this.closeSettingsBtn = document.getElementById('closeSettingsBtn');
 
@@ -80,9 +87,18 @@ class RendererManager {
       v = Math.max(20, Math.min(500, v));
       this.previewLengthInput.value = v; // 更新输入框的值
       const useTooltip = !!this.customTooltipToggle.checked;
-      ipcRenderer.invoke('set-settings', { previewLength: v, useCustomTooltip: useTooltip }).then((newCfg) => {
-        this.previewLength = newCfg.previewLength || this.previewLength;
-        this.useCustomTooltip = !!newCfg.useCustomTooltip;
+      const useNumberShortcuts = !!this.numberShortcutsToggle.checked; // 从UI元素获取数字快捷键设置
+      ipcRenderer.invoke('set-settings', { 
+        previewLength: v, 
+        useCustomTooltip: useTooltip,
+        useNumberShortcuts: useNumberShortcuts
+      }).then((res) => {
+        if (res && res.success && res.config) {
+          const newCfg = res.config;
+          this.previewLength = newCfg.previewLength || this.previewLength;
+          this.useCustomTooltip = !!newCfg.useCustomTooltip;
+          this.useNumberShortcuts = !!newCfg.useNumberShortcuts;
+        }
         this.hideSettings();
         // re-render to apply preview length
         this.renderHistory(this.currentHistory);
@@ -150,7 +166,7 @@ class RendererManager {
         document.activeElement !== this.screenshotBtn) {
 
         // 根据设置的快捷键处理粘贴
-        if (this.pasteShortcut === 'numbers' && event.key >= '1' && event.key <= '9') {
+        if (this.pasteShortcut === 'numbers' && this.useNumberShortcuts && event.key >= '1' && event.key <= '9') {
           event.preventDefault();
           const index = parseInt(event.key) - 1;
           this.pasteItemByIndex(index);
@@ -186,6 +202,22 @@ class RendererManager {
       this.currentHistory = history;
       this.renderHistory(history);
     });
+
+    // 监听主进程设置变更
+    ipcRenderer.on('settings-updated', (_event, updated) => {
+      try {
+        if (typeof updated.useNumberShortcuts !== 'undefined') {
+          this.useNumberShortcuts = !!updated.useNumberShortcuts;
+        }
+        if (typeof updated.pasteShortcut !== 'undefined') {
+          this.pasteShortcut = updated.pasteShortcut;
+        }
+        // re-render to show/hide shortcuts hints
+        this.renderHistory(this.currentHistory);
+      } catch (err) {
+        console.error('Failed to apply settings-updated in rendererManager:', err);
+      }
+    });
   }
 
   // 渲染历史记录列表
@@ -201,8 +233,8 @@ class RendererManager {
       li.className = 'history-item';
       li.dataset.id = item.id;
 
-      // 添加数字键提示
-      const shortcutHint = index < 9 ? `<span class="shortcut-hint">${index + 1}</span>` : '';
+      // 添加数字键提示 (仅当启用了数字快捷并且索引小于9时显示)
+      const shortcutHint = (this.useNumberShortcuts && index < 9) ? `<span class="shortcut-hint">${index + 1}</span>` : '';
 
       let contentHTML = '';
       if (item.type === 'text') {
@@ -491,11 +523,15 @@ class RendererManager {
       v = Math.max(20, Math.min(500, v));
       previewLengthInput.value = v;
       const useTooltip = !!customTooltipToggle.checked;
+      const useNumberShortcuts = !!this.useNumberShortcuts;
       const pasteShortcut = pasteShortcutSelect.value;
-      ipcRenderer.invoke('set-settings', { previewLength: v, useCustomTooltip: useTooltip, pasteShortcut: pasteShortcut }).then((newCfg) => {
-        this.previewLength = newCfg.previewLength || this.previewLength;
-        this.useCustomTooltip = !!newCfg.useCustomTooltip;
-        this.pasteShortcut = newCfg.pasteShortcut || this.pasteShortcut;
+      ipcRenderer.invoke('set-settings', { previewLength: v, useCustomTooltip: useTooltip, pasteShortcut: pasteShortcut }).then((res) => {
+        if (res && res.success && res.config) {
+          const newCfg = res.config;
+          this.previewLength = newCfg.previewLength || this.previewLength;
+          this.useCustomTooltip = !!newCfg.useCustomTooltip;
+          this.pasteShortcut = newCfg.pasteShortcut || this.pasteShortcut;
+        }
         this.closeSettings();
         this.renderHistory(this.currentHistory);
       }).catch(err => {

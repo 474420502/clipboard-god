@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
-function SettingsModal({ isOpen, onClose, onSave }) {
+function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   const [activeTab, setActiveTab] = useState('general');
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState(initialSettings || {
     previewLength: 120,
     useCustomTooltip: false,
+    useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
     theme: 'light'
@@ -16,26 +17,22 @@ function SettingsModal({ isOpen, onClose, onSave }) {
     { id: 'shortcuts', label: '快捷键', icon: '⌨️' }
   ];
 
-  // 从主进程获取设置
+  // 当 modal 打开或 initialSettings 变化时，从 props 同步内部 state
   useEffect(() => {
-    if (isOpen && window.electronAPI) {
-      window.electronAPI.getSettings()
-        .then((savedSettings) => {
-          if (savedSettings) {
-            setSettings({
-              previewLength: savedSettings.previewLength || 120,
-              useCustomTooltip: savedSettings.useCustomTooltip || false,
-              globalShortcut: savedSettings.globalShortcut || 'CommandOrControl+Alt+V',
-              screenshotShortcut: savedSettings.screenshotShortcut || 'CommandOrControl+Shift+S',
-              theme: savedSettings.theme || 'light'
-            });
-          }
-        })
-        .catch((error) => {
-          console.error('Failed to load settings:', error);
-        });
+    if (!isOpen) return;
+    if (initialSettings && typeof initialSettings === 'object') {
+      // 将主进程的 useCustomTooltip 映射到 renderer 的 customTooltip
+      const mapped = {
+        previewLength: initialSettings.previewLength,
+        useCustomTooltip: typeof initialSettings.useCustomTooltip !== 'undefined' ? initialSettings.useCustomTooltip : initialSettings.customTooltip,
+        useNumberShortcuts: typeof initialSettings.useNumberShortcuts !== 'undefined' ? initialSettings.useNumberShortcuts : true,
+        globalShortcut: initialSettings.globalShortcut,
+        screenshotShortcut: initialSettings.screenshotShortcut,
+        theme: initialSettings.theme
+      };
+      setSettings(prev => ({ ...prev, ...mapped }));
     }
-  }, [isOpen]);
+  }, [isOpen, initialSettings]);
 
   const handleChange = (field, value) => {
     setSettings(prev => ({
@@ -47,10 +44,32 @@ function SettingsModal({ isOpen, onClose, onSave }) {
   const handleSave = () => {
     try {
       if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-        window.electronAPI.setSettings(settings)
-          .then(() => {
-            if (typeof onSave === 'function') {
-              onSave(settings);
+        // 将 renderer 的字段映射回主进程期望的字段名
+        const payload = {
+          ...settings,
+          useCustomTooltip: settings.useCustomTooltip // keep same name used by main
+        };
+
+        window.electronAPI.setSettings(payload)
+          .then((res) => {
+            if (res && res.success && res.config) {
+              if (typeof onSave === 'function') {
+                // main returns config with main naming; map to renderer shape
+                const mapped = {
+                  previewLength: res.config.previewLength,
+                  customTooltip: typeof res.config.useCustomTooltip !== 'undefined' ? res.config.useCustomTooltip : res.config.customTooltip,
+                  useNumberShortcuts: typeof res.config.useNumberShortcuts !== 'undefined' ? res.config.useNumberShortcuts : res.config.useNumberShortcuts,
+                  globalShortcut: res.config.globalShortcut,
+                  screenshotShortcut: res.config.screenshotShortcut,
+                  theme: res.config.theme
+                };
+                onSave(mapped);
+              }
+            } else {
+              // fallback: pass the local settings object
+              if (typeof onSave === 'function') {
+                onSave(settings);
+              }
             }
             onClose();
           })
@@ -143,6 +162,18 @@ function SettingsModal({ isOpen, onClose, onSave }) {
                     使用自定义工具提示 (悬停查看并复制)
                   </label>
                   <div className="small">启用后，悬停文本项会显示更美观的工具提示及复制按钮。</div>
+                </div>
+                <div className="setting-row">
+                  <label>
+                    <input
+                      id="numberShortcutsToggle"
+                      type="checkbox"
+                      checked={settings.useNumberShortcuts}
+                      onChange={(e) => handleChange('useNumberShortcuts', e.target.checked)}
+                    />
+                    启用数字快捷键 (1-9) 触发粘贴
+                  </label>
+                  <div className="small">关闭后按数字 1-9 不会触发快速粘贴，且列表中不会显示数字提示。</div>
                 </div>
               </div>
             )}

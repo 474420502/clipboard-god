@@ -25,7 +25,7 @@ echo -e "\n============================================================\n" >> "$
 #    -not -path "./node_modules/*" : 排除 node_modules 目录
 #    -not -path "./.vscode/*" : 排除 .vscode 目录
 #    -not -name "package-lock.json" : 排除 package-lock.json 文件
-find . -type f \
+find ./src -type f \
   -not -path "./.git/*" \
   -not -path "./node_modules/*" \
   -not -path "./.vscode/*" \
