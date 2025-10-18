@@ -66,13 +66,27 @@ function App() {
   // 应用主题到DOM
   useEffect(() => {
     const applyTheme = (theme) => {
-      if (theme === 'dark') {
-        document.body.classList.add('dark-theme');
-        document.body.classList.remove('light-theme');
-      } else {
-        document.body.classList.add('light-theme');
-        document.body.classList.remove('dark-theme');
-      }
+      // 移除所有主题类
+      document.body.classList.remove(
+        'light-theme', 'dark-theme', 'blue-theme', 'purple-theme',
+        'green-theme', 'orange-theme', 'pink-theme', 'gray-theme',
+        'eye-protection-theme', 'high-contrast-theme'
+      );
+
+      // 添加当前主题类
+      const themeClass = theme === 'light' ? 'light-theme' :
+                        theme === 'dark' ? 'dark-theme' :
+                        theme === 'blue' ? 'blue-theme' :
+                        theme === 'purple' ? 'purple-theme' :
+                        theme === 'green' ? 'green-theme' :
+                        theme === 'orange' ? 'orange-theme' :
+                        theme === 'pink' ? 'pink-theme' :
+                        theme === 'gray' ? 'gray-theme' :
+                        theme === 'eye-protection' ? 'eye-protection-theme' :
+                        theme === 'high-contrast' ? 'high-contrast-theme' :
+                        'light-theme'; // 默认浅色主题
+
+      document.body.classList.add(themeClass);
     };
 
     // 初始应用主题

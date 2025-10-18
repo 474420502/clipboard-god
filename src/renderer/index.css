@@ -8,7 +8,7 @@ body {
     overflow: hidden;
 }
 
-/* 浅色主题变量 */
+/* 经典浅色主题变量 */
 body.light-theme {
     --bg-color: #f0f0f0;
     --text-color: #333;
@@ -36,7 +36,7 @@ body.light-theme {
     --settings-button-active-text: white;
 }
 
-/* 深色主题变量 */
+/* 经典深色主题变量 */
 body.dark-theme {
     --bg-color: #1a1a1a;
     --text-color: #e0e0e0;
@@ -62,6 +62,230 @@ body.dark-theme {
     --settings-button-hover-bg: #444;
     --settings-button-active-bg: #4caf50;
     --settings-button-active-text: white;
+}
+
+/* 蓝色主题变量 */
+body.blue-theme {
+    --bg-color: #e3f2fd;
+    --text-color: #1565c0;
+    --search-bg: white;
+    --search-border: #bbdefb;
+    --search-focus-border: #1976d2;
+    --search-focus-shadow: rgba(25, 118, 210, 0.2);
+    --item-border: #e1f5fe;
+    --item-hover-bg: #f1f8ff;
+    --item-selected-bg: #1976d2;
+    --item-selected-text: white;
+    --item-selected-border: #0d47a1;
+    --item-selected-shadow: rgba(25, 118, 210, 0.3);
+    --settings-overlay-bg: rgba(21, 101, 192, 0.1);
+    --settings-bg: #f8f9ff;
+    --settings-border: #bbdefb;
+    --settings-text: #1565c0;
+    --settings-input-bg: white;
+    --settings-input-border: #bbdefb;
+    --settings-input-focus-border: #1976d2;
+    --settings-input-focus-shadow: rgba(25, 118, 210, 0.2);
+    --settings-button-bg: #e3f2fd;
+    --settings-button-hover-bg: #f1f8ff;
+    --settings-button-active-bg: #1976d2;
+    --settings-button-active-text: white;
+}
+
+/* 紫色主题变量 */
+body.purple-theme {
+    --bg-color: #f3e5f5;
+    --text-color: #6a1b9a;
+    --search-bg: white;
+    --search-border: #ce93d8;
+    --search-focus-border: #8e24aa;
+    --search-focus-shadow: rgba(142, 36, 170, 0.2);
+    --item-border: #f8f5f9;
+    --item-hover-bg: #faf7fb;
+    --item-selected-bg: #8e24aa;
+    --item-selected-text: white;
+    --item-selected-border: #4a148c;
+    --item-selected-shadow: rgba(142, 36, 170, 0.3);
+    --settings-overlay-bg: rgba(106, 27, 154, 0.1);
+    --settings-bg: #f9f5fb;
+    --settings-border: #ce93d8;
+    --settings-text: #6a1b9a;
+    --settings-input-bg: white;
+    --settings-input-border: #ce93d8;
+    --settings-input-focus-border: #8e24aa;
+    --settings-input-focus-shadow: rgba(142, 36, 170, 0.2);
+    --settings-button-bg: #f3e5f5;
+    --settings-button-hover-bg: #faf7fb;
+    --settings-button-active-bg: #8e24aa;
+    --settings-button-active-text: white;
+}
+
+/* 绿色主题变量 */
+body.green-theme {
+    --bg-color: #e8f5e8;
+    --text-color: #2e7d32;
+    --search-bg: white;
+    --search-border: #a5d6a7;
+    --search-focus-border: #388e3c;
+    --search-focus-shadow: rgba(56, 142, 60, 0.2);
+    --item-border: #f1f8e9;
+    --item-hover-bg: #f9fdf9;
+    --item-selected-bg: #388e3c;
+    --item-selected-text: white;
+    --item-selected-border: #1b5e20;
+    --item-selected-shadow: rgba(56, 142, 60, 0.3);
+    --settings-overlay-bg: rgba(46, 125, 50, 0.1);
+    --settings-bg: #f5fbf5;
+    --settings-border: #a5d6a7;
+    --settings-text: #2e7d32;
+    --settings-input-bg: white;
+    --settings-input-border: #a5d6a7;
+    --settings-input-focus-border: #388e3c;
+    --settings-input-focus-shadow: rgba(56, 142, 60, 0.2);
+    --settings-button-bg: #e8f5e8;
+    --settings-button-hover-bg: #f9fdf9;
+    --settings-button-active-bg: #388e3c;
+    --settings-button-active-text: white;
+}
+
+/* 橙色主题变量 */
+body.orange-theme {
+    --bg-color: #fff3e0;
+    --text-color: #e65100;
+    --search-bg: white;
+    --search-border: #ffcc80;
+    --search-focus-border: #f57c00;
+    --search-focus-shadow: rgba(245, 124, 0, 0.2);
+    --item-border: #fff8e1;
+    --item-hover-bg: #fffdf7;
+    --item-selected-bg: #f57c00;
+    --item-selected-text: white;
+    --item-selected-border: #bf360c;
+    --item-selected-shadow: rgba(245, 124, 0, 0.3);
+    --settings-overlay-bg: rgba(230, 81, 0, 0.1);
+    --settings-bg: #fff9f3;
+    --settings-border: #ffcc80;
+    --settings-text: #e65100;
+    --settings-input-bg: white;
+    --settings-input-border: #ffcc80;
+    --settings-input-focus-border: #f57c00;
+    --settings-input-focus-shadow: rgba(245, 124, 0, 0.2);
+    --settings-button-bg: #fff3e0;
+    --settings-button-hover-bg: #fffdf7;
+    --settings-button-active-bg: #f57c00;
+    --settings-button-active-text: white;
+}
+
+/* 粉色主题变量 */
+body.pink-theme {
+    --bg-color: #fce4ec;
+    --text-color: #ad1457;
+    --search-bg: white;
+    --search-border: #f8bbd9;
+    --search-focus-border: #c2185b;
+    --search-focus-shadow: rgba(194, 24, 91, 0.2);
+    --item-border: #fceff2;
+    --item-hover-bg: #fef7fa;
+    --item-selected-bg: #c2185b;
+    --item-selected-text: white;
+    --item-selected-border: #880e4f;
+    --item-selected-shadow: rgba(194, 24, 91, 0.3);
+    --settings-overlay-bg: rgba(173, 20, 87, 0.1);
+    --settings-bg: #fdf6f9;
+    --settings-border: #f8bbd9;
+    --settings-text: #ad1457;
+    --settings-input-bg: white;
+    --settings-input-border: #f8bbd9;
+    --settings-input-focus-border: #c2185b;
+    --settings-input-focus-shadow: rgba(194, 24, 91, 0.2);
+    --settings-button-bg: #fce4ec;
+    --settings-button-hover-bg: #fef7fa;
+    --settings-button-active-bg: #c2185b;
+    --settings-button-active-text: white;
+}
+
+/* 灰色主题变量 */
+body.gray-theme {
+    --bg-color: #f5f5f5;
+    --text-color: #424242;
+    --search-bg: white;
+    --search-border: #bdbdbd;
+    --search-focus-border: #757575;
+    --search-focus-shadow: rgba(117, 117, 117, 0.2);
+    --item-border: #eeeeee;
+    --item-hover-bg: #fafafa;
+    --item-selected-bg: #757575;
+    --item-selected-text: white;
+    --item-selected-border: #424242;
+    --item-selected-shadow: rgba(117, 117, 117, 0.3);
+    --settings-overlay-bg: rgba(66, 66, 66, 0.1);
+    --settings-bg: #fafafa;
+    --settings-border: #bdbdbd;
+    --settings-text: #424242;
+    --settings-input-bg: white;
+    --settings-input-border: #bdbdbd;
+    --settings-input-focus-border: #757575;
+    --settings-input-focus-shadow: rgba(117, 117, 117, 0.2);
+    --settings-button-bg: #f5f5f5;
+    --settings-button-hover-bg: #fafafa;
+    --settings-button-active-bg: #757575;
+    --settings-button-active-text: white;
+}
+
+/* 护眼模式主题变量 */
+body.eye-protection-theme {
+    --bg-color: #fef7e0;
+    --text-color: #5d4e37;
+    --search-bg: #fffef7;
+    --search-border: #f0e6d2;
+    --search-focus-border: #d4a574;
+    --search-focus-shadow: rgba(212, 165, 116, 0.2);
+    --item-border: #f7f0e3;
+    --item-hover-bg: #fdfbf7;
+    --item-selected-bg: #d4a574;
+    --item-selected-text: #5d4e37;
+    --item-selected-border: #b8956c;
+    --item-selected-shadow: rgba(212, 165, 116, 0.3);
+    --settings-overlay-bg: rgba(93, 78, 55, 0.1);
+    --settings-bg: #fefcf7;
+    --settings-border: #f0e6d2;
+    --settings-text: #5d4e37;
+    --settings-input-bg: #fffef7;
+    --settings-input-border: #f0e6d2;
+    --settings-input-focus-border: #d4a574;
+    --settings-input-focus-shadow: rgba(212, 165, 116, 0.2);
+    --settings-button-bg: #fef7e0;
+    --settings-button-hover-bg: #fdfbf7;
+    --settings-button-active-bg: #d4a574;
+    --settings-button-active-text: #5d4e37;
+}
+
+/* 高对比度主题变量 */
+body.high-contrast-theme {
+    --bg-color: #000000;
+    --text-color: #ffffff;
+    --search-bg: #000000;
+    --search-border: #ffffff;
+    --search-focus-border: #ffff00;
+    --search-focus-shadow: rgba(255, 255, 0, 0.5);
+    --item-border: #ffffff;
+    --item-hover-bg: #333333;
+    --item-selected-bg: #ffff00;
+    --item-selected-text: #000000;
+    --item-selected-border: #ffffff;
+    --item-selected-shadow: rgba(255, 255, 0, 0.5);
+    --settings-overlay-bg: rgba(0, 0, 0, 0.9);
+    --settings-bg: #000000;
+    --settings-border: #ffffff;
+    --settings-text: #ffffff;
+    --settings-input-bg: #000000;
+    --settings-input-border: #ffffff;
+    --settings-input-focus-border: #ffff00;
+    --settings-input-focus-shadow: rgba(255, 255, 0, 0.5);
+    --settings-button-bg: #333333;
+    --settings-button-hover-bg: #666666;
+    --settings-button-active-bg: #ffff00;
+    --settings-button-active-text: #000000;
 }
 
 html {

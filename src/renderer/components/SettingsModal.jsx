@@ -184,8 +184,16 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     value={settings.theme}
                     onChange={(e) => handleChange('theme', e.target.value)}
                   >
-                    <option value="light">浅色</option>
-                    <option value="dark">深色</option>
+                    <option value="light">经典浅色</option>
+                    <option value="dark">经典深色</option>
+                    <option value="blue">蓝色主题</option>
+                    <option value="purple">紫色主题</option>
+                    <option value="green">绿色主题</option>
+                    <option value="orange">橙色主题</option>
+                    <option value="pink">粉色主题</option>
+                    <option value="gray">灰色主题</option>
+                    <option value="eye-protection">护眼模式</option>
+                    <option value="high-contrast">高对比度</option>
                   </select>
                   <div className="small">选择应用程序的主题风格。</div>
                 </div>
