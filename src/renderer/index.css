@@ -622,35 +622,56 @@ html {
     background: #2980b9;
 }
 
-/* Settings overlay / sidebar */
+/* Settings overlay / modal */
 .settings-overlay {
     position: fixed;
     inset: 0;
     background: var(--settings-overlay-bg);
     display: flex;
-    justify-content: flex-end;
+    justify-content: center;
+    align-items: center;
     z-index: 3000;
     animation: fadeIn 0.3s ease-out;
+    padding: 20px;
 }
 
 .settings-sidebar {
-    width: 600px;
-    max-width: 90%;
-    height: 100%;
+    width: 800px;
+    max-width: 90vw;
+    max-height: 90vh;
+    height: auto;
     background: var(--settings-bg);
-    box-shadow: -8px 0 24px rgba(0,0,0,0.2);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     display: flex;
     flex-direction: column;
-    animation: slideInRight 0.3s ease-out;
+    animation: modalSlideIn 0.3s ease-out;
     color: var(--settings-text);
+    overflow: hidden;
 }
 
-@keyframes slideInRight {
+/* 响应式设计 */
+@media (max-width: 900px) {
+    .settings-sidebar {
+        width: 95vw;
+        max-height: 95vh;
+    }
+}
+
+@media (max-height: 700px) {
+    .settings-sidebar {
+        max-height: 95vh;
+    }
+}
+
+@keyframes modalSlideIn {
     from {
-        transform: translateX(100%);
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
     }
     to {
-        transform: translateX(0);
+        opacity: 1;
+        transform: scale(1) translateY(0);
     }
 }
 
@@ -677,10 +698,10 @@ html {
 }
 
 .settings-nav {
-    width: 150px;
+    width: 120px;
     border-right: 1px solid var(--settings-border);
     background-color: var(--settings-button-bg);
-    padding: 16px 0;
+    padding: 12px 0;
 }
 
 .nav-item {

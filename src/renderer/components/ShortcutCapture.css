@@ -5,8 +5,9 @@
 
 .shortcut-input-group {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .shortcut-display {
@@ -53,7 +54,8 @@
 
 .button-group {
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  justify-content: flex-start;
 }
 
 .edit-button {
