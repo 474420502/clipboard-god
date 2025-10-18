@@ -181,10 +181,8 @@ function App() {
     const handler = () => {
       setSearchVisible(false);
       setSearchTerm('');
-      // Reset to first item when window is reopened
-      if (history.length > 0) {
-        setSelectedIndex(0);
-      }
+      // Note: Keep current selectedIndex when window is reopened
+      // setSelectedIndex(0); // Removed: don't reset selection on window reopen
       // also blur active element to ensure focus state is clean
       try {
         const active = document.activeElement;
@@ -267,6 +265,11 @@ function App() {
   // Global typing / search show handler
   useEffect(() => {
     const handler = (event) => {
+      // Disable keyboard interaction when settings modal is open
+      if (isSettingsOpen) {
+        return;
+      }
+
       // Check if focus is on search input - allow arrow keys for navigation even when search has focus
       const active = document.activeElement;
       const isSearchInputFocused = active && active.id === 'searchInput';
@@ -333,7 +336,7 @@ function App() {
 
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [filteredHistory, searchVisible, keyboardNavigationMode, selectedIndex]);
+  }, [filteredHistory, searchVisible, keyboardNavigationMode, selectedIndex, isSettingsOpen]);
 
   const handleScreenshot = () => {
     try {
