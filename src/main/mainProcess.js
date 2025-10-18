@@ -42,8 +42,11 @@ class MainProcess {
   constructor() {
     this.mainWindow = null;
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
+    // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 100
+    const maxHistoryConfig = Config.get('maxHistoryItems');
     const maxHistoryEnv = process.env.CLIPBOARD_GOD_MAX_HISTORY ? parseInt(process.env.CLIPBOARD_GOD_MAX_HISTORY, 10) : undefined;
-    this.clipboardManager = new ClipboardManager({ maxHistory: maxHistoryEnv });
+    const maxHistory = maxHistoryConfig || maxHistoryEnv || 100;
+    this.clipboardManager = new ClipboardManager({ maxHistory });
     this.trayManager = new TrayManager();
     this.screenshotManager = null;
     this.clipboardCheckInterval = null;
@@ -220,6 +223,14 @@ class MainProcess {
         }
         if (changedKeys.includes('screenshotShortcut')) {
           this.registerScreenshotShortcut();
+        }
+        if (changedKeys.includes('maxHistoryItems')) {
+          // 更新剪贴板管理器的最大历史记录数
+          const newMaxHistory = newConfig.maxHistoryItems;
+          if (typeof newMaxHistory === 'number' && newMaxHistory > 0) {
+            this.clipboardManager.setMaxHistory(newMaxHistory);
+            safeConsole.log('更新最大历史记录数为:', newMaxHistory);
+          }
         }
       } catch (err) {
         safeConsole.warn('重新注册快捷键时出错:', err);

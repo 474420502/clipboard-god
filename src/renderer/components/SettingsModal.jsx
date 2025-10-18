@@ -4,6 +4,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(initialSettings || {
     previewLength: 120,
+    maxHistoryItems: 100,
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
@@ -22,6 +23,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     if (initialSettings && typeof initialSettings === 'object') {
       const mapped = {
         previewLength: initialSettings.previewLength,
+        maxHistoryItems: initialSettings.maxHistoryItems,
         useNumberShortcuts: typeof initialSettings.useNumberShortcuts !== 'undefined' ? initialSettings.useNumberShortcuts : true,
         globalShortcut: initialSettings.globalShortcut,
         screenshotShortcut: initialSettings.screenshotShortcut,
@@ -145,6 +147,18 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     onChange={(e) => handleChange('previewLength', parseInt(e.target.value) || 120)}
                   />
                   <div className="small">设置列表预览中显示的字符数。较长的预览占用更多空间。</div>
+                </div>
+                <div className="setting-row">
+                  <label htmlFor="maxHistoryItemsInput">历史记录数量上限</label>
+                  <input
+                    id="maxHistoryItemsInput"
+                    type="number"
+                    min="10"
+                    max="1000"
+                    value={settings.maxHistoryItems}
+                    onChange={(e) => handleChange('maxHistoryItems', parseInt(e.target.value) || 100)}
+                  />
+                  <div className="small">设置保存的历史记录最大条数。超过此数量时会自动删除最旧的记录。</div>
                 </div>
                 <div className="setting-row">
                   <label>
