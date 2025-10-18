@@ -4,7 +4,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(initialSettings || {
     previewLength: 120,
-    maxHistoryItems: 100,
+    maxHistoryItems: 500,
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
@@ -154,9 +154,9 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     id="maxHistoryItemsInput"
                     type="number"
                     min="10"
-                    max="1000"
+                    max="100000"
                     value={settings.maxHistoryItems}
-                    onChange={(e) => handleChange('maxHistoryItems', parseInt(e.target.value) || 100)}
+                    onChange={(e) => handleChange('maxHistoryItems', parseInt(e.target.value) || 500)}
                   />
                   <div className="small">设置保存的历史记录最大条数。超过此数量时会自动删除最旧的记录。</div>
                 </div>

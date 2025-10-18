@@ -6,8 +6,8 @@ class ClipboardManager {
     this.history = [];
     this.listeners = [];
 
-    // 最大历史条目数，默认 8000
-    this.maxHistory = typeof options.maxHistory === 'number' ? options.maxHistory : 8000;
+    // 最大历史条目数，默认 100000
+    this.maxHistory = typeof options.maxHistory === 'number' ? options.maxHistory : 100000;
 
     // 初始化存储后端：使用 SqliteStorage
     this.storageBackend = new SqliteStorage({ maxHistory: this.maxHistory });

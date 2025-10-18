@@ -42,10 +42,10 @@ class MainProcess {
   constructor() {
     this.mainWindow = null;
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
-    // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 100
+    // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 500
     const maxHistoryConfig = Config.get('maxHistoryItems');
     const maxHistoryEnv = process.env.CLIPBOARD_GOD_MAX_HISTORY ? parseInt(process.env.CLIPBOARD_GOD_MAX_HISTORY, 10) : undefined;
-    const maxHistory = maxHistoryConfig || maxHistoryEnv || 100;
+    const maxHistory = maxHistoryConfig || maxHistoryEnv || 500;
     this.clipboardManager = new ClipboardManager({ maxHistory });
     this.trayManager = new TrayManager();
     this.screenshotManager = null;

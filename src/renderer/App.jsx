@@ -32,7 +32,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
     previewLength: 120,
-    maxHistoryItems: 100,
+    maxHistoryItems: 500,
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',

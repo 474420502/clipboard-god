@@ -14,7 +14,7 @@ try {
 
 class SqliteStorage {
     constructor(options = {}) {
-        this.maxHistory = options.maxHistory || 8000;
+        this.maxHistory = options.maxHistory || 100000;
         const cacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
         this.baseDir = path.join(cacheBase, 'clipboard-god');
         this.dbPath = path.join(this.baseDir, 'db.sqlite');
