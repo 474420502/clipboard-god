@@ -32,7 +32,6 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
     previewLength: 120,
-    customTooltip: false,
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
@@ -49,7 +48,6 @@ function App() {
         if (cfg && typeof cfg === 'object') {
           const mapped = {};
           if (typeof cfg.previewLength !== 'undefined') mapped.previewLength = cfg.previewLength;
-          if (typeof cfg.customTooltip !== 'undefined') mapped.customTooltip = cfg.customTooltip;
           if (typeof cfg.useNumberShortcuts !== 'undefined') mapped.useNumberShortcuts = cfg.useNumberShortcuts;
           if (typeof cfg.globalShortcut !== 'undefined') mapped.globalShortcut = cfg.globalShortcut;
           if (typeof cfg.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = cfg.screenshotShortcut;
@@ -154,7 +152,6 @@ function App() {
         // normalize payload
         const mapped = {};
         if (typeof updated.previewLength !== 'undefined') mapped.previewLength = updated.previewLength;
-        if (typeof updated.customTooltip !== 'undefined') mapped.customTooltip = updated.customTooltip;
         if (typeof updated.useNumberShortcuts !== 'undefined') {
           mapped.useNumberShortcuts = updated.useNumberShortcuts;
         }
@@ -399,7 +396,6 @@ function App() {
       <HistoryList
         history={filteredHistory}
         previewLength={settings.previewLength}
-        customTooltip={settings.customTooltip}
         showShortcuts={!!settings.useNumberShortcuts}
         selectedIndex={selectedIndex}
         keyboardNavigationMode={keyboardNavigationMode}
@@ -410,7 +406,6 @@ function App() {
         onSave={handleSaveSettings}
         initialSettings={{
           previewLength: settings.previewLength,
-          customTooltip: settings.customTooltip,
           useNumberShortcuts: settings.useNumberShortcuts,
           globalShortcut: settings.globalShortcut,
           screenshotShortcut: settings.screenshotShortcut,
