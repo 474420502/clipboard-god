@@ -75,16 +75,16 @@ function App() {
 
       // 添加当前主题类
       const themeClass = theme === 'light' ? 'light-theme' :
-                        theme === 'dark' ? 'dark-theme' :
-                        theme === 'blue' ? 'blue-theme' :
-                        theme === 'purple' ? 'purple-theme' :
-                        theme === 'green' ? 'green-theme' :
-                        theme === 'orange' ? 'orange-theme' :
-                        theme === 'pink' ? 'pink-theme' :
-                        theme === 'gray' ? 'gray-theme' :
-                        theme === 'eye-protection' ? 'eye-protection-theme' :
+        theme === 'dark' ? 'dark-theme' :
+          theme === 'blue' ? 'blue-theme' :
+            theme === 'purple' ? 'purple-theme' :
+              theme === 'green' ? 'green-theme' :
+                theme === 'orange' ? 'orange-theme' :
+                  theme === 'pink' ? 'pink-theme' :
+                    theme === 'gray' ? 'gray-theme' :
+                      theme === 'eye-protection' ? 'eye-protection-theme' :
                         theme === 'high-contrast' ? 'high-contrast-theme' :
-                        'light-theme'; // 默认浅色主题
+                          'light-theme'; // 默认浅色主题
 
       document.body.classList.add(themeClass);
     };

@@ -2,6 +2,7 @@
   "name": "clipboard-god",
   "version": "1.0.0",
   "description": "A powerful clipboard manager built with Electron and React",
+  "homepage": "https://github.com/clipboard-god/clipboard-god",
   "main": "main.js",
   "keywords": [
     "electron",
@@ -9,12 +10,20 @@
     "clipboard",
     "manager"
   ],
-  "author": "Eson",
+  "author": {
+    "name": "Eson",
+    "email": "474420502@qq.com"
+  },
   "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:all": "npm run build && electron-builder --win --mac --linux"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
@@ -26,7 +35,64 @@
     "@electron/rebuild": "^3.2.5",
     "@vitejs/plugin-react": "^4.2.0",
     "electron": "^38.3.0",
+    "electron-builder": "^24.13.3",
     "vite": "^5.0.0",
     "vite-plugin-electron": "^0.28.0"
+  },
+  "build": {
+    "appId": "com.clipboardgod.app",
+    "productName": "Clipboard God",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "mainProcess.js",
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "maintainer": "Eson <474420502@qq.com>",
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }
