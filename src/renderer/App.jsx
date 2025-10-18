@@ -1,7 +1,22 @@
+// NOTE: This file's IPC and keyboard wiring was simplified to trust the
+// `preload`-exposed `electronAPI`. Defensive fallbacks that attempted to
+// require('electron') from the renderer were removed to reduce redundancy
+// and surface potential security/clarity issues.
+//
+// The legacy DOM-based manager at `src/renderer/rendererManager.js` still
+// exists and contains duplicated logic (IPC listeners, tooltip helpers and
+// keyboard handling). Review that file and remove or migrate it when the
+// React components are the single source of truth for UI rendering.
+//
+// Changes in this file:
+// - use `electronAPI.getHistory()` on mount and subscribe to `onUpdateHistory`/`onError`.
+// - use the preload's ipcRenderer wrapper only for the legacy 'history-data' channel.
+// - avoid overwriting settings keys with undefined when mapping payloads.
 import React, { useState, useEffect, useCallback } from 'react';
 import HistoryList from './components/HistoryList';
 import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
+import useNumberShortcuts from './hooks/useNumberShortcuts';
 
 function App() {
   const [history, setHistory] = useState([]);
@@ -25,18 +40,19 @@ function App() {
   // 在 App 挂载时，从主进程加载设置并作为单一来源
   useEffect(() => {
     if (!window.electronAPI || typeof window.electronAPI.getSettings !== 'function') return;
+
+    // Load settings from main process. Map keys only when present to avoid overwriting with undefined.
     window.electronAPI.getSettings()
       .then((cfg) => {
         if (cfg && typeof cfg === 'object') {
-          // 主进程使用 useCustomTooltip 命名，renderer 使用 customTooltip，为兼容性做映射
-          const mapped = {
-            previewLength: cfg.previewLength,
-            customTooltip: typeof cfg.useCustomTooltip !== 'undefined' ? cfg.useCustomTooltip : cfg.customTooltip,
-            useNumberShortcuts: typeof cfg.useNumberShortcuts !== 'undefined' ? cfg.useNumberShortcuts : cfg.useNumberShortcuts,
-            globalShortcut: cfg.globalShortcut,
-            screenshotShortcut: cfg.screenshotShortcut,
-            theme: cfg.theme
-          };
+          const mapped = {};
+          if (typeof cfg.previewLength !== 'undefined') mapped.previewLength = cfg.previewLength;
+          if (typeof cfg.customTooltip !== 'undefined') mapped.customTooltip = cfg.customTooltip;
+          if (typeof cfg.useNumberShortcuts !== 'undefined') mapped.useNumberShortcuts = cfg.useNumberShortcuts;
+          if (typeof cfg.globalShortcut !== 'undefined') mapped.globalShortcut = cfg.globalShortcut;
+          if (typeof cfg.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = cfg.screenshotShortcut;
+          if (typeof cfg.theme !== 'undefined') mapped.theme = cfg.theme;
+
           setSettings(prev => ({ ...prev, ...mapped }));
         }
       })
@@ -45,44 +61,26 @@ function App() {
       });
   }, []);
 
-  // 设置 IPC 监听器
+  // 设置 IPC 监听器（简化：使用 preload 暴露的 API，移除 require('electron') 的冗余 fallback）
   useEffect(() => {
-    // 确保 electronAPI 存在
     if (!window.electronAPI) {
       console.error('electronAPI not available');
       return;
     }
 
-    // ESC键监听器 - 隐藏窗口
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape' || event.keyCode === 27) {
-        console.log('ESC键被按下，隐藏窗口');
-        try {
-          window.electronAPI.hideWindow();
-        } catch (error) {
-          console.error('Failed to hide window:', error);
-        }
-      }
-    };
-
-    // 添加键盘事件监听器
-    document.addEventListener('keydown', handleKeyDown);
-
-    // 初始加载数据
+    // 初始加载数据（通过 preload -> 主进程触发 history-data 或 update-history）
     try {
       window.electronAPI.getHistory();
     } catch (error) {
       console.error('Failed to get history:', error);
     }
 
-    // 处理初始历史数据加载
-    const handleHistoryData = (initialHistory) => {
-      console.log('Received initial history data:', initialHistory);
-      setHistory(initialHistory);
+    const handleHistoryData = (_history) => {
+      // history-data carries the initial full history
+      setHistory(_history);
     };
 
     const handleUpdate = (updatedHistory) => {
-      console.log('Received history update:', updatedHistory);
       setHistory(updatedHistory);
     };
 
@@ -90,45 +88,23 @@ function App() {
       console.error('Received error from main process:', error);
     };
 
-    // 监听初始历史数据
-    const historyDataHandler = (_event, initialHistory) => {
-      handleHistoryData(initialHistory);
-    };
-
-    // 监听实时更新
+    // subscribe to updates / errors via preload wrappers
     window.electronAPI.onUpdateHistory(handleUpdate);
     window.electronAPI.onError(handleError);
 
-    // 监听初始历史数据事件
-    if (window.electronAPI && window.electronAPI.ipcRenderer) {
-      window.electronAPI.ipcRenderer.on('history-data', historyDataHandler);
-    } else {
-      // 备用方法：直接通过 ipcRenderer
-      try {
-        const { ipcRenderer } = require('electron');
-        ipcRenderer.on('history-data', historyDataHandler);
-      } catch (err) {
-        console.warn('Cannot access ipcRenderer directly:', err);
-      }
+    // preload exposes a thin ipcRenderer wrapper — use it for the legacy 'history-data' channel
+    if (window.electronAPI.ipcRenderer && typeof window.electronAPI.ipcRenderer.on === 'function') {
+      window.electronAPI.ipcRenderer.on('history-data', (_event, data) => handleHistoryData(data));
     }
 
-    // 组件卸载时清理监听器
     return () => {
-      // 移除键盘事件监听器
-      document.removeEventListener('keydown', handleKeyDown);
-
       try {
-        window.electronAPI.cleanupListeners();
-        // 清理初始历史数据监听器
-        if (window.electronAPI && window.electronAPI.ipcRenderer) {
+        // cleanup listeners registered via preload
+        if (window.electronAPI && typeof window.electronAPI.cleanupListeners === 'function') {
+          window.electronAPI.cleanupListeners();
+        }
+        if (window.electronAPI && window.electronAPI.ipcRenderer && typeof window.electronAPI.ipcRenderer.removeAllListeners === 'function') {
           window.electronAPI.ipcRenderer.removeAllListeners('history-data');
-        } else {
-          try {
-            const { ipcRenderer } = require('electron');
-            ipcRenderer.removeAllListeners('history-data');
-          } catch (err) {
-            console.warn('Cannot remove ipcRenderer listeners directly:', err);
-          }
         }
       } catch (error) {
         console.error('Failed to cleanup listeners:', error);
@@ -170,10 +146,9 @@ function App() {
     const settingsUpdatedHandler = (_event, updated) => {
       try {
         if (!updated || typeof updated !== 'object') return;
-        // normalize payload: main process uses useCustomTooltip, renderer uses customTooltip
+        // normalize payload
         const mapped = {};
         if (typeof updated.previewLength !== 'undefined') mapped.previewLength = updated.previewLength;
-        if (typeof updated.useCustomTooltip !== 'undefined') mapped.customTooltip = updated.useCustomTooltip;
         if (typeof updated.customTooltip !== 'undefined') mapped.customTooltip = updated.customTooltip;
         if (typeof updated.useNumberShortcuts !== 'undefined') mapped.useNumberShortcuts = updated.useNumberShortcuts;
         if (typeof updated.globalShortcut !== 'undefined') mapped.globalShortcut = updated.globalShortcut;
@@ -192,6 +167,35 @@ function App() {
         window.electronAPI.ipcRenderer.removeAllListeners('settings-updated');
       } catch (err) {
         // ignored
+      }
+    };
+  }, []);
+
+  // 当全局快捷键触发并打开窗口时，主进程会发送 'global-shortcut'.
+  // 每次收到该事件时我们应该清空搜索栏并隐藏它，确保不继承上次的数据。
+  useEffect(() => {
+    if (!window.electronAPI || !window.electronAPI.ipcRenderer) return;
+
+    const handler = () => {
+      setSearchVisible(false);
+      setSearchTerm('');
+      // also blur active element to ensure focus state is clean
+      try {
+        const active = document.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+          active.blur();
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    window.electronAPI.ipcRenderer.on('global-shortcut', handler);
+    return () => {
+      try {
+        window.electronAPI.ipcRenderer.removeAllListeners('global-shortcut');
+      } catch (err) {
+        // ignore
       }
     };
   }, []);
@@ -243,25 +247,16 @@ function App() {
     applyFilters();
   }, [applyFilters]);
 
-  // 处理键盘快捷键 (1-9)
-  const handleKeyDown = useCallback((event) => {
-    // 忽略当输入框或其他可编辑元素有焦点时的按键
-    const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
-      return;
-    }
-
-    if (settings.useNumberShortcuts && event.key >= '1' && event.key <= '9') {
-      const index = parseInt(event.key, 10) - 1;
-      if (filteredHistory[index]) {
-        try {
-          window.electronAPI.pasteItem(filteredHistory[index]);
-        } catch (error) {
-          console.error('Failed to paste item:', error);
-        }
+  // useNumberShortcuts hook handles number-key paste behavior
+  useNumberShortcuts(filteredHistory, settings.useNumberShortcuts, (item) => {
+    try {
+      if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
+        window.electronAPI.pasteItem(item);
       }
+    } catch (err) {
+      console.error('Failed to paste item via shortcut:', err);
     }
-  }, [filteredHistory]);
+  });
 
   // Global typing / search show handler
   useEffect(() => {
@@ -376,7 +371,7 @@ function App() {
         onSave={handleSaveSettings}
         initialSettings={{
           previewLength: settings.previewLength,
-          useCustomTooltip: settings.customTooltip || settings.useCustomTooltip,
+          customTooltip: settings.customTooltip,
           useNumberShortcuts: settings.useNumberShortcuts,
           globalShortcut: settings.globalShortcut,
           screenshotShortcut: settings.screenshotShortcut,

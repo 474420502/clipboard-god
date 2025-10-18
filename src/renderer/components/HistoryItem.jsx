@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { truncateText } from '../utils/text';
 
 function HistoryItem({ item, index, previewLength = 120, customTooltip = false, showShortcuts = true }) {
   const [showTooltip, setShowTooltip] = useState(false);
@@ -23,10 +24,6 @@ function HistoryItem({ item, index, previewLength = 120, customTooltip = false, 
     }
   };
 
-  const truncateText = (text, maxLength) => {
-    if (!text) return '';
-    return text.length > maxLength ? text.slice(0, maxLength - 1) + '…' : text;
-  };
 
   const handleMouseEnter = (e) => {
     if (customTooltip && item.type === 'text') {

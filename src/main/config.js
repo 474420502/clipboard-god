@@ -7,7 +7,7 @@ const DEFAULT_CONFIG = {
   // 预览文本长度
   previewLength: 120,
   // 是否使用自定义工具提示
-  useCustomTooltip: false,
+  customTooltip: false,
   // 粘贴快捷键
   pasteShortcut: 'numbers',
   // 是否使用数字快捷键

@@ -112,7 +112,20 @@ class MainProcess {
 
       safeConsole.log(`全局快捷键 ${shortcut} 被触发`);
       if (this.mainWindow) {
-        this.mainWindow.isVisible() ? this.mainWindow.hide() : this.mainWindow.show();
+        if (this.mainWindow.isVisible()) {
+          this.mainWindow.hide();
+        } else {
+          this.mainWindow.show();
+          // Notify renderer that the global shortcut opened the window so the UI
+          // can reset state (clear search and hide search input) and not inherit previous data.
+          try {
+            if (this.mainWindow.webContents) {
+              this.mainWindow.webContents.send('global-shortcut');
+            }
+          } catch (err) {
+            safeConsole.warn('Failed to notify renderer about global shortcut:', err);
+          }
+        }
       }
     });
 

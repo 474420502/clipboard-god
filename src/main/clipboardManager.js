@@ -1,12 +1,5 @@
 const { clipboard, app } = require('electron');
-const fs = require('fs');
-const path = require('path');
-let SqliteStorage;
-try {
-  SqliteStorage = require('./storage/sqliteStorage');
-} catch (e) {
-  SqliteStorage = null;
-}
+const SqliteStorage = require('./storage/sqliteStorage');
 
 class ClipboardManager {
   constructor(options = {}) {
@@ -16,32 +9,15 @@ class ClipboardManager {
     // 最大历史条目数，默认 8000
     this.maxHistory = typeof options.maxHistory === 'number' ? options.maxHistory : 8000;
 
-    // 存储目录：遵循 XDG 标准优先使用 XDG_CACHE_HOME，否则使用 ~/.cache
-    const cacheBase = process.env.XDG_CACHE_HOME || path.join(require('os').homedir(), '.cache');
-    this.storageDir = path.join(cacheBase, 'clipboard-god');
-    this.storageFile = path.join(this.storageDir, 'history.json');
-
-    // 初始化存储后端：优先 sqlite，否则使用 JSON 文件
-    this._ensureStorageDir();
-    this.storageBackend = null;
-    try {
-      if (SqliteStorage) {
-        this.storageBackend = new SqliteStorage({ maxHistory: this.maxHistory });
-        // load history from db
-        const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-        // convert to expected in-memory format
-        this.history = rows.map(r => {
-          if (r.type === 'text') return { id: r.id || Date.now(), type: 'text', content: r.content, timestamp: new Date(r.timestamp) };
-          return { id: r.id || Date.now(), type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path };
-        });
-      } else {
-        this._loadFromDisk();
-      }
-    } catch (err) {
-      console.error('初始化存储后端失败，回退到 JSON 存储:', err);
-      this.storageBackend = null;
-      this._loadFromDisk();
-    }
+    // 初始化存储后端：使用 SqliteStorage
+    this.storageBackend = new SqliteStorage({ maxHistory: this.maxHistory });
+    // load history from db
+    const rows = this.storageBackend.getHistory(this.maxHistory, 0);
+    // convert to expected in-memory format
+    this.history = rows.map(r => {
+      if (r.type === 'text') return { id: r.id || Date.now(), type: 'text', content: r.content, timestamp: new Date(r.timestamp) };
+      return { id: r.id || Date.now(), type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path };
+    });
   }
 
   // 开始监控剪贴板
@@ -115,8 +91,8 @@ class ClipboardManager {
   setMaxHistory(n) {
     if (typeof n === 'number' && n > 0) {
       this.maxHistory = n;
-      if (this.history.length > this.maxHistory) this.history.length = this.maxHistory;
-      this._saveToDisk();
+      this.storageBackend.maxHistory = n; // 更新存储后端的 maxHistory
+      // SqliteStorage 会自动处理修剪
     }
   }
 
@@ -128,33 +104,14 @@ class ClipboardManager {
         return false;
       }
 
-      // If sqlite backend available, let it handle persistence and pruning
-      if (this.storageBackend) {
-        try {
-          const info = this.storageBackend.addItem(item);
-          // reload history from DB to reflect dedup/updated timestamps
-          const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-          this.history = rows.map(r => {
-            if (r.type === 'text') return { id: r.id || Date.now(), type: 'text', content: r.content, timestamp: new Date(r.timestamp) };
-            return { id: r.id || Date.now(), type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path };
-          });
-          this.notifyListeners();
-          return true;
-        } catch (err) {
-          console.error('sqlite 写入失败，回退到内存/文件写入:', err);
-          // fallthrough to JSON fallback below
-        }
-      }
-
-      // JSON fallback
-      this.history.unshift(item);
-
-      if (this.history.length > this.maxHistory) {
-        this.history.length = this.maxHistory;
-      }
-
+      const info = this.storageBackend.addItem(item);
+      // reload history from DB to reflect dedup/updated timestamps
+      const rows = this.storageBackend.getHistory(this.maxHistory, 0);
+      this.history = rows.map(r => {
+        if (r.type === 'text') return { id: r.id || Date.now(), type: 'text', content: r.content, timestamp: new Date(r.timestamp) };
+        return { id: r.id || Date.now(), type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path };
+      });
       this.notifyListeners();
-      this._saveToDisk();
       return true;
     } catch (err) {
       console.error('添加历史项失败:', err);
@@ -178,44 +135,6 @@ class ClipboardManager {
   // 通知所有监听者
   notifyListeners() {
     this.listeners.forEach(listener => listener(this.history));
-  }
-
-  // 内部：确保存储目录存在
-  _ensureStorageDir() {
-    try {
-      if (!fs.existsSync(this.storageDir)) {
-        fs.mkdirSync(this.storageDir, { recursive: true });
-      }
-    } catch (err) {
-      console.error('无法创建存储目录:', err);
-    }
-  }
-
-  // 从磁盘加载历史（非阻塞）
-  _loadFromDisk() {
-    try {
-      if (fs.existsSync(this.storageFile)) {
-        const raw = fs.readFileSync(this.storageFile, { encoding: 'utf8' });
-        const data = JSON.parse(raw);
-        if (Array.isArray(data)) {
-          this.history = data.slice(0, this.maxHistory);
-        }
-      }
-    } catch (err) {
-      console.error('加载历史失败:', err);
-    }
-  }
-
-  // 将历史写入磁盘（异步写入）
-  _saveToDisk() {
-    try {
-      const toWrite = JSON.stringify(this.history.slice(0, this.maxHistory));
-      fs.writeFile(this.storageFile, toWrite, { encoding: 'utf8' }, (err) => {
-        if (err) console.error('写入历史到磁盘失败:', err);
-      });
-    } catch (err) {
-      console.error('保存历史失败:', err);
-    }
   }
 }
 

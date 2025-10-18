@@ -4,7 +4,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(initialSettings || {
     previewLength: 120,
-    useCustomTooltip: false,
+    customTooltip: false,
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
@@ -21,10 +21,9 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   useEffect(() => {
     if (!isOpen) return;
     if (initialSettings && typeof initialSettings === 'object') {
-      // 将主进程的 useCustomTooltip 映射到 renderer 的 customTooltip
       const mapped = {
         previewLength: initialSettings.previewLength,
-        useCustomTooltip: typeof initialSettings.useCustomTooltip !== 'undefined' ? initialSettings.useCustomTooltip : initialSettings.customTooltip,
+        customTooltip: initialSettings.customTooltip,
         useNumberShortcuts: typeof initialSettings.useNumberShortcuts !== 'undefined' ? initialSettings.useNumberShortcuts : true,
         globalShortcut: initialSettings.globalShortcut,
         screenshotShortcut: initialSettings.screenshotShortcut,
@@ -47,7 +46,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
         // 将 renderer 的字段映射回主进程期望的字段名
         const payload = {
           ...settings,
-          useCustomTooltip: settings.useCustomTooltip // keep same name used by main
+          customTooltip: settings.customTooltip
         };
 
         window.electronAPI.setSettings(payload)
@@ -57,7 +56,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 // main returns config with main naming; map to renderer shape
                 const mapped = {
                   previewLength: res.config.previewLength,
-                  customTooltip: typeof res.config.useCustomTooltip !== 'undefined' ? res.config.useCustomTooltip : res.config.customTooltip,
+                  customTooltip: res.config.customTooltip,
                   useNumberShortcuts: typeof res.config.useNumberShortcuts !== 'undefined' ? res.config.useNumberShortcuts : res.config.useNumberShortcuts,
                   globalShortcut: res.config.globalShortcut,
                   screenshotShortcut: res.config.screenshotShortcut,
@@ -156,8 +155,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     <input
                       id="customTooltipToggle"
                       type="checkbox"
-                      checked={settings.useCustomTooltip}
-                      onChange={(e) => handleChange('useCustomTooltip', e.target.checked)}
+                      checked={settings.customTooltip}
+                      onChange={(e) => handleChange('customTooltip', e.target.checked)}
                     />
                     使用自定义工具提示 (悬停查看并复制)
                   </label>
