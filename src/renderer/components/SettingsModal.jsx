@@ -228,3 +228,4 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
 }
 
 export default SettingsModal;
+

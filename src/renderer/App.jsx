@@ -63,6 +63,26 @@ function App() {
       });
   }, []);
 
+  // 应用主题到DOM
+  useEffect(() => {
+    const applyTheme = (theme) => {
+      if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+        document.body.classList.remove('light-theme');
+      } else {
+        document.body.classList.add('light-theme');
+        document.body.classList.remove('dark-theme');
+      }
+    };
+
+    // 初始应用主题
+    applyTheme(settings.theme);
+
+    // 监听主题变化
+    const currentTheme = settings.theme;
+    applyTheme(currentTheme);
+  }, [settings.theme]);
+
   // 设置 IPC 监听器（简化：使用 preload 暴露的 API，移除 require('electron') 的冗余 fallback）
   useEffect(() => {
     if (!window.electronAPI) {

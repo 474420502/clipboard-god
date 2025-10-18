@@ -2,10 +2,66 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
     padding: 0;
-    background-color: #f0f0f0;
-    color: #333;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     height: 100vh;
     overflow: hidden;
+}
+
+/* 浅色主题变量 */
+body.light-theme {
+    --bg-color: #f0f0f0;
+    --text-color: #333;
+    --search-bg: white;
+    --search-border: #ddd;
+    --search-focus-border: #3498db;
+    --search-focus-shadow: rgba(52, 152, 219, 0.2);
+    --item-border: #eee;
+    --item-hover-bg: #f8f9fa;
+    --item-selected-bg: #2196f3;
+    --item-selected-text: white;
+    --item-selected-border: #1976d2;
+    --item-selected-shadow: rgba(33, 150, 243, 0.3);
+    --settings-overlay-bg: rgba(0, 0, 0, 0.5);
+    --settings-bg: white;
+    --settings-border: #ddd;
+    --settings-text: #333;
+    --settings-input-bg: white;
+    --settings-input-border: #ddd;
+    --settings-input-focus-border: #3498db;
+    --settings-input-focus-shadow: rgba(52, 152, 219, 0.2);
+    --settings-button-bg: #f8f9fa;
+    --settings-button-hover-bg: #e9ecef;
+    --settings-button-active-bg: #2196f3;
+    --settings-button-active-text: white;
+}
+
+/* 深色主题变量 */
+body.dark-theme {
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --search-bg: #2d2d2d;
+    --search-border: #444;
+    --search-focus-border: #64b5f6;
+    --search-focus-shadow: rgba(100, 181, 246, 0.2);
+    --item-border: #333;
+    --item-hover-bg: #333;
+    --item-selected-bg: #4caf50;
+    --item-selected-text: white;
+    --item-selected-border: #388e3c;
+    --item-selected-shadow: rgba(76, 175, 80, 0.3);
+    --settings-overlay-bg: rgba(0, 0, 0, 0.7);
+    --settings-bg: #2d2d2d;
+    --settings-border: #444;
+    --settings-text: #e0e0e0;
+    --settings-input-bg: #1a1a1a;
+    --settings-input-border: #444;
+    --settings-input-focus-border: #64b5f6;
+    --settings-input-focus-shadow: rgba(100, 181, 246, 0.2);
+    --settings-button-bg: #333;
+    --settings-button-hover-bg: #444;
+    --settings-button-active-bg: #4caf50;
+    --settings-button-active-text: white;
 }
 
 html {
@@ -21,8 +77,8 @@ html {
 
 .search-box {
     padding: 2px 2px;
-    background-color: white;
-    border-bottom: 1px solid #ddd;
+    background-color: var(--search-bg);
+    border-bottom: 1px solid var(--search-border);
     animation: slideUp 0.3s ease-out;
 }
 
@@ -40,17 +96,19 @@ html {
 #searchInput {
     width: 100%;
     padding: 10px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--search-border);
     border-radius: 4px;
     font-size: 14px;
     box-sizing: border-box;
     transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: var(--search-bg);
+    color: var(--text-color);
 }
 
 #searchInput:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+    border-color: var(--search-focus-border);
+    box-shadow: 0 0 0 2px var(--search-focus-shadow);
 }
 
 .history-list {
@@ -78,24 +136,25 @@ html {
     display: flex;
     align-items: center;
     padding: 10px 15px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--item-border);
     cursor: pointer;
     transition: all 0.2s;
     position: relative;
     max-width: 100%;
     box-sizing: border-box;
+    color: var(--text-color);
 }
 
 .history-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--item-hover-bg);
     transform: translateX(5px);
 }
 
 .history-item.selected {
-    background-color: #2196f3;
-    color: white;
-    border: 2px solid #1976d2;
-    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+    background-color: var(--item-selected-bg);
+    color: var(--item-selected-text);
+    border: 2px solid var(--item-selected-border);
+    box-shadow: 0 2px 8px var(--item-selected-shadow);
 }
 
 .item-icon {
@@ -115,7 +174,7 @@ html {
 }
 
 .text-icon {
-    background-color: #3498db;
+    background-color: var(--item-selected-bg);
     color: white;
     padding: 2px;
     border-radius: 2px;
@@ -128,7 +187,7 @@ html {
 }
 
 .image-icon {
-    background-color: #2ecc71;
+    background-color: var(--item-selected-border);
     color: white;
     padding: 2px;
     border-radius: 2px;
@@ -223,7 +282,7 @@ html {
 .settings-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.35);
+    background: var(--settings-overlay-bg);
     display: flex;
     justify-content: flex-end;
     z-index: 3000;
@@ -234,11 +293,12 @@ html {
     width: 600px;
     max-width: 90%;
     height: 100%;
-    background: #fff;
+    background: var(--settings-bg);
     box-shadow: -8px 0 24px rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
     animation: slideInRight 0.3s ease-out;
+    color: var(--settings-text);
 }
 
 @keyframes slideInRight {
@@ -255,7 +315,8 @@ html {
     align-items: center;
     justify-content: space-between;
     padding: 16px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--settings-border);
+    color: var(--settings-text);
 }
 
 .settings-body {
@@ -267,14 +328,14 @@ html {
 
 .settings-footer {
     padding: 12px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--settings-border);
     text-align: right;
 }
 
 .settings-nav {
     width: 150px;
-    border-right: 1px solid #eee;
-    background-color: #f8f9fa;
+    border-right: 1px solid var(--settings-border);
+    background-color: var(--settings-button-bg);
     padding: 16px 0;
 }
 
@@ -292,16 +353,16 @@ html {
 }
 
 .nav-item:hover {
-    background-color: #e9ecef;
+    background-color: var(--settings-button-hover-bg);
 }
 
 .nav-item.active {
-    background-color: #007bff;
-    color: white;
+    background-color: var(--settings-button-active-bg);
+    color: var(--settings-button-active-text);
 }
 
 .nav-item.active:hover {
-    background-color: #0056b3;
+    background-color: var(--settings-button-active-bg);
 }
 
 .nav-icon {
@@ -341,7 +402,7 @@ html {
 }
 
 .settings-close:hover {
-    background-color: #f0f0f0;
+    background-color: var(--settings-button-hover-bg);
 }
 
 .setting-row {
@@ -349,14 +410,32 @@ html {
 }
 
 .small {
-    color: #666;
+    color: var(--text-color);
+    opacity: 0.7;
     font-size: 12px;
     margin-top: 6px;
 }
 
+/* Form elements */
+input, select, textarea {
+    background-color: var(--settings-input-bg);
+    color: var(--settings-text);
+    border: 1px solid var(--settings-input-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--settings-input-focus-border);
+    box-shadow: 0 0 0 2px var(--settings-input-focus-shadow);
+}
+
 .btn-primary {
-    background: #3498db;
-    color: white;
+    background: var(--settings-button-active-bg);
+    color: var(--settings-button-active-text);
     border: none;
     padding: 8px 12px;
     border-radius: 4px;
@@ -365,12 +444,14 @@ html {
 }
 
 .btn-primary:hover {
-    background: #2980b9;
+    background: var(--settings-button-active-bg);
+    opacity: 0.8;
 }
 
 .empty-state {
     text-align: center;
     padding: 40px 20px;
-    color: #7f8c8d;
+    color: var(--text-color);
+    opacity: 0.6;
     animation: fadeIn 0.5s ease-in;
 }
