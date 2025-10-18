@@ -153,8 +153,10 @@ class MainProcess {
 
     const ret = globalShortcut.register(shortcut, () => {
       safeConsole.log(`截图快捷键 ${shortcut} 被触发`);
-      if (this.mainWindow && this.screenshotManager) {
+      if (this.screenshotManager) {
         this.screenshotManager.startScreenshot();
+      } else if (this.mainWindow && this.mainWindow.webContents) {
+        this.mainWindow.webContents.send('take-screenshot');
       }
     });
 
@@ -223,6 +225,8 @@ class MainProcess {
         }
         if (changedKeys.includes('screenshotShortcut')) {
           this.registerScreenshotShortcut();
+          // 重新构建菜单以更新快捷键显示
+          this.buildAppMenu();
         }
         if (changedKeys.includes('maxHistoryItems')) {
           // 更新剪贴板管理器的最大历史记录数
@@ -364,13 +368,16 @@ class MainProcess {
   // 构建应用菜单并挂载行为
   buildAppMenu() {
     try {
+      // 从配置中获取实际的截图快捷键
+      const screenshotShortcut = Config.get('screenshotShortcut') || 'CommandOrControl+Shift+S';
+
       const template = [
         {
           label: '功能',
           submenu: [
             {
               label: '截图',
-              accelerator: 'CmdOrCtrl+Shift+S',
+              accelerator: screenshotShortcut, // 使用配置中的实际快捷键
               click: () => {
                 safeConsole.log('菜单: 截图 被点击');
                 // 如果主进程已有 screenshotManager，直接触发；否则让渲染进程处理
@@ -446,3 +453,4 @@ class MainProcess {
 }
 
 module.exports = MainProcess;
+

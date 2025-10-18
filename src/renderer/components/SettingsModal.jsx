@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ShortcutCapture from './ShortcutCapture';
 
 function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   const [activeTab, setActiveTab] = useState('general');
@@ -203,22 +204,20 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
               <div className="settings-section">
                 <h4>快捷键设置</h4>
                 <div className="setting-row">
-                  <label htmlFor="globalShortcutInput">全局快捷键</label>
-                  <input
-                    id="globalShortcutInput"
-                    type="text"
+                  <label>全局快捷键</label>
+                  <ShortcutCapture
                     value={settings.globalShortcut}
-                    onChange={(e) => handleChange('globalShortcut', e.target.value)}
+                    onChange={(value) => handleChange('globalShortcut', value)}
+                    placeholder="点击设置全局快捷键"
                   />
                   <div className="small">显示/隐藏剪贴板窗口的快捷键。使用 Ctrl+Alt+V (Windows/Linux) 或 Cmd+Alt+V (macOS)。常见替代：Ctrl+Shift+V, F12</div>
                 </div>
                 <div className="setting-row">
-                  <label htmlFor="screenshotShortcutInput">截图快捷键</label>
-                  <input
-                    id="screenshotShortcutInput"
-                    type="text"
+                  <label>截图快捷键</label>
+                  <ShortcutCapture
                     value={settings.screenshotShortcut}
-                    onChange={(e) => handleChange('screenshotShortcut', e.target.value)}
+                    onChange={(value) => handleChange('screenshotShortcut', value)}
+                    placeholder="点击设置截图快捷键"
                   />
                   <div className="small">触发截图功能的快捷键。使用 Ctrl+Shift+S (Windows/Linux) 或 Cmd+Shift+S (macOS)。</div>
                 </div>

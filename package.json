@@ -19,6 +19,7 @@
     "dev": "vite",
     "build": "vite build",
     "start": "electron .",
+    "postinstall": "electron-builder install-app-deps",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
@@ -42,6 +43,7 @@
   "build": {
     "appId": "com.clipboardgod.app",
     "productName": "Clipboard God",
+    "icon": "assets/icon-256.png",
     "directories": {
       "output": "dist-electron"
     },
@@ -80,6 +82,12 @@
       "target": [
         {
           "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
           "arch": [
             "x64"
           ]

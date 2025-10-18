@@ -34,6 +34,18 @@ body.light-theme {
     --settings-button-hover-bg: #e9ecef;
     --settings-button-active-bg: #2196f3;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #ddd;
+    --input-bg: #f8f9fa;
+    --accent-color: #3498db;
+    --button-bg: #f8f9fa;
+    --button-hover-bg: #e9ecef;
+    --modal-bg: white;
+    --bg-secondary: #f8f9fa;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #2980b9;
+    --text-secondary: #6c757d;
 }
 
 /* 经典深色主题变量 */
@@ -62,6 +74,18 @@ body.dark-theme {
     --settings-button-hover-bg: #444;
     --settings-button-active-bg: #4caf50;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #444;
+    --input-bg: #2d2d2d;
+    --accent-color: #64b5f6;
+    --button-bg: #333;
+    --button-hover-bg: #444;
+    --modal-bg: #2d2d2d;
+    --bg-secondary: #1a1a1a;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #42a5f5;
+    --text-secondary: #b0b0b0;
 }
 
 /* 蓝色主题变量 */
@@ -90,6 +114,18 @@ body.blue-theme {
     --settings-button-hover-bg: #f1f8ff;
     --settings-button-active-bg: #1976d2;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #bbdefb;
+    --input-bg: white;
+    --accent-color: #1976d2;
+    --button-bg: #e3f2fd;
+    --button-hover-bg: #f1f8ff;
+    --modal-bg: #f8f9ff;
+    --bg-secondary: #e3f2fd;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #1565c0;
+    --text-secondary: #5e92f3;
 }
 
 /* 紫色主题变量 */
@@ -118,6 +154,18 @@ body.purple-theme {
     --settings-button-hover-bg: #faf7fb;
     --settings-button-active-bg: #8e24aa;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #ce93d8;
+    --input-bg: white;
+    --accent-color: #8e24aa;
+    --button-bg: #f3e5f5;
+    --button-hover-bg: #faf7fb;
+    --modal-bg: #f9f5fb;
+    --bg-secondary: #f3e5f5;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #7b1fa2;
+    --text-secondary: #ab47bc;
 }
 
 /* 绿色主题变量 */
@@ -146,6 +194,18 @@ body.green-theme {
     --settings-button-hover-bg: #f9fdf9;
     --settings-button-active-bg: #388e3c;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #a5d6a7;
+    --input-bg: white;
+    --accent-color: #388e3c;
+    --button-bg: #e8f5e8;
+    --button-hover-bg: #f9fdf9;
+    --modal-bg: #f5fbf5;
+    --bg-secondary: #e8f5e8;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #2e7d32;
+    --text-secondary: #4caf50;
 }
 
 /* 橙色主题变量 */
@@ -174,6 +234,18 @@ body.orange-theme {
     --settings-button-hover-bg: #fffdf7;
     --settings-button-active-bg: #f57c00;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #ffcc80;
+    --input-bg: white;
+    --accent-color: #f57c00;
+    --button-bg: #fff3e0;
+    --button-hover-bg: #fffdf7;
+    --modal-bg: #fff9f3;
+    --bg-secondary: #fff3e0;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #ef6c00;
+    --text-secondary: #ff9800;
 }
 
 /* 粉色主题变量 */
@@ -202,6 +274,18 @@ body.pink-theme {
     --settings-button-hover-bg: #fef7fa;
     --settings-button-active-bg: #c2185b;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #f8bbd9;
+    --input-bg: white;
+    --accent-color: #c2185b;
+    --button-bg: #fce4ec;
+    --button-hover-bg: #fef7fa;
+    --modal-bg: #fdf6f9;
+    --bg-secondary: #fce4ec;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #ad1457;
+    --text-secondary: #e91e63;
 }
 
 /* 灰色主题变量 */
@@ -230,6 +314,18 @@ body.gray-theme {
     --settings-button-hover-bg: #fafafa;
     --settings-button-active-bg: #757575;
     --settings-button-active-text: white;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #bdbdbd;
+    --input-bg: white;
+    --accent-color: #757575;
+    --button-bg: #f5f5f5;
+    --button-hover-bg: #fafafa;
+    --modal-bg: #fafafa;
+    --bg-secondary: #f5f5f5;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #616161;
+    --text-secondary: #9e9e9e;
 }
 
 /* 护眼模式主题变量 */
@@ -258,6 +354,18 @@ body.eye-protection-theme {
     --settings-button-hover-bg: #fdfbf7;
     --settings-button-active-bg: #d4a574;
     --settings-button-active-text: #5d4e37;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #f0e6d2;
+    --input-bg: #fffef7;
+    --accent-color: #d4a574;
+    --button-bg: #fef7e0;
+    --button-hover-bg: #fdfbf7;
+    --modal-bg: #fefcf7;
+    --bg-secondary: #fef7e0;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-hover-bg: #5a6268;
+    --accent-hover-color: #c4915f;
+    --text-secondary: #8d6e63;
 }
 
 /* 高对比度主题变量 */
@@ -286,6 +394,18 @@ body.high-contrast-theme {
     --settings-button-hover-bg: #666666;
     --settings-button-active-bg: #ffff00;
     --settings-button-active-text: #000000;
+    /* ShortcutCapture 组件变量 */
+    --border-color: #ffffff;
+    --input-bg: #000000;
+    --accent-color: #ffff00;
+    --button-bg: #333333;
+    --button-hover-bg: #666666;
+    --modal-bg: #000000;
+    --bg-secondary: #000000;
+    --button-secondary-bg: #666666;
+    --button-secondary-hover-bg: #999999;
+    --accent-hover-color: #ffff99;
+    --text-secondary: #cccccc;
 }
 
 html {

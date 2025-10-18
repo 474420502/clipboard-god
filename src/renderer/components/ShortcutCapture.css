@@ -1,0 +1,287 @@
+/* ShortcutCapture Component Styles */
+.shortcut-capture {
+  position: relative;
+}
+
+.shortcut-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.shortcut-display {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.shortcut-display:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
+.capture-button {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--button-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.capture-button:hover:not(:disabled) {
+  background: var(--button-hover-bg);
+  border-color: var(--accent-color);
+}
+
+.capture-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.capture-button:disabled:hover {
+  background: var(--button-bg);
+  border-color: var(--border-color);
+}
+
+.button-group {
+  display: flex;
+  gap: 4px;
+}
+
+.edit-button {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.edit-button:hover:not(:disabled) {
+  background: var(--button-hover-bg);
+  border-color: var(--accent-color);
+}
+
+.edit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Capture Overlay */
+.capture-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.capture-modal {
+  background: var(--modal-bg);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+}
+
+.capture-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.capture-header h4 {
+  margin: 0 0 8px 0;
+  color: var(--text-color);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.capture-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.capture-display {
+  margin-bottom: 20px;
+}
+
+.current-shortcut {
+  padding: 16px;
+  border: 2px dashed var(--border-color);
+  border-radius: 6px;
+  text-align: center;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--input-bg);
+}
+
+.shortcut-text {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent-color);
+  letter-spacing: 1px;
+}
+
+.placeholder {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.capture-instructions {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.capture-instructions p {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.capture-instructions ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-secondary);
+}
+
+.capture-instructions li {
+  margin-bottom: 4px;
+}
+
+.capture-instructions kbd {
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-color);
+}
+
+.capture-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.cancel-button,
+.confirm-button {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-button {
+  background: var(--button-secondary-bg);
+  color: var(--text-color);
+}
+
+.cancel-button:hover {
+  background: var(--button-secondary-hover-bg);
+  border-color: var(--accent-color);
+}
+
+.confirm-button {
+  background: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+.confirm-button:hover:not(:disabled) {
+  background: var(--accent-hover-color);
+  border-color: var(--accent-hover-color);
+}
+
+.confirm-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
+.confirm-button:disabled:hover {
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
+/* Edit Mode Styles */
+.edit-display {
+  margin: 20px 0;
+}
+
+.edit-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-family: monospace;
+  font-size: 16px;
+  margin-bottom: 16px;
+}
+
+.edit-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(100, 181, 246, 0.1);
+}
+
+.edit-examples {
+  background: var(--bg-secondary);
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.edit-examples p {
+  margin: 0 0 8px 0;
+  font-weight: bold;
+  color: var(--text-color);
+}
+
+.edit-examples ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.edit-examples li {
+  margin: 4px 0;
+  color: var(--text-secondary);
+}
+
+.edit-examples code {
+  background: var(--input-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  color: var(--accent-color);
+  border: 1px solid var(--border-color);
+}

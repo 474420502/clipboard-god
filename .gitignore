@@ -49,3 +49,7 @@ Thumbs.db
 # Desktop integration (keep in version control)
 # *.desktop files should be tracked for distribution
 # install-desktop.sh should be tracked
+
+package-lock.json
+yarn.lock
+node_modules
