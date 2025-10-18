@@ -27,6 +27,8 @@ function App() {
     sortBy: 'time'
   });
   const [searchVisible, setSearchVisible] = useState(false); // hidden by default
+  const [keyboardNavigationMode, setKeyboardNavigationMode] = useState(true); // keyboard navigation mode - always enabled
+  const [selectedIndex, setSelectedIndex] = useState(0); // selected item index for keyboard navigation - start with first item
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
     previewLength: 120,
@@ -78,10 +80,18 @@ function App() {
     const handleHistoryData = (_history) => {
       // history-data carries the initial full history
       setHistory(_history);
+      // Always select first item when history is loaded
+
+      setSelectedIndex(0);
+
     };
 
     const handleUpdate = (updatedHistory) => {
       setHistory(updatedHistory);
+      // Always reset to first item when history updates (new items added)
+      if (updatedHistory && updatedHistory.length > 0) {
+        setSelectedIndex(0);
+      }
     };
 
     const handleError = (error) => {
@@ -174,6 +184,10 @@ function App() {
     const handler = () => {
       setSearchVisible(false);
       setSearchTerm('');
+      // Reset to first item when window is reopened
+      if (history.length > 0) {
+        setSelectedIndex(0);
+      }
       // also blur active element to ensure focus state is clean
       try {
         const active = document.activeElement;
@@ -256,9 +270,12 @@ function App() {
   // Global typing / search show handler
   useEffect(() => {
     const handler = (event) => {
-      // ignore when focus is on editable elements
+      // Check if focus is on search input - allow arrow keys for navigation even when search has focus
       const active = document.activeElement;
-      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+      const isSearchInputFocused = active && active.id === 'searchInput';
+
+      // ignore when focus is on other editable elements (but allow search input)
+      if (active && (active.tagName === 'TEXTAREA' || active.isContentEditable) && !isSearchInputFocused) {
         return;
       }
 
@@ -276,6 +293,21 @@ function App() {
             window.electronAPI.hideWindow();
           } catch (err) { }
         }
+        return;
+      }
+
+      // Handle keyboard navigation (always enabled)
+      if (event.key === 'ArrowUp') {
+        handleNavigateItems('up');
+        event.preventDefault();
+        return;
+      } else if (event.key === 'ArrowDown') {
+        handleNavigateItems('down');
+        event.preventDefault();
+        return;
+      } else if (event.key === 'Enter') {
+        handleKeyboardSelect(selectedIndex);
+        event.preventDefault();
         return;
       }
 
@@ -304,7 +336,7 @@ function App() {
 
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [filteredHistory, searchVisible]);
+  }, [filteredHistory, searchVisible, keyboardNavigationMode, selectedIndex]);
 
   const handleScreenshot = () => {
     try {
@@ -330,6 +362,32 @@ function App() {
     setSearchOptions(options);
   };
 
+  const handleKeyboardSelect = (index) => {
+    if (index >= 0 && index < filteredHistory.length) {
+      const selectedItem = filteredHistory[index];
+      try {
+        if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
+          window.electronAPI.pasteItem(selectedItem);
+        }
+      } catch (err) {
+        console.error('Failed to paste selected item:', err);
+      }
+      // Exit keyboard navigation mode after selection
+      setKeyboardNavigationMode(false);
+      setSelectedIndex(0);
+    }
+  };
+
+  const handleNavigateItems = (direction) => {
+    let newIndex = selectedIndex;
+    if (direction === 'up') {
+      newIndex = selectedIndex > 0 ? selectedIndex - 1 : filteredHistory.length - 1;
+    } else if (direction === 'down') {
+      newIndex = selectedIndex < filteredHistory.length - 1 ? selectedIndex + 1 : 0;
+    }
+    setSelectedIndex(newIndex);
+  };
+
   return (
     <div className="app-container">
       <SearchBar
@@ -343,6 +401,8 @@ function App() {
         previewLength={settings.previewLength}
         customTooltip={settings.customTooltip}
         showShortcuts={!!settings.useNumberShortcuts}
+        selectedIndex={selectedIndex}
+        keyboardNavigationMode={keyboardNavigationMode}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
@@ -362,3 +422,4 @@ function App() {
 }
 
 export default App;
+

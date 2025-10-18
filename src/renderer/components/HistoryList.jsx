@@ -1,7 +1,7 @@
 import React from 'react';
 import HistoryItem from './HistoryItem';
 
-function HistoryList({ history, previewLength, customTooltip, showShortcuts = true }) {
+function HistoryList({ history, previewLength, customTooltip, showShortcuts = true, selectedIndex = 0, keyboardNavigationMode = false }) {
   if (!history || history.length === 0) {
     return <div className="empty-state">No clipboard history yet</div>;
   }
@@ -16,6 +16,7 @@ function HistoryList({ history, previewLength, customTooltip, showShortcuts = tr
           previewLength={previewLength}
           customTooltip={customTooltip}
           showShortcuts={showShortcuts}
+          isSelected={keyboardNavigationMode && index === selectedIndex}
         />
       ))}
     </ul>
@@ -23,3 +24,4 @@ function HistoryList({ history, previewLength, customTooltip, showShortcuts = tr
 }
 
 export default HistoryList;
+

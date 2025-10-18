@@ -92,7 +92,10 @@ html {
 }
 
 .history-item.selected {
-    background-color: #e3f2fd;
+    background-color: #2196f3;
+    color: white;
+    border: 2px solid #1976d2;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
 }
 
 .item-icon {

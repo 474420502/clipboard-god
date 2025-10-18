@@ -18,6 +18,17 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
     }
   };
 
+  const handleKeyDown = (e) => {
+    // Prevent up/down arrow keys from moving cursor in search input
+    // These keys are used for item navigation
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      // Let the event bubble up to global handler for navigation
+    }
+    // Allow left/right arrow keys for cursor movement in search input
+    // Other keys are handled by global keyboard listener
+  };
+
   const handleTypeChange = (e) => {
     setSearchType(e.target.value);
   };
@@ -65,6 +76,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
           placeholder="Search clipboard history..."
           value={searchTerm || ''}
           onChange={handleChange}
+          onKeyDown={handleKeyDown}
           style={{ flex: 1 }}
         />
         <button

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { truncateText } from '../utils/text';
 
-function HistoryItem({ item, index, previewLength = 120, customTooltip = false, showShortcuts = true }) {
+function HistoryItem({ item, index, previewLength = 120, customTooltip = false, showShortcuts = true, isSelected = false }) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
@@ -52,7 +52,7 @@ function HistoryItem({ item, index, previewLength = 120, customTooltip = false, 
 
   return (
     <li
-      className="history-item"
+      className={`history-item ${isSelected ? 'selected' : ''}`}
       onClick={handlePaste}
       title={isText && !customTooltip ? item.content : (isText ? 'Click to paste text' : 'Click to paste image')}
       onMouseEnter={handleMouseEnter}
