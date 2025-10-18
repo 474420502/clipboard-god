@@ -52,7 +52,7 @@ class MainProcess {
     this._pasteLock = false;
     this._registeredShortcut = null;
     // 当正在执行粘贴操作时，短暂抑制任何会显示主窗口的自动行为
-    this._suppressShow = false;
+    this._isPasting = false;
     // config file watcher state
     this._configWatcher = null;
     this._configWatchTimer = null;
@@ -105,7 +105,7 @@ class MainProcess {
 
     const ret = globalShortcut.register(shortcut, () => {
       // 如果在粘贴的短时间窗口内，抑制快捷键导致的显示/隐藏切换，避免在隐藏后被立即弹出
-      if (this._suppressShow) {
+      if (this._isPasting) {
         safeConsole.log('抑制全局快捷键触发（正在执行粘贴）');
         return;
       }
@@ -273,11 +273,9 @@ class MainProcess {
 
         // 抑制短时间内任何会显示主窗口的自动行为（比如全局快捷键或托盘单击触发的切换），
         // 避免隐藏后立刻被重新弹出。将抑制状态也写到窗口对象上，供托盘逻辑检查。
-        this._suppressShow = true;
-        if (this.mainWindow) this.mainWindow.__suppressShow = true;
+        this._isPasting = true;
         setTimeout(() => {
-          this._suppressShow = false;
-          if (this.mainWindow) this.mainWindow.__suppressShow = false;
+          this._isPasting = false;
         }, 200);
 
         // 等待一小段时间以确保焦点切换回前一个应用
@@ -287,10 +285,12 @@ class MainProcess {
             .then(() => {
               safeConsole.log('粘贴操作完成');
               this._pasteLock = false;
+              this._isPasting = false;
             })
             .catch((error) => {
               safeConsole.error('粘贴操作失败:', error);
               this._pasteLock = false;
+              this._isPasting = false;
               // 发送错误信息到渲染进程
               if (this.mainWindow && this.mainWindow.webContents) {
                 this.mainWindow.webContents.send('error', error.message);
@@ -339,7 +339,7 @@ class MainProcess {
     }
 
     this.createWindow();
-    this.trayManager.createTray(this.mainWindow);
+    this.trayManager.createTray(this.mainWindow, this);
     this.registerGlobalShortcuts();
     this.registerScreenshotShortcut();
     this.startClipboardMonitoring();

@@ -40,35 +40,7 @@ class ScreenshotManager {
 
     // 监听截图完成事件
     this.screenshots.on('ok', (event, buffer) => {
-      try {
-        const image = nativeImage.createFromBuffer(buffer);
-        if (!image.isEmpty()) {
-          // 写入系统剪贴板
-          clipboard.writeImage(image);
-
-          // 将图片添加到内部历史记录
-          const newItem = {
-            id: Date.now(),
-            type: 'image',
-            content: image.toDataURL(),
-            timestamp: new Date()
-          };
-
-          if (this.clipboardManager && typeof this.clipboardManager.addItem === 'function') {
-            this.clipboardManager.addItem(newItem);
-          }
-
-          // 隐藏主窗口
-          if (this.mainWindow && this.mainWindow.isVisible()) {
-            this.mainWindow.hide();
-          }
-        }
-      } catch (error) {
-        console.error('保存截图失败:', error);
-        if (this.mainWindow && this.mainWindow.webContents) {
-          this.mainWindow.webContents.send('error', error.message);
-        }
-      }
+      this._processScreenshotBuffer(buffer);
     });
 
     // 监听取消事件
@@ -80,6 +52,36 @@ class ScreenshotManager {
     this.screenshots.on('save', (event, buffer) => {
       console.log('截图已保存到桌面');
     });
+  }
+
+  // 私有方法：处理截图缓冲区
+  _processScreenshotBuffer(buffer) {
+    try {
+      const image = nativeImage.createFromBuffer(buffer);
+      if (image.isEmpty()) return;
+
+      clipboard.writeImage(image);
+
+      const newItem = {
+        id: Date.now(),
+        type: 'image',
+        content: image.toDataURL(),
+        timestamp: new Date()
+      };
+
+      if (this.clipboardManager && typeof this.clipboardManager.addItem === 'function') {
+        this.clipboardManager.addItem(newItem);
+      }
+
+      if (this.mainWindow && this.mainWindow.isVisible()) {
+        this.mainWindow.hide();
+      }
+    } catch (error) {
+      console.error('保存截图失败:', error);
+      if (this.mainWindow && this.mainWindow.webContents) {
+        this.mainWindow.webContents.send('error', error.message);
+      }
+    }
   }
 
   // 启动截图
@@ -96,26 +98,8 @@ class ScreenshotManager {
           const src = sources[0];
           const image = nativeImage.createFromDataURL(src.thumbnail.toDataURL());
           if (image && !image.isEmpty()) {
-            try {
-              clipboard.writeImage(image);
-
-              const newItem = {
-                id: Date.now(),
-                type: 'image',
-                content: image.toDataURL(),
-                timestamp: new Date()
-              };
-
-              if (this.clipboardManager && typeof this.clipboardManager.addItem === 'function') {
-                this.clipboardManager.addItem(newItem);
-              }
-
-              if (this.mainWindow && this.mainWindow.isVisible()) this.mainWindow.hide();
-              console.log('desktopCapturer 截图并保存到剪贴板完成');
-            } catch (err) {
-              console.error('desktopCapturer 写入剪贴板失败:', err);
-              if (this.mainWindow && this.mainWindow.webContents) this.mainWindow.webContents.send('error', err.message);
-            }
+            this._processScreenshotBuffer(image.toPNG());
+            console.log('desktopCapturer 截图并保存到剪贴板完成');
           }
         })
         .catch(err => {
@@ -134,3 +118,4 @@ class ScreenshotManager {
 }
 
 module.exports = ScreenshotManager;
+

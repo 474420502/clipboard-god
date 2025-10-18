@@ -39,7 +39,7 @@ class TrayManager {
   }
 
   // 创建系统托盘
-  createTray(mainWindow) {
+  createTray(mainWindow, mainProcess) {
     let trayIcon = null;
 
     // 尝试使用自定义图标
@@ -94,7 +94,7 @@ class TrayManager {
         label: '打开',
         click: () => {
           // Respect any temporary suppression (e.g., during paste we hide then paste)
-          if (mainWindow && mainWindow.__suppressShow) {
+          if (mainProcess && mainProcess._isPasting) {
             safeConsole.log('抑制托盘打开（正在执行粘贴）');
             return;
           }

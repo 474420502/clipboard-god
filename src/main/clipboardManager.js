@@ -22,8 +22,31 @@ class ClipboardManager {
 
   // 开始监控剪贴板
   startMonitoring() {
-    this.checkClipboard();
-    this.interval = setInterval(() => this.checkClipboard(), 1000);
+    // 优先使用 watch API
+    if (clipboard.watch) {
+      this.previousText = clipboard.readText();
+      this.previousImage = clipboard.readImage().toDataURL();
+
+      clipboard.watch((type) => {
+        if (type === 'text') {
+          const currentText = clipboard.readText();
+          if (currentText !== this.previousText) {
+            this.previousText = currentText;
+            this.checkClipboard();
+          }
+        } else if (type === 'image') {
+          const currentImage = clipboard.readImage().toDataURL();
+          if (currentImage !== this.previousImage) {
+            this.previousImage = currentImage;
+            this.checkClipboard();
+          }
+        }
+      });
+    } else {
+      // 备选方案
+      this.checkClipboard();
+      this.interval = setInterval(() => this.checkClipboard(), 1000);
+    }
   }
 
   // 停止监控剪贴板
@@ -104,13 +127,32 @@ class ClipboardManager {
         return false;
       }
 
-      const info = this.storageBackend.addItem(item);
-      // reload history from DB to reflect dedup/updated timestamps
-      const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-      this.history = rows.map(r => {
-        if (r.type === 'text') return { id: r.id || Date.now(), type: 'text', content: r.content, timestamp: new Date(r.timestamp) };
-        return { id: r.id || Date.now(), type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path };
-      });
+      const result = this.storageBackend.addItem(item);
+      if (!result) return false;
+
+      const newItem = {
+        id: result.id,
+        type: item.type,
+        content: item.type === 'text' ? item.content : (result.image_path || item.content),
+        timestamp: new Date(item.timestamp || Date.now()),
+        image_path: result.image_path,
+        image_thumb: result.image_thumb
+      };
+
+      // 如果是更新时间戳，则找到旧项，移到最前面
+      const existingIndex = this.history.findIndex(h => h.id === result.id);
+      if (existingIndex > -1) {
+        this.history.splice(existingIndex, 1);
+      }
+
+      // 插入到最前面
+      this.history.unshift(newItem);
+
+      // 裁剪历史记录
+      if (this.history.length > this.maxHistory) {
+        this.history.length = this.maxHistory;
+      }
+
       this.notifyListeners();
       return true;
     } catch (err) {

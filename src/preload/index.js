@@ -10,28 +10,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setSettings: (settings) => ipcRenderer.invoke('set-settings', settings),
   hideWindow: () => ipcRenderer.send('hide-window'),
 
-  // 主进程 -> 渲染器 (监听)
-  onUpdateHistory: (callback) => {
-    if (typeof callback === 'function') {
-      ipcRenderer.on('update-history', (_event, value) => callback(value));
-    }
-  },
-  onError: (callback) => {
-    if (typeof callback === 'function') {
-      ipcRenderer.on('error', (_event, value) => callback(value));
-    }
-  },
-  
-  // 暴露 ipcRenderer 以支持更多事件监听
-  ipcRenderer: {
-    on: (channel, func) => ipcRenderer.on(channel, func),
-    removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
-  },
-  
-  // 清理监听器（好习惯）
+  // --- 主进程 -> 渲染器 (监听) ---
+  onUpdateHistory: (callback) => ipcRenderer.on('update-history', (_event, value) => callback(value)),
+  onError: (callback) => ipcRenderer.on('error', (_event, value) => callback(value)),
+  onHistoryData: (callback) => ipcRenderer.on('history-data', (_event, value) => callback(value)),
+  onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
+  onTakeScreenshot: (callback) => ipcRenderer.on('take-screenshot', callback),
+  onGlobalShortcut: (callback) => ipcRenderer.on('global-shortcut', callback),
+  onSettingsUpdated: (callback) => ipcRenderer.on('settings-updated', (_event, value) => callback(value)),
+
+  // 清理所有监听器
   cleanupListeners: () => {
     ipcRenderer.removeAllListeners('update-history');
     ipcRenderer.removeAllListeners('error');
     ipcRenderer.removeAllListeners('history-data');
+    ipcRenderer.removeAllListeners('open-settings');
+    ipcRenderer.removeAllListeners('take-screenshot');
+    ipcRenderer.removeAllListeners('global-shortcut');
+    ipcRenderer.removeAllListeners('settings-updated');
   }
 });

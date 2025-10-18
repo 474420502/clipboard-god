@@ -91,20 +91,13 @@ function App() {
     // subscribe to updates / errors via preload wrappers
     window.electronAPI.onUpdateHistory(handleUpdate);
     window.electronAPI.onError(handleError);
-
-    // preload exposes a thin ipcRenderer wrapper — use it for the legacy 'history-data' channel
-    if (window.electronAPI.ipcRenderer && typeof window.electronAPI.ipcRenderer.on === 'function') {
-      window.electronAPI.ipcRenderer.on('history-data', (_event, data) => handleHistoryData(data));
-    }
+    window.electronAPI.onHistoryData(handleHistoryData);
 
     return () => {
       try {
         // cleanup listeners registered via preload
         if (window.electronAPI && typeof window.electronAPI.cleanupListeners === 'function') {
           window.electronAPI.cleanupListeners();
-        }
-        if (window.electronAPI && window.electronAPI.ipcRenderer && typeof window.electronAPI.ipcRenderer.removeAllListeners === 'function') {
-          window.electronAPI.ipcRenderer.removeAllListeners('history-data');
         }
       } catch (error) {
         console.error('Failed to cleanup listeners:', error);
@@ -114,7 +107,7 @@ function App() {
 
   // 监听从菜单触发的动作（主进程发送）
   useEffect(() => {
-    if (!window.electronAPI || !window.electronAPI.ipcRenderer) return;
+    if (!window.electronAPI) return;
 
     const openSettingsHandler = () => setIsSettingsOpen(true);
     const takeScreenshotHandler = () => {
@@ -125,14 +118,12 @@ function App() {
       }
     };
 
-    window.electronAPI.ipcRenderer.on('open-settings', openSettingsHandler);
-    window.electronAPI.ipcRenderer.on('take-screenshot', takeScreenshotHandler);
+    window.electronAPI.onOpenSettings(openSettingsHandler);
+    window.electronAPI.onTakeScreenshot(takeScreenshotHandler);
 
     return () => {
       try {
-        window.electronAPI.ipcRenderer.removeAllListeners('open-settings');
-        window.electronAPI.ipcRenderer.removeAllListeners('take-screenshot');
-        window.electronAPI.ipcRenderer.removeAllListeners('settings-updated');
+        window.electronAPI.cleanupListeners();
       } catch (err) {
         console.warn('清理菜单 ipc 监听器失败:', err);
       }
@@ -141,9 +132,9 @@ function App() {
 
   // 监听主进程广播的设置变更（比如快捷键开关）并应用
   useEffect(() => {
-    if (!window.electronAPI || !window.electronAPI.ipcRenderer) return;
+    if (!window.electronAPI) return;
 
-    const settingsUpdatedHandler = (_event, updated) => {
+    const settingsUpdatedHandler = (updated) => {
       try {
         if (!updated || typeof updated !== 'object') return;
         // normalize payload
@@ -161,10 +152,10 @@ function App() {
       }
     };
 
-    window.electronAPI.ipcRenderer.on('settings-updated', settingsUpdatedHandler);
+    window.electronAPI.onSettingsUpdated(settingsUpdatedHandler);
     return () => {
       try {
-        window.electronAPI.ipcRenderer.removeAllListeners('settings-updated');
+        window.electronAPI.cleanupListeners();
       } catch (err) {
         // ignored
       }
@@ -174,7 +165,7 @@ function App() {
   // 当全局快捷键触发并打开窗口时，主进程会发送 'global-shortcut'.
   // 每次收到该事件时我们应该清空搜索栏并隐藏它，确保不继承上次的数据。
   useEffect(() => {
-    if (!window.electronAPI || !window.electronAPI.ipcRenderer) return;
+    if (!window.electronAPI) return;
 
     const handler = () => {
       setSearchVisible(false);
@@ -190,10 +181,10 @@ function App() {
       }
     };
 
-    window.electronAPI.ipcRenderer.on('global-shortcut', handler);
+    window.electronAPI.onGlobalShortcut(handler);
     return () => {
       try {
-        window.electronAPI.ipcRenderer.removeAllListeners('global-shortcut');
+        window.electronAPI.cleanupListeners();
       } catch (err) {
         // ignore
       }
