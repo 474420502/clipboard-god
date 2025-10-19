@@ -218,10 +218,8 @@ function App() {
     const handler = () => {
       setSearchVisible(false);
       setSearchTerm('');
-      // Note: Keep current selectedIndex when window is reopened
-      // setSelectedIndex(0); // Removed: don't reset selection on window reopen
-      // Re-enable keyboard navigation mode when window is reopened
-      setKeyboardNavigationMode(true);
+      setSelectedIndex(0); // Reset selection to first item when window is reopened
+      setKeyboardNavigationMode(false); // Disable keyboard navigation mode initially
       // also blur active element to ensure focus state is clean
       try {
         const active = document.activeElement;
@@ -418,11 +416,12 @@ function App() {
   };
 
   const handleNavigateItems = (direction) => {
+    setKeyboardNavigationMode(true); // Enable keyboard navigation mode when navigating
     let newIndex = selectedIndex;
     if (direction === 'up') {
-      newIndex = selectedIndex > 0 ? selectedIndex - 1 : filteredHistory.length - 1;
+      newIndex = selectedIndex > 0 ? selectedIndex - 1 : 0;
     } else if (direction === 'down') {
-      newIndex = selectedIndex < filteredHistory.length - 1 ? selectedIndex + 1 : 0;
+      newIndex = selectedIndex < filteredHistory.length - 1 ? selectedIndex + 1 : filteredHistory.length - 1;
     }
     setSelectedIndex(newIndex);
   };
@@ -441,6 +440,8 @@ function App() {
         showShortcuts={!!settings.useNumberShortcuts}
         selectedIndex={selectedIndex}
         keyboardNavigationMode={keyboardNavigationMode}
+        setSelectedIndex={setSelectedIndex}
+        setKeyboardNavigationMode={setKeyboardNavigationMode}
       />
       <SettingsModal
         isOpen={isSettingsOpen}

@@ -1,7 +1,16 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { truncateText } from '../utils/text';
+import Tooltip from './Tooltip';
 
-function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, isSelected = false }) {
+function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, isSelected = false, setSelectedIndex, setKeyboardNavigationMode }) {
+  const itemRef = useRef(null);
+
+  useEffect(() => {
+    if (isSelected && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isSelected]);
+
   const handlePaste = () => {
     try {
       if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
@@ -22,9 +31,10 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, i
 
   return (
     <li
+      ref={itemRef}
       className={`history-item ${isSelected ? 'selected' : ''}`}
       onClick={handlePaste}
-      title={isText ? item.content : 'Click to paste image'}
+      onMouseEnter={setSelectedIndex ? () => { setKeyboardNavigationMode(true); setSelectedIndex(index); } : undefined}
     >
       <div className="item-icon">
         {isText && <span className="text-icon">T</span>}
@@ -39,6 +49,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, i
         {isText && <span className="text-preview">{displayText}</span>}
         {isImage && '[Image]'}
       </div>
+      <Tooltip content={isText ? item.content : 'Click to paste image'} visible={isSelected} />
     </li>
   );
 }

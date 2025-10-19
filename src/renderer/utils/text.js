@@ -1,5 +1,5 @@
 // Small utilities for text handling used by renderer components.
-export function truncateText(text, maxLen = 120) {
+export function truncateText(text, maxLen = 500) {
     if (text == null) return '';
     const s = String(text);
     if (s.length <= maxLen) return s;
