@@ -140,18 +140,39 @@ class MainProcess {
       const size = this.tooltipSize;
       const offsetX = 8;
 
-      const desiredX = mainBounds.x + mainBounds.width + offsetX;
-      let desiredY = mainBounds.y + (anchorRect.top || 0);
+      // Use main window size as the tooltip size (matching requirement)
+      const tooltipWidth = Math.max(100, Math.min(mainBounds.width, 1600));
+      const tooltipHeight = Math.max(30, Math.min(mainBounds.height, 2000));
 
-      // Ensure tooltip fits on screen vertically
+      // Determine available space on left and right of the main window within the display work area
       const display = screen.getDisplayMatching(mainBounds);
-      const workArea = display ? display.workArea : { height: 10000 };
-      if (desiredY + size.h > workArea.height) {
-        desiredY = Math.max(0, workArea.height - size.h - 10);
+      const workArea = display ? display.workArea : { x: 0, y: 0, width: 10000, height: 10000 };
+
+      const spaceRight = workArea.x + workArea.width - (mainBounds.x + mainBounds.width);
+      const spaceLeft = mainBounds.x - workArea.x;
+
+      // If there's enough room on the right, prefer right; otherwise flip to left
+      const placeRight = spaceRight >= tooltipWidth || spaceRight >= spaceLeft;
+
+      const desiredX = placeRight ? (mainBounds.x + mainBounds.width + offsetX) : (mainBounds.x - tooltipWidth - offsetX);
+      // Align tooltip top with main window top per user request
+      let desiredY = mainBounds.y;
+
+      // Ensure tooltip fits vertically within the workArea
+      if (desiredY + tooltipHeight > workArea.y + workArea.height) {
+        desiredY = Math.max(workArea.y, workArea.y + workArea.height - tooltipHeight - 10);
       }
+      if (desiredY < workArea.y) desiredY = workArea.y + 10;
+
+      // Clamp horizontally to workArea
+      let finalX = desiredX;
+      if (finalX + tooltipWidth > workArea.x + workArea.width) {
+        finalX = workArea.x + workArea.width - tooltipWidth - 10;
+      }
+      if (finalX < workArea.x) finalX = workArea.x + 10;
 
       try {
-        this.tooltipWindow.setBounds({ x: Math.max(desiredX, 0), y: Math.max(desiredY, 0), width: Math.max(100, Math.min(size.w, 800)), height: Math.max(30, Math.min(size.h, 1000)) });
+        this.tooltipWindow.setBounds({ x: Math.round(finalX), y: Math.round(desiredY), width: Math.round(tooltipWidth), height: Math.round(tooltipHeight) });
       } catch (err) { }
     } catch (err) {
       // ignore reposition errors
@@ -186,6 +207,33 @@ class MainProcess {
     // 当窗口关闭时，取消引用窗口对象（仅在真正退出应用时发生）
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
+    });
+
+    // 当主窗口失去焦点时（例如用户点击了其他应用），隐藏主窗口以及 tooltip
+    this.mainWindow.on('blur', () => {
+      try {
+        // 如果正在执行粘贴操作，不要隐藏（以避免干扰粘贴流程）
+        if (this._isPasting) return;
+
+        // 如果用户已通过托盘请求退出（ClickQuit），不要干预
+        if (this.trayManager && this.trayManager.ClickQuit) return;
+
+        try {
+          if (this.mainWindow && this.mainWindow.isVisible()) this.mainWindow.hide();
+        } catch (_) { }
+        try {
+          // Notify renderer to reset item selection (set selectIndex -> 0) so next show starts fresh
+          try {
+            if (this.mainWindow && this.mainWindow.webContents) {
+              this.mainWindow.webContents.send('reset-selection');
+            }
+          } catch (_) { }
+
+          if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide();
+        } catch (_) { }
+      } catch (err) {
+        // ignore
+      }
     });
   }
 
@@ -421,6 +469,12 @@ class MainProcess {
     // Tooltip control from renderer: show/hide/update
     ipcMain.on('show-tooltip', (_event, payload) => {
       try {
+        // Do not show tooltip if there's no main window or it's not visible
+        if (!this.mainWindow || this.mainWindow.isDestroyed() || !this.mainWindow.isVisible() || this._isPasting) {
+          // skip showing tooltip when main window is hidden, destroyed, or during paste
+          return;
+        }
+
         this.createTooltipWindow();
         if (!this.tooltipWindow) return;
 
@@ -447,18 +501,21 @@ class MainProcess {
         // Use loadURL with data URL
         this.tooltipWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
 
-        // When the tooltip's webContents finish loading, attempt to measure and resize using an estimate
+        // When the tooltip's webContents finish loading, attempt to measure content but
+        // ultimately size the tooltip to match the main window dimensions.
         this.tooltipWindow.webContents.once('did-finish-load', () => {
           try {
-            // Ask for size by executing JavaScript
+            // Ask for size by executing JavaScript to compute content size (kept for compatibility)
             this.tooltipWindow.webContents.executeJavaScript(`(function(){const el=document.getElementById('box'); if(!el) return {w:300,h:50}; const r=el.getBoundingClientRect(); ({w:Math.ceil(r.width), h:Math.ceil(r.height)});})()`)
               .then((size) => {
-                this.tooltipSize = { w: Math.max(200, Math.min(800, size.w + 8)), h: Math.max(30, Math.min(1000, size.h + 8)) };
+                // store measured content size but override tooltip size with main window size
+                this.tooltipSize = { w: size.w + 8, h: size.h + 8 };
+                // Reposition will use mainWindow size to set the tooltip bounds
                 this.repositionTooltip();
                 try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
               })
               .catch((err) => {
-                // fallback show
+                // fallback: still set tooltipSize but reposition uses main window
                 this.tooltipSize = { w: 420, h: 120 };
                 this.repositionTooltip();
                 try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }

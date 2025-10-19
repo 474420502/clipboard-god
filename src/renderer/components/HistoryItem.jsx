@@ -49,9 +49,20 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, i
             // stable, show tooltip
             try {
               if (window.electronAPI && typeof window.electronAPI.showTooltip === 'function') {
+                // Round the bounding rect values to integers so tiny sub-pixel
+                // or fractional changes during scrolling don't cause the tooltip
+                // to reposition constantly. This keeps the tooltip visually
+                // stable while the list scrolls slightly.
+                const anchorRect = {
+                  top: Math.round(rect.top),
+                  left: Math.round(rect.left),
+                  width: Math.round(rect.width),
+                  height: Math.round(rect.height)
+                };
+
                 window.electronAPI.showTooltip({
                   content: isText ? item.content : 'Click to paste image',
-                  anchorRect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+                  anchorRect
                 });
               }
             } catch (err) { }
