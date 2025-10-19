@@ -61,10 +61,14 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
                   height: Math.round(rect.height)
                 };
 
-                window.electronAPI.showTooltip({
-                  content: isText ? item.content : 'Click to paste image',
-                  anchorRect
-                });
+                if (isText) {
+                  window.electronAPI.showTooltip({ content: item.content, anchorRect });
+                } else {
+                  // For images, send an HTML payload so the main process can render an image inside the tooltip
+                  const src = item.image_path ? `file://${item.image_path}` : item.content;
+                  const html = `<div style="max-width:440px;max-height:320px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;"><img src=\"${src}\" style=\"max-width:420px;max-height:280px;border-radius:6px;display:block;\" alt=\"image preview\"/><div style=\"font-size:12px;color:#ddd;\">Click to paste image</div></div>`;
+                  window.electronAPI.showTooltip({ content: html, anchorRect, html: true });
+                }
               }
             } catch (err) { }
             rafId.current = null;

@@ -481,28 +481,67 @@ class MainProcess {
         this.createTooltipWindow();
         if (!this.tooltipWindow) return;
 
-        const { content = '', anchorRect = {} } = payload || {};
+        const { content = '', anchorRect = {}, html: isHtml = false } = payload || {};
         this.tooltipPayload = { content, anchorRect };
 
-        // Build a minimal HTML with encoded content
-        const safeContent = String(content)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#039;');
+        // If the renderer requested HTML payload, trust it but still restrict via CSP
+        let pageHtml;
+        if (isHtml) {
+          // Inline any file:// URLs into data: URLs so the tooltip (loaded via data: URL)
+          // can render them without cross-origin/file protocol restrictions.
+          try {
+            // find file://... occurrences in the content and replace with data URLs
+            const fileUrlRegex = /src=\"file:\/\/([^\"']+)\"/g;
+            let replaced = String(content);
+            let match;
+            while ((match = fileUrlRegex.exec(content)) !== null) {
+              try {
+                const filePath = '/' + match[1].replace(/^\/+/, ''); // normalize leading slash
+                if (fs.existsSync(filePath)) {
+                  const buf = fs.readFileSync(filePath);
+                  const ext = path.extname(filePath).toLowerCase();
+                  let mime = 'image/png';
+                  if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+                  else if (ext === '.gif') mime = 'image/gif';
+                  else if (ext === '.webp') mime = 'image/webp';
+                  else if (ext === '.svg') mime = 'image/svg+xml';
+                  const b64 = buf.toString('base64');
+                  const dataUrl = `data:${mime};base64,${b64}`;
+                  replaced = replaced.replace(match[0], `src=\"${dataUrl}\"`);
+                }
+              } catch (err) {
+                // ignore replacement errors and keep original src
+              }
+            }
 
-        const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:pre-wrap;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${safeContent}</div><script>const {ipcRenderer} = require('electron');
-        // send height back to main when content is ready
-        window.addEventListener('DOMContentLoaded', () => {
-          const el = document.getElementById('box');
-          const rect = el.getBoundingClientRect();
-          ipcRenderer.sendToHost && ipcRenderer.sendToHost('tooltip-size', { w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
-        });
-        </script></body></html>`;
+            // Build tooltip HTML without requiring node inside the page. The main
+            // process will measure content via executeJavaScript after load instead
+            // of relying on ipc from the page.
+            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${replaced}</div></body></html>`;
+          } catch (err) {
+            // fallback to raw content if replacement fails
+            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${String(content)}</div></body></html>`;
+          }
+        } else {
+          // sanitized text-only payload
+          const safeContent = String(content)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+          pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:pre-wrap;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${safeContent}</div><script>const {ipcRenderer} = require('electron');
+          window.addEventListener('DOMContentLoaded', () => {
+            const el = document.getElementById('box');
+            const rect = el.getBoundingClientRect();
+            ipcRenderer.sendToHost && ipcRenderer.sendToHost('tooltip-size', { w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
+          });
+          </script></body></html>`;
+        }
 
         // Use loadURL with data URL
-        this.tooltipWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+        this.tooltipWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(pageHtml));
 
         // When the tooltip's webContents finish loading, attempt to measure content but
         // ultimately size the tooltip to match the main window dimensions.
