@@ -57,6 +57,8 @@ function App() {
           if (typeof cfg.globalShortcut !== 'undefined') mapped.globalShortcut = cfg.globalShortcut;
           if (typeof cfg.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = cfg.screenshotShortcut;
           if (typeof cfg.theme !== 'undefined') mapped.theme = cfg.theme;
+          // include llms map when present so renderer can show entries in settings
+          if (typeof cfg.llms !== 'undefined') mapped.llms = cfg.llms;
 
           setSettings(prev => ({ ...prev, ...mapped }));
         }
@@ -236,6 +238,8 @@ function App() {
         if (typeof updated.globalShortcut !== 'undefined') mapped.globalShortcut = updated.globalShortcut;
         if (typeof updated.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = updated.screenshotShortcut;
         if (typeof updated.theme !== 'undefined') mapped.theme = updated.theme;
+        // pass through llms when main process provides it
+        if (typeof updated.llms !== 'undefined') mapped.llms = updated.llms;
 
         setSettings(prev => ({ ...prev, ...mapped }));
       } catch (err) {
@@ -248,6 +252,70 @@ function App() {
       } catch (err) {
         // ignored
       }
+    };
+  }, []);
+
+  // LLM stream handling: show tooltip and update as chunks arrive
+  useEffect(() => {
+    if (!window.electronAPI) return;
+
+    let acc = '';
+
+    const onChunk = (chunk) => {
+      try {
+        // chunk may be JSON or plain text; attempt to parse
+        let text = '';
+        if (typeof chunk === 'string') {
+          // try JSON parse
+          try {
+            const j = JSON.parse(chunk);
+            // accept common shapes
+            if (typeof j === 'string') text = j;
+            else if (j && j.choices && Array.isArray(j.choices)) {
+              // openai style
+              for (const c of j.choices) {
+                if (c && c.delta && c.delta.content) text += c.delta.content;
+                else if (c && c.text) text += c.text;
+              }
+            } else if (j && j.data) {
+              text += JSON.stringify(j.data);
+            } else {
+              text += String(j);
+            }
+          } catch (e) {
+            text = chunk;
+          }
+        } else if (chunk && typeof chunk === 'object') {
+          text = JSON.stringify(chunk);
+        }
+
+        acc += text;
+        // update tooltip via main process
+        try {
+          window.electronAPI.showTooltip({ content: acc, html: false });
+        } catch (err) { }
+      } catch (err) { }
+    };
+
+    const onComplete = (info) => {
+      try {
+        if (info && info.success === false) {
+          window.electronAPI.showTooltip({ content: `LLM 请求失败: ${info.error || 'unknown'}`, html: false });
+        }
+        // auto-hide after short delay
+        setTimeout(() => {
+          try { window.electronAPI.hideTooltip(); } catch (err) { }
+        }, 4000);
+      } catch (err) { }
+    };
+
+    window.electronAPI.onLlmStream(onChunk);
+    window.electronAPI.onLlmComplete(onComplete);
+
+    return () => {
+      try {
+        window.electronAPI.cleanupListeners();
+      } catch (err) { }
     };
   }, []);
 
@@ -522,7 +590,8 @@ function App() {
           enableTooltips: settings.enableTooltips,
           globalShortcut: settings.globalShortcut,
           screenshotShortcut: settings.screenshotShortcut,
-          theme: settings.theme
+          theme: settings.theme,
+          llms: settings.llms || {}
         }}
       />
     </div>

@@ -1,4 +1,4 @@
-const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, screen } = require('electron');
+const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, screen, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ClipboardManager = require('./clipboardManager');
@@ -373,6 +373,9 @@ class MainProcess {
           // 重新构建菜单以更新快捷键显示
           this.buildAppMenu();
         }
+        if (changedKeys.includes('llmShortcut') || changedKeys.includes('llms') || changedKeys.includes('llm')) {
+          try { this.registerLlmShortcut(); } catch (err) { safeConsole.warn('registerLlmShortcut failed:', err); }
+        }
         if (changedKeys.includes('maxHistoryItems')) {
           // 更新剪贴板管理器的最大历史记录数
           const newMaxHistory = newConfig.maxHistoryItems;
@@ -401,6 +404,149 @@ class MainProcess {
 
       safeConsole.log('设置保存结果:', result.success, '变更键:', changedKeys, '新配置:', newConfig);
       return result; // { success, config }
+    });
+
+    // Register LLM shortcut API (exposed to settings changes)
+    // This registers a global shortcut that will read current clipboard and invoke LLM stream
+    this.registerLlmShortcut = () => {
+      // unregister any previously registered per-entry shortcuts
+      try {
+        if (this._registeredLlmShortcuts && Array.isArray(this._registeredLlmShortcuts)) {
+          for (const s of this._registeredLlmShortcuts) {
+            try { globalShortcut.unregister(s); } catch (_) { }
+          }
+        }
+      } catch (err) { }
+      this._registeredLlmShortcuts = [];
+
+      const llms = Config.get('llms') || {};
+      for (const [name, entry] of Object.entries(llms)) {
+        try {
+          const shortcut = entry && entry.llmShortcut;
+          if (!shortcut || String(shortcut).trim() === '') continue;
+          const registered = globalShortcut.register(shortcut, async () => {
+            safeConsole.log(`LLM 条目 ${name} 快捷键 ${shortcut} 被触发`);
+            try {
+              // use entry settings to trigger LLM with clipboard
+              await this._triggerLlmFromClipboardForEntry(name, entry);
+            } catch (err) {
+              safeConsole.error('Trigger LLM for entry failed:', err);
+            }
+          });
+          if (registered) this._registeredLlmShortcuts.push(shortcut);
+          safeConsole.log(`注册 LLM 条目快捷键 ${name}:`, shortcut, 'ok=', registered);
+        } catch (err) {
+          safeConsole.warn('注册 LLM 条目快捷键失败:', name, err);
+        }
+      }
+    };
+
+    // Trigger LLM request using current clipboard content
+    this._triggerLlmFromClipboard = async () => {
+      try {
+        // detect text or image on clipboard
+        const formats = clipboard.availableFormats();
+        let input = '';
+        let inputType = 'text';
+        if (formats.includes('text/plain')) {
+          input = clipboard.readText();
+          inputType = 'text';
+        } else if (formats.includes('image/png') || formats.includes('image/jpeg')) {
+          const img = clipboard.readImage();
+          if (!img.isEmpty()) {
+            input = img.toDataURL();
+            inputType = 'image';
+          }
+        }
+
+        // call llm using saved config and stream back to renderer
+        // fallback: if there's a default single llm configured, use it (back-compat)
+        const cfg = Config.getAll();
+        const llms = cfg.llms || {};
+        const names = Object.keys(llms || {});
+        if (names.length === 0) {
+          // try legacy llm
+          const llmCfg = cfg.llm || {};
+          const apitype = llmCfg.apitype || 'ollama';
+          const baseurl = llmCfg.baseurl;
+          const model = llmCfg.model;
+          const apikey = llmCfg.apikey;
+          const params = llmCfg;
+          const fakeEvent = { sender: this.mainWindow && this.mainWindow.webContents };
+          if (apitype === 'ollama') {
+            await this._callOllamaStream(fakeEvent, { baseurl, model, apikey, params, input });
+          } else {
+            await this._callOpenApiStream(fakeEvent, { baseurl, model, apikey, params, input });
+          }
+          return;
+        }
+        // Multiple entries exist: by default trigger the first one
+        const firstName = names[0];
+        const entry = llms[firstName];
+        await this._triggerLlmFromClipboardForEntry(firstName, entry, input);
+      } catch (err) {
+        safeConsole.error('LLM trigger error:', err);
+        try { if (this.mainWindow && this.mainWindow.webContents) this.mainWindow.webContents.send('llm-complete', { success: false, error: err.message }); } catch (_) { }
+      }
+    };
+
+    // Trigger for a named entry using its entry config
+    this._triggerLlmFromClipboardForEntry = async (name, entry, explicitInput) => {
+      try {
+        let input = explicitInput;
+        if (typeof input === 'undefined') {
+          const formats = clipboard.availableFormats();
+          if (formats.includes('text/plain')) {
+            input = clipboard.readText();
+          } else if (formats.includes('image/png') || formats.includes('image/jpeg')) {
+            const img = clipboard.readImage();
+            if (!img.isEmpty()) input = img.toDataURL();
+          }
+        }
+
+        if (!entry) throw new Error('LLM 条目不存在');
+        const apitype = entry.apitype || 'ollama';
+        const baseurl = entry.baseurl;
+        const model = entry.model;
+        const apikey = entry.apikey;
+        const params = entry;
+
+        const fakeEvent = { sender: this.mainWindow && this.mainWindow.webContents };
+        if (apitype === 'ollama') {
+          await this._callOllamaStream(fakeEvent, { baseurl, model, apikey, params, input });
+        } else {
+          await this._callOpenApiStream(fakeEvent, { baseurl, model, apikey, params, input });
+        }
+      } catch (err) {
+        safeConsole.error('Trigger LLM entry failed:', name, err);
+        try { if (this.mainWindow && this.mainWindow.webContents) this.mainWindow.webContents.send('llm-complete', { success: false, error: err.message }); } catch (_) { }
+      }
+    };
+
+    // LLM request handler - supports streaming tokens back to renderer
+    ipcMain.handle('llm-request', async (event, payload) => {
+      try {
+        const cfg = Config.getAll();
+        const llmCfg = cfg.llm || {};
+        const apitype = (payload && payload.apitype) || llmCfg.apitype || 'ollama';
+        const baseurl = (payload && payload.baseurl) || llmCfg.baseurl || '';
+        const model = (payload && payload.model) || llmCfg.model || '';
+        const apikey = (payload && payload.apikey) || llmCfg.apikey || '';
+        const params = Object.assign({}, llmCfg, payload.params || {});
+
+        // choose implementation
+        if (apitype === 'ollama') {
+          await this._callOllamaStream(event, { baseurl, model, apikey, params, input: payload.input });
+        } else {
+          await this._callOpenApiStream(event, { baseurl, model, apikey, params, input: payload.input });
+        }
+
+        return { success: true };
+      } catch (err) {
+        safeConsole.error('llm-request failed:', err);
+        try { event.sender.send('llm-complete', { success: false, error: err.message }); } catch (_) { }
+        return { success: false, error: err.message };
+      }
     });
 
     // 粘贴项目
@@ -615,10 +761,159 @@ class MainProcess {
     this.trayManager.createTray(this.mainWindow, this);
     this.registerGlobalShortcuts();
     this.registerScreenshotShortcut();
+    // register optional LLM shortcut from config
+    try { this.registerLlmShortcut(); } catch (err) { safeConsole.warn('registerLlmShortcut during init failed:', err); }
     this.startClipboardMonitoring();
     this.setupIpcHandlers();
     // 构建应用顶部菜单（将截图/设置从主窗口移到菜单）
     this.buildAppMenu();
+  }
+
+  // Helper: simple fetch using node's https/http (avoid new deps). Returns response stream
+  async _simpleFetch(url, options = {}) {
+    // prefer undici if available for nicer streaming, otherwise use native http/https
+    let undici;
+    try { undici = require('undici'); } catch (_) { undici = null; }
+    if (undici && undici.fetch) {
+      return undici.fetch(url, options);
+    }
+
+    // fallback to node's http/https
+    const { URL } = require('url');
+    const parsed = new URL(url);
+    const lib = parsed.protocol === 'https:' ? require('https') : require('http');
+
+    return new Promise((resolve, reject) => {
+      const req = lib.request(url, {
+        method: options.method || 'GET',
+        headers: options.headers || {}
+      }, (res) => {
+        resolve(res);
+      });
+      req.on('error', reject);
+      if (options.body) {
+        if (typeof options.body === 'string' || Buffer.isBuffer(options.body)) req.write(options.body);
+        else req.write(JSON.stringify(options.body));
+      }
+      req.end();
+    });
+  }
+
+  // Parse streaming response (SSE-like or newline-delimited) and emit 'llm-stream' events
+  async _streamResponseToRenderer(event, res) {
+    try {
+      const sender = event && event.sender;
+      if (!res || !res.body) return;
+
+      // If using undici Response, res.body is a ReadableStream (whatwg). Convert if needed.
+      if (res.body.getReader) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let buffer = '';
+        while (!done) {
+          const r = await reader.read();
+          done = r.done;
+          if (r.value) {
+            buffer += decoder.decode(r.value, { stream: true });
+            // split by newline
+            let idx;
+            while ((idx = buffer.indexOf('\n')) !== -1) {
+              const line = buffer.slice(0, idx).trim();
+              buffer = buffer.slice(idx + 1);
+              if (!line) continue;
+              try {
+                // if SSE: lines like 'data: {...}'
+                if (line.startsWith('data:')) {
+                  const json = line.replace(/^data:\s*/, '');
+                  sender.send('llm-stream', json);
+                } else {
+                  sender.send('llm-stream', line);
+                }
+              } catch (err) { }
+            }
+          }
+        }
+        if (buffer && buffer.trim()) {
+          try { sender.send('llm-stream', buffer.trim()); } catch (_) { }
+        }
+        try { sender.send('llm-complete', { success: true }); } catch (_) { }
+        return;
+      }
+
+      // Node.js stream
+      const stream = res;
+      stream.setEncoding && stream.setEncoding('utf8');
+      let acc = '';
+      stream.on('data', (chunk) => {
+        try {
+          const s = String(chunk);
+          acc += s;
+          // try to split into lines
+          const parts = acc.split(/\r?\n/);
+          acc = parts.pop();
+          for (const p of parts) {
+            const line = p.trim();
+            if (!line) continue;
+            // SSE style
+            if (line.startsWith('data:')) {
+              const json = line.replace(/^data:\s*/, '');
+              try { event.sender.send('llm-stream', json); } catch (_) { }
+            } else {
+              try { event.sender.send('llm-stream', line); } catch (_) { }
+            }
+          }
+        } catch (err) { }
+      });
+      stream.on('end', () => {
+        try { event.sender.send('llm-complete', { success: true }); } catch (_) { }
+      });
+      stream.on('error', (err) => {
+        try { event.sender.send('llm-complete', { success: false, error: err && err.message }); } catch (_) { }
+      });
+    } catch (err) {
+      try { event.sender.send('llm-complete', { success: false, error: err && err.message }); } catch (_) { }
+    }
+  }
+
+  // Call Ollama server (assumes /chat/completions streaming or /api ...). Basic implementation supporting streaming text
+  async _callOllamaStream(event, { baseurl, model, apikey, params, input }) {
+    if (!baseurl) baseurl = 'http://localhost:11434';
+    // Ollama's streaming chat endpoint: POST /api/generate or /chat/completions depending on version
+    const url = `${baseurl.replace(/\/$/, '')}/api/generate`;
+    const body = {
+      model: model,
+      prompt: params.prompt || input || '',
+      // map parameters
+      temperature: params.temperature,
+      top_p: params.top_p,
+      top_k: params.top_k,
+      max_tokens: params.max_tokens
+    };
+    const headers = { 'Content-Type': 'application/json' };
+    if (apikey) headers['Authorization'] = `Bearer ${apikey}`;
+
+    const res = await this._simpleFetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    await this._streamResponseToRenderer(event, res);
+  }
+
+  // Call OpenAPI-compatible streaming (e.g., OpenAI chat completions) using streaming=true
+  async _callOpenApiStream(event, { baseurl, model, apikey, params, input }) {
+    if (!baseurl) throw new Error('OpenAPI baseurl not configured');
+    const url = `${baseurl.replace(/\/$/, '')}/v1/chat/completions`;
+    const payload = {
+      model: model,
+      messages: [{ role: 'user', content: params.prompt || input || '' }],
+      temperature: params.temperature,
+      top_p: params.top_p,
+      stream: true,
+      max_tokens: params.max_tokens
+    };
+    const headers = { 'Content-Type': 'application/json' };
+    if (apikey) headers['Authorization'] = `Bearer ${apikey}`;
+
+    const res = await this._simpleFetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    await this._streamResponseToRenderer(event, res);
   }
 
 

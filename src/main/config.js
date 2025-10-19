@@ -20,6 +20,25 @@ const DEFAULT_CONFIG = {
   screenshotShortcut: 'CommandOrControl+Shift+S',
   // 主题
   theme: 'light'
+  ,
+  // 大模型设置
+  llm: {
+    apitype: 'ollama', // 'ollama' or 'openapi'
+    model: '',
+    baseurl: '',
+    apikey: '',
+    prompt: '',
+    temperature: 0.7,
+    top_p: 0.95,
+    top_k: 0.9,
+    context_window: 32768,
+    max_tokens: 32768,
+    min_p: 0.05,
+    presence_penalty: 1.1
+  },
+
+  // 多个 LLM 条目，键为用户备注名 -> { model, prompt, baseurl, apikey, params..., llmShortcut }
+  llms: {}
 };
 
 // 获取配置文件路径

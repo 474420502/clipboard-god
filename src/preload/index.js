@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Tooltip controls
   showTooltip: (payload) => ipcRenderer.send('show-tooltip', payload),
   hideTooltip: () => ipcRenderer.send('hide-tooltip'),
+  // LLM request: invoke and receive progress via events
+  llmRequest: (payload) => ipcRenderer.invoke('llm-request', payload),
+  onLlmStream: (callback) => ipcRenderer.on('llm-stream', (_event, chunk) => callback(chunk)),
+  onLlmComplete: (callback) => ipcRenderer.on('llm-complete', (_event, info) => callback(info)),
 
   // 清理所有监听器
   cleanupListeners: () => {
@@ -31,5 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('take-screenshot');
     ipcRenderer.removeAllListeners('global-shortcut');
     ipcRenderer.removeAllListeners('settings-updated');
+    ipcRenderer.removeAllListeners('llm-stream');
+    ipcRenderer.removeAllListeners('llm-complete');
   }
 });
