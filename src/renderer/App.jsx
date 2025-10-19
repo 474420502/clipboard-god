@@ -12,7 +12,7 @@
 // - use `electronAPI.getHistory()` on mount and subscribe to `onUpdateHistory`/`onError`.
 // - use the preload's ipcRenderer wrapper only for the legacy 'history-data' channel.
 // - avoid overwriting settings keys with undefined when mapping payloads.
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import HistoryList from './components/HistoryList';
 import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
@@ -37,7 +37,8 @@ function App() {
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
-    theme: 'light'
+    theme: 'light',
+    enableTooltips: true
   });
 
   // 在 App 挂载时，从主进程加载设置并作为单一来源
@@ -52,6 +53,7 @@ function App() {
           if (typeof cfg.previewLength !== 'undefined') mapped.previewLength = cfg.previewLength;
           if (typeof cfg.maxHistoryItems !== 'undefined') mapped.maxHistoryItems = cfg.maxHistoryItems;
           if (typeof cfg.useNumberShortcuts !== 'undefined') mapped.useNumberShortcuts = cfg.useNumberShortcuts;
+          if (typeof cfg.enableTooltips !== 'undefined') mapped.enableTooltips = cfg.enableTooltips;
           if (typeof cfg.globalShortcut !== 'undefined') mapped.globalShortcut = cfg.globalShortcut;
           if (typeof cfg.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = cfg.screenshotShortcut;
           if (typeof cfg.theme !== 'undefined') mapped.theme = cfg.theme;
@@ -112,20 +114,57 @@ function App() {
       console.error('Failed to get history:', error);
     }
 
+    // Maintain a set of the front-N ids/hashes to detect when a truly new item arrives.
+    const FRONT_N = 20;
+    const prevFrontSetRef = { current: new Set() };
+
+    const takeFrontIdsOrHashes = (arr) => {
+      const s = new Set();
+      if (!arr || !arr.length) return s;
+      for (let i = 0; i < Math.min(FRONT_N, arr.length); i++) {
+        const it = arr[i];
+        if (!it) continue;
+        if (typeof it.id !== 'undefined' && it.id !== null) s.add(String(it.id));
+        else if (typeof it.hash !== 'undefined' && it.hash !== null) s.add(`hash:${String(it.hash)}`);
+        else if (it.timestamp) s.add(`ts:${String(it.timestamp)}`); // last-resort
+      }
+      return s;
+    };
+
     const handleHistoryData = (_history) => {
-      // history-data carries the initial full history
       setHistory(_history);
-      // Always select first item when history is loaded
-
       setSelectedIndex(0);
-
+      prevFrontSetRef.current = takeFrontIdsOrHashes(_history);
     };
 
     const handleUpdate = (updatedHistory) => {
       setHistory(updatedHistory);
-      // Always reset to first item when history updates (new items added)
-      if (updatedHistory && updatedHistory.length > 0) {
-        setSelectedIndex(0);
+
+      try {
+        const newFrontSet = takeFrontIdsOrHashes(updatedHistory);
+
+        // If none of the current front ids/hashes exist in the previous front set,
+        // we likely have a genuinely new item(s) inserted at the front -> reset selection.
+        let hasOverlap = false;
+        for (const v of newFrontSet) {
+          if (prevFrontSetRef.current.has(v)) { hasOverlap = true; break; }
+        }
+
+        if (!hasOverlap && newFrontSet.size > 0) {
+          // new items have arrived at the front
+          setSelectedIndex(0);
+        } else {
+          // preserve current selection but clamp to bounds
+          setSelectedIndex((prev) => {
+            if (!updatedHistory || updatedHistory.length === 0) return 0;
+            return Math.max(0, Math.min(prev, updatedHistory.length - 1));
+          });
+        }
+
+        // update prev set for next comparison
+        prevFrontSetRef.current = newFrontSet;
+      } catch (err) {
+        setSelectedIndex((prev) => (updatedHistory && updatedHistory.length > 0 ? Math.min(prev, updatedHistory.length - 1) : 0));
       }
     };
 
@@ -193,6 +232,7 @@ function App() {
         if (typeof updated.useNumberShortcuts !== 'undefined') {
           mapped.useNumberShortcuts = updated.useNumberShortcuts;
         }
+        if (typeof updated.enableTooltips !== 'undefined') mapped.enableTooltips = updated.enableTooltips;
         if (typeof updated.globalShortcut !== 'undefined') mapped.globalShortcut = updated.globalShortcut;
         if (typeof updated.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = updated.screenshotShortcut;
         if (typeof updated.theme !== 'undefined') mapped.theme = updated.theme;
@@ -463,6 +503,7 @@ function App() {
         history={filteredHistory}
         previewLength={settings.previewLength}
         showShortcuts={!!settings.useNumberShortcuts}
+        enableTooltips={!!settings.enableTooltips}
         selectedIndex={selectedIndex}
         keyboardNavigationMode={keyboardNavigationMode}
         setSelectedIndex={setSelectedIndex}
@@ -478,6 +519,7 @@ function App() {
           previewLength: settings.previewLength,
           maxHistoryItems: settings.maxHistoryItems,
           useNumberShortcuts: settings.useNumberShortcuts,
+          enableTooltips: settings.enableTooltips,
           globalShortcut: settings.globalShortcut,
           screenshotShortcut: settings.screenshotShortcut,
           theme: settings.theme

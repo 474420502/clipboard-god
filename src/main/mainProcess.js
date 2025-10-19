@@ -469,6 +469,9 @@ class MainProcess {
     // Tooltip control from renderer: show/hide/update
     ipcMain.on('show-tooltip', (_event, payload) => {
       try {
+        // Respect global enableTooltips config: do not show if disabled
+        const cfg = Config.getAll();
+        if (cfg && cfg.enableTooltips === false) return;
         // Do not show tooltip if there's no main window or it's not visible
         if (!this.mainWindow || this.mainWindow.isDestroyed() || !this.mainWindow.isVisible() || this._isPasting) {
           // skip showing tooltip when main window is hidden, destroyed, or during paste

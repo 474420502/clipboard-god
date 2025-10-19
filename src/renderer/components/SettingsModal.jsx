@@ -9,7 +9,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     useNumberShortcuts: true,
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
-    theme: 'light'
+    theme: 'light',
+    enableTooltips: true
   });
 
   const tabs = [
@@ -26,6 +27,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
         previewLength: initialSettings.previewLength,
         maxHistoryItems: initialSettings.maxHistoryItems,
         useNumberShortcuts: typeof initialSettings.useNumberShortcuts !== 'undefined' ? initialSettings.useNumberShortcuts : true,
+        enableTooltips: typeof initialSettings.enableTooltips !== 'undefined' ? initialSettings.enableTooltips : true,
         globalShortcut: initialSettings.globalShortcut,
         screenshotShortcut: initialSettings.screenshotShortcut,
         theme: initialSettings.theme
@@ -39,6 +41,12 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
       ...prev,
       [field]: value
     }));
+    // If user is toggling off tooltips, immediately hide any visible tooltip
+    try {
+      if (field === 'enableTooltips' && value === false && window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
+        window.electronAPI.hideTooltip();
+      }
+    } catch (err) { }
   };
 
   const handleSave = () => {
@@ -56,13 +64,21 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 // main returns config with main naming; map to renderer shape
                 const mapped = {
                   previewLength: res.config.previewLength,
+                  maxHistoryItems: res.config.maxHistoryItems,
                   useNumberShortcuts: typeof res.config.useNumberShortcuts !== 'undefined' ? res.config.useNumberShortcuts : res.config.useNumberShortcuts,
+                  enableTooltips: typeof res.config.enableTooltips !== 'undefined' ? res.config.enableTooltips : true,
                   globalShortcut: res.config.globalShortcut,
                   screenshotShortcut: res.config.screenshotShortcut,
                   theme: res.config.theme
                 };
                 onSave(mapped);
               }
+              // also ensure tooltip is hidden if saved config disables it
+              try {
+                if (mapped && mapped.enableTooltips === false && window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
+                  window.electronAPI.hideTooltip();
+                }
+              } catch (err) { }
             } else {
               // fallback: pass the local settings object
               if (typeof onSave === 'function') {
@@ -172,6 +188,18 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     启用数字快捷键 (1-9) 触发粘贴
                   </label>
                   <div className="small">关闭后按数字 1-9 不会触发快速粘贴，且列表中不会显示数字提示。</div>
+                </div>
+                <div className="setting-row">
+                  <label>
+                    <input
+                      id="enableTooltipsToggle"
+                      type="checkbox"
+                      checked={settings.enableTooltips}
+                      onChange={(e) => handleChange('enableTooltips', e.target.checked)}
+                    />
+                    启用工具提示
+                  </label>
+                  <div className="small">关闭后应用将不再显示条目预览的工具提示（包括主进程的外部 tooltip 窗口）。</div>
                 </div>
               </div>
             )}

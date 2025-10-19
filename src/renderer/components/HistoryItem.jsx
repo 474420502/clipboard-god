@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { truncateText } from '../utils/text';
 
-function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, isSelected = false, setSelectedIndex, setKeyboardNavigationMode }) {
+function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, enableTooltips = true, isSelected = false, setSelectedIndex, setKeyboardNavigationMode }) {
   const itemRef = useRef(null);
 
   // rAF-based stability detection: wait until bounding rect is stable for N consecutive frames
@@ -48,7 +48,8 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, i
           if (stableCount.current >= STABLE_FRAMES) {
             // stable, show tooltip
             try {
-              if (window.electronAPI && typeof window.electronAPI.showTooltip === 'function') {
+              // respect renderer-side toggle first
+              if (enableTooltips && window.electronAPI && typeof window.electronAPI.showTooltip === 'function') {
                 // Round the bounding rect values to integers so tiny sub-pixel
                 // or fractional changes during scrolling don't cause the tooltip
                 // to reposition constantly. This keeps the tooltip visually
@@ -80,7 +81,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, i
     } else {
       // Hide tooltip immediately when unselected
       try {
-        if (window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
+        if (enableTooltips && window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
           window.electronAPI.hideTooltip();
         }
       } catch (err) { }

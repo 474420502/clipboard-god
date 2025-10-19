@@ -8,6 +8,8 @@ const DEFAULT_CONFIG = {
   previewLength: 120,
   // 是否使用自定义工具提示
   customTooltip: false,
+  // 是否启用工具提示 (如果为 false, 渲染器的 tooltip 调用会被忽略)
+  enableTooltips: true,
   // 粘贴快捷键
   pasteShortcut: 'numbers',
   // 是否使用数字快捷键

@@ -8,7 +8,33 @@ class PasteHandler {
       if (item.type === 'text') {
         clipboard.writeText(item.content);
       } else if (item.type === 'image') {
-        const image = nativeImage.createFromDataURL(item.content);
+        let image = null;
+        try {
+          // If content is a data URL (stored inline), create from data URL
+          if (typeof item.content === 'string' && item.content.startsWith('data:')) {
+            image = nativeImage.createFromDataURL(item.content);
+          } else if (typeof item.content === 'string') {
+            // Maybe it's a stored file path (sqliteStorage saves image_path)
+            const fs = require('fs');
+            try {
+              if (fs.existsSync(item.content)) {
+                const buf = fs.readFileSync(item.content);
+                image = nativeImage.createFromBuffer(buf);
+              }
+            } catch (e) {
+              // ignore file read errors, will fallback
+            }
+          } else if (item.content && Buffer.isBuffer(item.content)) {
+            image = nativeImage.createFromBuffer(item.content);
+          }
+        } catch (err) {
+          console.error('创建 nativeImage 失败:', err);
+        }
+
+        if (!image || image.isEmpty()) {
+          throw new Error('无法解析图像数据用于写入剪贴板');
+        }
+
         clipboard.writeImage(image);
       }
       return true;
