@@ -1,4 +1,4 @@
-const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu } = require('electron');
+const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ClipboardManager = require('./clipboardManager');
@@ -41,6 +41,10 @@ const safeConsole = {
 class MainProcess {
   constructor() {
     this.mainWindow = null;
+    this.tooltipWindow = null;
+    this.tooltipPayload = null;
+    this.tooltipSize = null;
+    this.tooltipWindow = null;
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
     // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 500
     const maxHistoryConfig = Config.get('maxHistoryItems');
@@ -60,6 +64,98 @@ class MainProcess {
     this._configWatcher = null;
     this._configWatchTimer = null;
     this._lastConfigSnapshot = null;
+  }
+
+  // Create the tooltip BrowserWindow (lazy)
+  createTooltipWindow() {
+    if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) return;
+
+    try {
+      this.tooltipWindow = new BrowserWindow({
+        width: 420,
+        height: 200,
+        show: false,
+        frame: false,
+        resizable: false,
+        // Do not force alwaysOnTop so z-order follows parent/main window
+        alwaysOnTop: false,
+        focusable: false,
+        skipTaskbar: true,
+        transparent: true,
+        parent: this.mainWindow || undefined,
+        modal: false,
+        webPreferences: {
+          contextIsolation: true,
+        }
+      });
+
+      // Ensure tooltip hides when main window hides and follows show/hide
+      if (this.mainWindow) {
+        this.mainWindow.on('hide', () => {
+          try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide(); } catch (_) { }
+        });
+        this.mainWindow.on('show', () => {
+          // tooltip remains hidden until explicitly requested by renderer
+        });
+        // reposition tooltip when main window moves or resizes
+        this.mainWindow.on('move', () => {
+          try { this.repositionTooltip(); } catch (_) { }
+        });
+        this.mainWindow.on('resize', () => {
+          try { this.repositionTooltip(); } catch (_) { }
+        });
+        // Hide tooltip when the main window loses focus (user switched to another app)
+        this.mainWindow.on('blur', () => {
+          try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide(); } catch (_) { }
+        });
+        // When main window regains focus, restore tooltip if there is a payload
+        this.mainWindow.on('focus', () => {
+          try {
+            if (this.tooltipPayload && this.tooltipWindow && !this.tooltipWindow.isDestroyed()) {
+              this.repositionTooltip();
+              try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
+            }
+          } catch (_) { }
+        });
+      }
+
+      // Clean up when tooltip closed
+      this.tooltipWindow.on('closed', () => {
+        this.tooltipWindow = null;
+      });
+    } catch (err) {
+      safeConsole.error('创建 tooltip 窗口失败:', err);
+      this.tooltipWindow = null;
+    }
+  }
+
+  // Reposition tooltip using last payload/size relative to mainWindow
+  repositionTooltip() {
+    try {
+      if (!this.tooltipWindow || this.tooltipWindow.isDestroyed() || !this.tooltipPayload || !this.tooltipSize) return;
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+      const mainBounds = this.mainWindow.getBounds();
+      const { anchorRect } = this.tooltipPayload;
+      const size = this.tooltipSize;
+      const offsetX = 8;
+
+      const desiredX = mainBounds.x + mainBounds.width + offsetX;
+      let desiredY = mainBounds.y + (anchorRect.top || 0);
+
+      // Ensure tooltip fits on screen vertically
+      const display = screen.getDisplayMatching(mainBounds);
+      const workArea = display ? display.workArea : { height: 10000 };
+      if (desiredY + size.h > workArea.height) {
+        desiredY = Math.max(0, workArea.height - size.h - 10);
+      }
+
+      try {
+        this.tooltipWindow.setBounds({ x: Math.max(desiredX, 0), y: Math.max(desiredY, 0), width: Math.max(100, Math.min(size.w, 800)), height: Math.max(30, Math.min(size.h, 1000)) });
+      } catch (err) { }
+    } catch (err) {
+      // ignore reposition errors
+    }
   }
 
   // 创建主窗口
@@ -320,6 +416,66 @@ class MainProcess {
           this.mainWindow.webContents.send('error', error.message);
         }
       }
+    });
+
+    // Tooltip control from renderer: show/hide/update
+    ipcMain.on('show-tooltip', (_event, payload) => {
+      try {
+        this.createTooltipWindow();
+        if (!this.tooltipWindow) return;
+
+        const { content = '', anchorRect = {} } = payload || {};
+        this.tooltipPayload = { content, anchorRect };
+
+        // Build a minimal HTML with encoded content
+        const safeContent = String(content)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+
+        const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:pre-wrap;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${safeContent}</div><script>const {ipcRenderer} = require('electron');
+        // send height back to main when content is ready
+        window.addEventListener('DOMContentLoaded', () => {
+          const el = document.getElementById('box');
+          const rect = el.getBoundingClientRect();
+          ipcRenderer.sendToHost && ipcRenderer.sendToHost('tooltip-size', { w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
+        });
+        </script></body></html>`;
+
+        // Use loadURL with data URL
+        this.tooltipWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+
+        // When the tooltip's webContents finish loading, attempt to measure and resize using an estimate
+        this.tooltipWindow.webContents.once('did-finish-load', () => {
+          try {
+            // Ask for size by executing JavaScript
+            this.tooltipWindow.webContents.executeJavaScript(`(function(){const el=document.getElementById('box'); if(!el) return {w:300,h:50}; const r=el.getBoundingClientRect(); ({w:Math.ceil(r.width), h:Math.ceil(r.height)});})()`)
+              .then((size) => {
+                this.tooltipSize = { w: Math.max(200, Math.min(800, size.w + 8)), h: Math.max(30, Math.min(1000, size.h + 8)) };
+                this.repositionTooltip();
+                try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
+              })
+              .catch((err) => {
+                // fallback show
+                this.tooltipSize = { w: 420, h: 120 };
+                this.repositionTooltip();
+                try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
+              });
+          } catch (err) {
+            try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
+          }
+        });
+      } catch (err) {
+        safeConsole.error('show-tooltip 处理失败:', err);
+      }
+    });
+
+    ipcMain.on('hide-tooltip', () => {
+      try {
+        if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide();
+      } catch (err) { }
     });
 
     // 截图相关功能

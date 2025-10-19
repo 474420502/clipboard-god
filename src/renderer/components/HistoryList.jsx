@@ -15,7 +15,7 @@ function HistoryList({ history, previewLength, showShortcuts = true, selectedInd
           index={index}
           previewLength={previewLength}
           showShortcuts={showShortcuts}
-          isSelected={keyboardNavigationMode && index === selectedIndex}
+          isSelected={index === selectedIndex}
           setSelectedIndex={setSelectedIndex}
           setKeyboardNavigationMode={setKeyboardNavigationMode}
         />

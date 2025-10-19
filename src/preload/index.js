@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTakeScreenshot: (callback) => ipcRenderer.on('take-screenshot', callback),
   onGlobalShortcut: (callback) => ipcRenderer.on('global-shortcut', callback),
   onSettingsUpdated: (callback) => ipcRenderer.on('settings-updated', (_event, value) => callback(value)),
+  // Tooltip controls
+  showTooltip: (payload) => ipcRenderer.send('show-tooltip', payload),
+  hideTooltip: () => ipcRenderer.send('hide-tooltip'),
 
   // 清理所有监听器
   cleanupListeners: () => {

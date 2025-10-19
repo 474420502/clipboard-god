@@ -30,6 +30,7 @@ function App() {
   const [keyboardNavigationMode, setKeyboardNavigationMode] = useState(true); // keyboard navigation mode - always enabled
   const [selectedIndex, setSelectedIndex] = useState(0); // selected item index for keyboard navigation - start with first item
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [suppressMouseHover, setSuppressMouseHover] = useState(false);
   const [settings, setSettings] = useState({
     previewLength: 120,
     maxHistoryItems: 500,
@@ -375,6 +376,29 @@ function App() {
     return () => document.removeEventListener('keydown', handler);
   }, [filteredHistory, searchVisible, keyboardNavigationMode, selectedIndex, isSettingsOpen]);
 
+  // Clear suppressMouseHover when the user moves the mouse
+  useEffect(() => {
+    const onPointerMove = () => {
+      if (suppressMouseHover) setSuppressMouseHover(false);
+    };
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove);
+    return () => {
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('pointermove', onPointerMove);
+    };
+  }, [suppressMouseHover]);
+
+  // expose suppress flag for simple global check (HistoryItem reads this)
+  useEffect(() => {
+    try {
+      window.__suppressMouseHover = suppressMouseHover;
+    } catch (err) { }
+    return () => {
+      try { window.__suppressMouseHover = false; } catch (err) { }
+    };
+  }, [suppressMouseHover]);
+
   const handleScreenshot = () => {
     try {
       window.electronAPI.startScreenshot();
@@ -409,14 +433,15 @@ function App() {
       } catch (err) {
         console.error('Failed to paste selected item:', err);
       }
-      // Exit keyboard navigation mode after selection
-      setKeyboardNavigationMode(false);
+      // Keep keyboard navigation enabled; after paste we can reset selection to first item
       setSelectedIndex(0);
     }
   };
 
   const handleNavigateItems = (direction) => {
     setKeyboardNavigationMode(true); // Enable keyboard navigation mode when navigating
+    // temporarily suppress mouse hover-driven selection
+    setSuppressMouseHover(true);
     let newIndex = selectedIndex;
     if (direction === 'up') {
       newIndex = selectedIndex > 0 ? selectedIndex - 1 : 0;
@@ -442,6 +467,8 @@ function App() {
         keyboardNavigationMode={keyboardNavigationMode}
         setSelectedIndex={setSelectedIndex}
         setKeyboardNavigationMode={setKeyboardNavigationMode}
+        suppressMouseHover={suppressMouseHover}
+        setSuppressMouseHover={setSuppressMouseHover}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
