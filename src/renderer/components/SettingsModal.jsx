@@ -20,31 +20,10 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     { id: 'llm', label: '大模型', icon: '🤖' }
   ];
 
-  // 当 modal 打开或 initialSettings 变化时，从 props 同步内部 state
-  useEffect(() => {
-    if (!isOpen) return;
-    if (initialSettings && typeof initialSettings === 'object') {
-      const mapped = {
-        previewLength: initialSettings.previewLength,
-        maxHistoryItems: initialSettings.maxHistoryItems,
-        useNumberShortcuts: typeof initialSettings.useNumberShortcuts !== 'undefined' ? initialSettings.useNumberShortcuts : true,
-        enableTooltips: typeof initialSettings.enableTooltips !== 'undefined' ? initialSettings.enableTooltips : true,
-        globalShortcut: initialSettings.globalShortcut,
-        screenshotShortcut: initialSettings.screenshotShortcut,
-        theme: initialSettings.theme
-      };
-      // include llms map if present
-      if (initialSettings.llms && typeof initialSettings.llms === 'object') {
-        mapped.llms = { ...initialSettings.llms };
-        // if no selected item, pick the first one by default
-        const names = Object.keys(initialSettings.llms);
-        if (names.length > 0) {
-          mapped._selectedLlm = names[0];
-        }
-      }
-      setSettings(prev => ({ ...prev, ...mapped }));
-    }
-  }, [isOpen, initialSettings]);
+  // 控制每个条目的参数面板是否展开（默认折叠 -> false）
+  const [paramsExpanded, setParamsExpanded] = useState({});
+
+
 
   const handleChange = (field, value) => {
     setSettings(prev => ({
@@ -161,6 +140,41 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
+
+  // 当传入的 initialSettings 在主进程加载后更新时，
+  // 在打开设置模态框时把初始值同步到内部 state，避免仍然显示最初的默认值。
+  useEffect(() => {
+    if (!isOpen) return; // 仅在打开模态框时同步
+    try {
+      // Debug: print incoming initialSettings so we can verify what renderer received
+      try { console.log('SettingsModal: initialSettings received:', initialSettings); } catch (e) { }
+      const src = initialSettings || {};
+      setSettings(prev => ({
+        previewLength: typeof src.previewLength !== 'undefined' ? src.previewLength : 120,
+        maxHistoryItems: typeof src.maxHistoryItems !== 'undefined' ? src.maxHistoryItems : 500,
+        useNumberShortcuts: typeof src.useNumberShortcuts !== 'undefined' ? src.useNumberShortcuts : true,
+        globalShortcut: typeof src.globalShortcut !== 'undefined' ? src.globalShortcut : 'CommandOrControl+Alt+V',
+        screenshotShortcut: typeof src.screenshotShortcut !== 'undefined' ? src.screenshotShortcut : 'CommandOrControl+Shift+S',
+        theme: typeof src.theme !== 'undefined' ? src.theme : 'light',
+        enableTooltips: typeof src.enableTooltips !== 'undefined' ? src.enableTooltips : true,
+        llms: src.llms || {},
+        _selectedLlm: src._selectedLlm || ''
+      }));
+    } catch (err) {
+      console.warn('Failed to sync initialSettings into SettingsModal:', err);
+    }
+  }, [initialSettings, isOpen]);
+
+  // Previously we auto-created an LLM entry when the user typed/selected a name.
+  // That caused entries to appear without the user clicking [+]. Disable auto-create
+  // and only create a new entry when the user explicitly clicks the + button below.
+  // Keep the selected name value but do not mutate `settings.llms` here.
+  useEffect(() => {
+    // If the selected name no longer exists in llms, keep the selection but do not
+    // create or mutate the llms map here. The + button will create entries.
+    // This effect intentionally does nothing to avoid implicit creation.
+    return () => { };
+  }, [settings._selectedLlm]);
 
   if (!isOpen) return null;
 
@@ -309,43 +323,55 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 <div className="setting-row">
                   <label>条目名称（选择或输入）</label>
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    <input
-                      list="llm-names"
-                      placeholder="选择已有或输入新名称，例如：备注1"
-                      value={settings._selectedLlm || ''}
-                      onChange={(e) => handleChange('_selectedLlm', e.target.value)}
-                    />
-                    <datalist id="llm-names">
-                      {settings.llms && Object.keys(settings.llms).map(name => (
-                        <option key={name} value={name} />
-                      ))}
-                    </datalist>
-                    <button type="button" onClick={() => {
-                      const name = (settings._selectedLlm || '').trim();
-                      if (!name) return;
-                      if (settings.llms && settings.llms[name]) {
-                        // already exists -> just select it
-                        handleChange('_selectedLlm', name);
-                        return;
-                      }
-                      const next = { ...(settings.llms || {}) };
-                      next[name] = {
-                        model: '',
-                        prompt: '',
-                        baseurl: '',
-                        apikey: '',
-                        temperature: 0.7,
-                        top_p: 0.95,
-                        top_k: 0.9,
-                        context_window: 32768,
-                        max_tokens: 32768,
-                        min_p: 0.05,
-                        presence_penalty: 1.1,
-                        llmShortcut: ''
-                      };
-                      handleChange('llms', next);
-                      handleChange('_selectedLlm', name);
-                    }}>+</button>
+                    {/* wrap input and button so they behave as a single unit */}
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: '1 1 auto', minWidth: 0 }}>
+                      <input
+                        list="llm-names"
+                        placeholder="选择已有或输入新名称，例如：备注1"
+                        value={settings._selectedLlm || ''}
+                        onChange={(e) => handleChange('_selectedLlm', e.target.value)}
+                        style={{ flex: '1 1 auto', minWidth: 0 }}
+                      />
+                      <datalist id="llm-names">
+                        {settings.llms && Object.keys(settings.llms).map(name => (
+                          <option key={name} value={name} />
+                        ))}
+                      </datalist>
+                      <button
+                        type="button"
+                        title="新增或选择条目"
+                        style={{ flex: '0 0 auto', padding: '6px 10px' }}
+                        onClick={() => {
+                          const name = (settings._selectedLlm || '').trim();
+                          if (!name) return;
+                          if (settings.llms && settings.llms[name]) {
+                            // already exists -> just select it
+                            handleChange('_selectedLlm', name);
+                            return;
+                          }
+                          const next = { ...(settings.llms || {}) };
+                          next[name] = {
+                            apitype: 'ollama',
+                            model: '',
+                            prompt: 'Summarize \{\{\}\}',
+                            baseurl: 'http://localhost:11434',
+                            apikey: '',
+                            temperature: 0.7,
+                            top_p: 0.95,
+                            top_k: 0.9,
+                            context_window: 32768,
+                            max_tokens: 32768,
+                            min_p: 0.05,
+                            presence_penalty: 1.1,
+                            llmShortcut: ''
+                          };
+                          handleChange('llms', next);
+                          handleChange('_selectedLlm', name);
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -361,11 +387,42 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                           <label>API 类型</label>
                           <select
                             value={entry.apitype || 'ollama'}
-                            onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), apitype: e.target.value } })}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              const nextEntry = { ...(entry || {}), apitype: v };
+                              // If switching to ollama, ensure a reasonable default baseurl
+                              if (v === 'ollama' && (!nextEntry.baseurl || String(nextEntry.baseurl).trim() === '')) {
+                                nextEntry.baseurl = 'http://localhost:11434';
+                              }
+                              handleChange('llms', { ...(settings.llms || {}), [name]: nextEntry });
+                            }}
                           >
                             <option value="ollama">Ollama</option>
                             <option value="openapi">OpenAPI</option>
                           </select>
+                        </div>
+                        <div className="setting-row">
+                          <label>输入类型</label>
+                          <select
+                            value={entry.inputType || 'text'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const nextEntry = { ...(entry || {}), inputType: val };
+                              // when switching to text, if prompt empty, set default template
+                              if (val === 'text' && (!nextEntry.prompt || String(nextEntry.prompt).trim() === '')) {
+                                nextEntry.prompt = '总结内容 {{text}}';
+                              }
+                              // when switching to image and prompt is the text-template, clear it
+                              if (val === 'image' && nextEntry.prompt === '总结内容 {{text}}') {
+                                nextEntry.prompt = '';
+                              }
+                              handleChange('llms', { ...(settings.llms || {}), [name]: nextEntry });
+                            }}
+                          >
+                            <option value="text">文本</option>
+                            <option value="image">图片</option>
+                          </select>
+                          <div className="small">选择此条目期望接收的输入类型。文本输入会在提示词中用 {'{{text}}'} 占位原文。</div>
                         </div>
                         <div className="setting-row">
                           <label>Model</label>
@@ -379,24 +436,140 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                           <label>API Key</label>
                           <input type="password" value={entry.apikey || ''} onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), apikey: e.target.value } })} />
                         </div>
-                        <div className="setting-row">
+                        <div className="setting-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           <label>Prompt</label>
-                          <textarea rows={3} value={entry.prompt || ''} onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), prompt: e.target.value } })} />
+                          <textarea
+                            rows={3}
+                            value={entry.prompt || ''}
+                            placeholder={(!entry.prompt || String(entry.prompt).trim() === '') && (entry.inputType || 'text') === 'text' ? 'Summarize {{text}}' : ''}
+                            onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), prompt: e.target.value } })}
+                            style={{ width: '100%', minHeight: '80px', resize: 'vertical' }}
+                          />
                         </div>
+
                         <div className="setting-row">
-                          <label>LLM 快捷键</label>
-                          <ShortcutCapture value={entry.llmShortcut || ''} onChange={(v) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), llmShortcut: v } })} placeholder="可选快捷键" />
+                          <label>条目快捷键</label>
+                          <ShortcutCapture
+                            value={entry.llmShortcut || ''}
+                            onChange={(value) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), llmShortcut: value } })}
+                            placeholder="设置此条目的快捷键（可选）"
+                          />
+                          <div className="small">为此 LLM 条目设置快捷键，设置后可使用全局快捷键触发指定条目的处理。</div>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button type="button" onClick={() => {
-                            // delete
-                            if (!confirm(`删除条目 "${name}" ?`)) return;
-                            const next = { ...(settings.llms || {}) };
-                            delete next[name];
-                            handleChange('llms', next);
-                            handleChange('_selectedLlm', '');
-                          }}>删除</button>
-                          <div className="small">保存时会把所有条目写回配置文件；同名条目不允许存在。</div>
+
+                        <div className="params-group" style={{ borderTop: '1px solid #f0f0f0', paddingTop: '12px', marginTop: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h6 style={{ margin: 0 }}>参数</h6>
+                            {/* 默认折叠，点击展开/收起 */}
+                            <button
+                              type="button"
+                              className="params-toggle"
+                              onClick={() => setParamsExpanded(prev => ({ ...(prev || {}), [name]: !prev[name] }))}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--settings-text)' }}
+                            >
+                              {(paramsExpanded && paramsExpanded[name]) ? '▾ 收起' : '▸ 展开'}
+                            </button>
+                          </div>
+                          {(paramsExpanded && paramsExpanded[name]) ? (
+                            <div className="params-content" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                              <div className="setting-row">
+                                <label>Temperature</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="2"
+                                  value={typeof entry.temperature !== 'undefined' ? entry.temperature : 0.7}
+                                  onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), temperature: parseFloat(e.target.value) || 0 } })}
+                                />
+                              </div>
+
+                              <div className="setting-row">
+                                <label>Top P</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="1"
+                                  value={typeof entry.top_p !== 'undefined' ? entry.top_p : 0.95}
+                                  onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), top_p: parseFloat(e.target.value) || 0 } })}
+                                />
+                              </div>
+
+                              <div className="setting-row">
+                                <label>Top K</label>
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={typeof entry.top_k !== 'undefined' ? entry.top_k : 0.9}
+                                  onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), top_k: parseFloat(e.target.value) || 0 } })}
+                                />
+                              </div>
+
+                              <div className="setting-row">
+                                <label>Context Window</label>
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={typeof entry.context_window !== 'undefined' ? entry.context_window : 32768}
+                                  onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), context_window: parseInt(e.target.value) || 0 } })}
+                                />
+                              </div>
+
+                              <div className="setting-row">
+                                <label>Max Tokens</label>
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={typeof entry.max_tokens !== 'undefined' ? entry.max_tokens : 32768}
+                                  onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), max_tokens: parseInt(e.target.value) || 0 } })}
+                                />
+                              </div>
+
+                              <div className="setting-row">
+                                <label>Min P</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="1"
+                                  value={typeof entry.min_p !== 'undefined' ? entry.min_p : 0.05}
+                                  onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), min_p: parseFloat(e.target.value) || 0 } })}
+                                />
+                              </div>
+
+                              <div className="setting-row">
+                                <label>Presence Penalty</label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="-2"
+                                  max="2"
+                                  value={typeof entry.presence_penalty !== 'undefined' ? entry.presence_penalty : 1.1}
+                                  onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), presence_penalty: parseFloat(e.target.value) || 0 } })}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>参数已折叠，点击展开查看/编辑</div>
+                          )}
+                        </div>
+
+                        <div className="setting-row">
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button type="button" onClick={() => {
+                              // delete
+                              if (!confirm(`删除条目 "${name}" ?`)) return;
+                              const next = { ...(settings.llms || {}) };
+                              delete next[name];
+                              handleChange('llms', next);
+                              handleChange('_selectedLlm', '');
+                            }}>删除</button>
+                            <div className="small">保存时会把所有条目写回配置文件；同名条目不允许存在。</div>
+                          </div>
                         </div>
                       </div>
                     );

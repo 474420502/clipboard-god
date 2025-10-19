@@ -351,12 +351,16 @@ class MainProcess {
 
     ipcMain.handle('set-settings', async (event, values) => {
       safeConsole.log('保存设置:', values);
+      try { safeConsole.log('配置文件路径 (Config.configPath):', Config.configPath); } catch (e) { }
 
       // 获取保存前的旧配置以便比较哪些设置发生了变化
       const oldConfig = Config.getAll();
 
       // 使用异步 API 持久化配置
       const result = await Config.setMany(values); // { success, config }
+      if (!result || result.success !== true) {
+        safeConsole.error('Config.setMany 失败，路径:', Config.configPath, '返回:', result);
+      }
       const newConfig = result.config || Config.getAll();
 
       // 计算变更的键
@@ -759,12 +763,13 @@ class MainProcess {
 
     this.createWindow();
     this.trayManager.createTray(this.mainWindow, this);
+    // Setup IPC handlers early so helper methods like registerLlmShortcut are defined
+    this.setupIpcHandlers();
     this.registerGlobalShortcuts();
     this.registerScreenshotShortcut();
-    // register optional LLM shortcut from config
+    // register optional LLM shortcut from config (defined inside setupIpcHandlers)
     try { this.registerLlmShortcut(); } catch (err) { safeConsole.warn('registerLlmShortcut during init failed:', err); }
     this.startClipboardMonitoring();
-    this.setupIpcHandlers();
     // 构建应用顶部菜单（将截图/设置从主窗口移到菜单）
     this.buildAppMenu();
   }

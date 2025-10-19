@@ -830,8 +830,24 @@ input, select, textarea {
     border: 1px solid var(--settings-input-border);
     border-radius: 4px;
     padding: 8px 12px;
-    font-size: 14px;
+    font-size: 15px; /* slightly larger for readability */
     transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* Parameters group styling */
+.params-group h6 {
+    font-size: 15px;
+    margin-bottom: 4px;
+}
+.params-toggle {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.params-content input {
+    font-size: 15px; /* ensure parameter inputs use larger font */
+}
+.params-group .small {
+    font-size: 12px;
 }
 
 input:focus, select:focus, textarea:focus {

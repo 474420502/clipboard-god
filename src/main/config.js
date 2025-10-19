@@ -15,27 +15,27 @@ const DEFAULT_CONFIG = {
   // 是否使用数字快捷键
   useNumberShortcuts: true,
   // 全局快捷键
-  globalShortcut: 'CommandOrControl+Alt+V',
+  globalShortcut: 'CommandOrControl+;',
   // 截图快捷键
-  screenshotShortcut: 'CommandOrControl+Shift+S',
+  screenshotShortcut: 'CommandOrControl+Alt+A',
   // 主题
   theme: 'light'
   ,
   // 大模型设置
-  llm: {
-    apitype: 'ollama', // 'ollama' or 'openapi'
-    model: '',
-    baseurl: '',
-    apikey: '',
-    prompt: '',
-    temperature: 0.7,
-    top_p: 0.95,
-    top_k: 0.9,
-    context_window: 32768,
-    max_tokens: 32768,
-    min_p: 0.05,
-    presence_penalty: 1.1
-  },
+  // llm: {
+  //   apitype: 'ollama', // 'ollama' or 'openapi'
+  //   model: '',
+  //   baseurl: '',
+  //   apikey: '',
+  //   prompt: '',
+  //   temperature: 0.7,
+  //   top_p: 0.95,
+  //   top_k: 0.9,
+  //   context_window: 32768,
+  //   max_tokens: 32768,
+  //   min_p: 0.05,
+  //   presence_penalty: 1.1
+  // },
 
   // 多个 LLM 条目，键为用户备注名 -> { model, prompt, baseurl, apikey, params..., llmShortcut }
   llms: {}
@@ -61,6 +61,10 @@ const getConfigPath = () => {
 class Config {
   constructor() {
     this.configPath = getConfigPath();
+    // Log the resolved config path for debugging why saves may fail
+    try {
+      console.log('配置文件路径:', this.configPath);
+    } catch (err) { }
     // 启动时同步加载一份到内存（主进程启动时做一次）
     this.config = this._loadSync();
     // 用于串行化所有写入操作，避免并发写覆盖
@@ -92,8 +96,11 @@ class Config {
     const tmp = `${this.configPath}.tmp`;
     const data = JSON.stringify(this.config, null, 2);
     try {
+      // Log where we are about to write the config (tmp then rename)
+      try { console.log('写入配置（临时）:', tmp); } catch (e) { }
       await fs.promises.writeFile(tmp, data, 'utf8');
       await fs.promises.rename(tmp, this.configPath);
+      try { console.log('配置已持久化到:', this.configPath); } catch (e) { }
       return true;
     } catch (err) {
       console.error('保存配置文件失败:', err);

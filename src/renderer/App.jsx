@@ -49,6 +49,7 @@ function App() {
     window.electronAPI.getSettings()
       .then((cfg) => {
         if (cfg && typeof cfg === 'object') {
+          try { console.log('App: loaded settings from main:', cfg); } catch (e) { }
           const mapped = {};
           if (typeof cfg.previewLength !== 'undefined') mapped.previewLength = cfg.previewLength;
           if (typeof cfg.maxHistoryItems !== 'undefined') mapped.maxHistoryItems = cfg.maxHistoryItems;
