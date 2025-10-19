@@ -140,8 +140,9 @@ class MainProcess {
       const size = this.tooltipSize;
       const offsetX = 8;
 
-      // Use main window size as the tooltip size (matching requirement)
-      const tooltipWidth = Math.max(100, Math.min(mainBounds.width, 1600));
+      // Tooltip width can be up to twice the main window width; clamp to a sane maximum
+      const tooltipWidth = Math.max(100, Math.min(mainBounds.width * 2, 1600));
+      // Tooltip height follows main window height but clamped to a reasonable max
       const tooltipHeight = Math.max(30, Math.min(mainBounds.height, 2000));
 
       // Determine available space on left and right of the main window within the display work area
@@ -514,13 +515,19 @@ class MainProcess {
               }
             }
 
-            // Build tooltip HTML without requiring node inside the page. The main
-            // process will measure content via executeJavaScript after load instead
-            // of relying on ipc from the page.
-            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${replaced}</div></body></html>`;
+            // Build tooltip HTML without requiring node inside the page. Inject main window
+            // dimensions as CSS variables so content can cap its size relative to the
+            // main window (max-width = 2 * mainWidth, max-height = mainHeight).
+            const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
+            const mainWidth = Math.max(100, Math.round(mainBounds.width));
+            const mainHeight = Math.max(100, Math.round(mainBounds.height));
+            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>:root{--main-width:${mainWidth}px;--main-height:${mainHeight}px;}html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:calc(var(--main-width) * 2);max-height:var(--main-height);overflow:auto;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${replaced}</div></body></html>`;
           } catch (err) {
             // fallback to raw content if replacement fails
-            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${String(content)}</div></body></html>`;
+            const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
+            const mainWidth = Math.max(100, Math.round(mainBounds.width));
+            const mainHeight = Math.max(100, Math.round(mainBounds.height));
+            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>:root{--main-width:${mainWidth}px;--main-height:${mainHeight}px;}html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:calc(var(--main-width) * 2);max-height:var(--main-height);overflow:auto;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${String(content)}</div></body></html>`;
           }
         } else {
           // sanitized text-only payload
@@ -530,14 +537,10 @@ class MainProcess {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
-
-          pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:800px;line-height:1.4;white-space:pre-wrap;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${safeContent}</div><script>const {ipcRenderer} = require('electron');
-          window.addEventListener('DOMContentLoaded', () => {
-            const el = document.getElementById('box');
-            const rect = el.getBoundingClientRect();
-            ipcRenderer.sendToHost && ipcRenderer.sendToHost('tooltip-size', { w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
-          });
-          </script></body></html>`;
+          const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
+          const mainWidth = Math.max(100, Math.round(mainBounds.width));
+          const mainHeight = Math.max(100, Math.round(mainBounds.height));
+          pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>:root{--main-width:${mainWidth}px;--main-height:${mainHeight}px;}html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:calc(var(--main-width) * 2);max-height:var(--main-height);overflow:auto;line-height:1.4;white-space:pre-wrap;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${safeContent}</div></body></html>`;
         }
 
         // Use loadURL with data URL

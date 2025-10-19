@@ -97,7 +97,7 @@ class SqliteStorage {
         const thumbPath = path.join(this.imagesDir, thumbName);
         try {
             const img = nativeImage.createFromBuffer(buf);
-            const thumb = img.resize({ width: 64, height: 64 });
+            const thumb = img.resize({ width: 128, height: 128 });
             const thumbBuf = thumb.toPNG();
             if (!fs.existsSync(thumbPath)) fs.writeFileSync(thumbPath, thumbBuf);
         } catch (e) {

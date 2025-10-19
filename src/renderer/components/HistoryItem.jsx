@@ -122,7 +122,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
   return (
     <li
       ref={itemRef}
-      className={`history-item ${isSelected ? 'selected' : ''}`}
+      className={`history-item ${isSelected ? 'selected' : ''} ${isImage ? 'image-item' : ''}`}
       onClick={handlePaste}
       onMouseEnter={setSelectedIndex ? (e) => {
         if (e && e.isTrusted && typeof setSelectedIndex === 'function') { // only allow user mouse, skip synthetic
@@ -146,7 +146,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
       </div>
       <div className="item-content">
         {isText && <span className="text-preview">{displayText}</span>}
-        {isImage && '[Image]'}
+        {isImage}
       </div>
       {/* external tooltip window shown via main process; internal tooltip removed */}
     </li>
