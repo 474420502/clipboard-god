@@ -1,4 +1,4 @@
-const { Tray, Menu, nativeImage } = require('electron');
+const { Tray, Menu, nativeImage, app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -42,36 +42,67 @@ class TrayManager {
   createTray(mainWindow, mainProcess) {
     let trayIcon = null;
 
-    // 尝试使用自定义图标
-    const iconPath = path.join(__dirname, '../../assets/icon.png');
+    // 尝试使用自定义图标 — 尝试多个候选路径，覆盖打包和开发环境
+    const candidates = [];
+    try {
+      // resourcesPath when packaged
+      if (app && app.isPackaged) {
+        candidates.push(path.join(process.resourcesPath || '', 'app', 'assets', 'icon.png'));
+        candidates.push(path.join(process.resourcesPath || '', 'assets', 'icon.png'));
+      }
+    } catch (_) { }
+
+    // standard dev location relative to source
+    candidates.push(path.join(__dirname, '../../assets/icon.png'));
+    candidates.push(path.join(__dirname, '../../../assets/icon.png'));
+    // electron-builder may place files under dist-electron or linux-unpacked
+    candidates.push(path.join(__dirname, '../../dist-electron/assets/icon.png'));
+
+    // also try absolute path installed by packaging (hicolor path)
+    candidates.push(path.join('/usr/share/icons/hicolor/64x64/apps/clipboard-god.png'));
+
+    // dedupe
+    const seen = new Set();
+    const uniqCandidates = candidates.filter(p => p && !seen.has(p) && (seen.add(p) || true));
 
     try {
-      if (fs.existsSync(iconPath)) {
-        console.log('加载托盘图标:', iconPath);
-        trayIcon = nativeImage.createFromPath(iconPath);
-
-        // 确保图标不为空
-        if (trayIcon.isEmpty()) {
-          console.warn('托盘图标文件存在但为空，使用备选方案');
-          trayIcon = null;
-        } else {
-          // 在不同操作系统上调整图标大小
-          let targetSize;
-          if (process.platform === 'darwin') {
-            targetSize = 18; // macOS
-          } else if (process.platform === 'win32') {
-            targetSize = 16; // Windows
+      console.log('托盘图标候选路径:', uniqCandidates);
+      console.log('process.resourcesPath:', process.resourcesPath, 'app.isPackaged:', app && app.isPackaged);
+      for (const c of uniqCandidates) {
+        try {
+          if (fs.existsSync(c)) {
+            console.log('尝试加载托盘图标:', c);
+            const ni = nativeImage.createFromPath(c);
+            if (!ni.isEmpty()) {
+              trayIcon = ni;
+              console.log('找到有效托盘图标:', c);
+              break;
+            } else {
+              console.warn('图标文件存在但 nativeImage 为空:', c);
+            }
           } else {
-            targetSize = 22; // Linux
+            // not exists — continue
           }
-          trayIcon = trayIcon.resize({ width: targetSize, height: targetSize });
-          console.log(`托盘图标加载成功，大小: ${targetSize}x${targetSize}`);
+        } catch (err) {
+          console.warn('检查候选图标路径出错:', c, err && err.message);
         }
-      } else {
-        console.warn('托盘图标文件不存在:', iconPath);
       }
     } catch (error) {
-      console.error('加载托盘图标失败:', error.message);
+      console.error('加载托盘图标候选列表失败:', error && error.message);
+    }
+
+    // 如果找到了 trayIcon，调整大小
+    if (trayIcon && !trayIcon.isEmpty()) {
+      try {
+        let targetSize;
+        if (process.platform === 'darwin') targetSize = 18;
+        else if (process.platform === 'win32') targetSize = 16;
+        else targetSize = 22;
+        trayIcon = trayIcon.resize({ width: targetSize, height: targetSize });
+        console.log(`托盘图标加载成功，大小: ${targetSize}x${targetSize}`);
+      } catch (err) {
+        console.warn('调整托盘图标大小失败:', err && err.message);
+      }
     }
 
     // 如果自定义图标加载失败，创建默认图标

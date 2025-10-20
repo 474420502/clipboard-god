@@ -1,0 +1,78 @@
+#!/bin/sh
+set -e
+
+# postinst for clipboard-god
+# - update icon cache and desktop db if possible
+# - detect common AppIndicator / StatusNotifier packages; if missing, print
+#   friendly apt install suggestions for the user's distro
+
+echo "postinst: running clipboard-god post-installation steps..."
+
+# Update icon cache if available
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  if [ -d /usr/share/icons/hicolor ]; then
+    echo "Updating icon cache..."
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+  fi
+fi
+
+# Update desktop database if available
+if command -v update-desktop-database >/dev/null 2>&1; then
+  if [ -d /usr/share/applications ]; then
+    echo "Updating desktop database..."
+    update-desktop-database /usr/share/applications || true
+  fi
+fi
+
+# Detect common indicator packages. If none found, print guidance.
+has_indicator=0
+for pkg in libappindicator3-1 libayatana-appindicator3-1 indicator-application; do
+  if dpkg -s "$pkg" >/dev/null 2>&1; then
+    has_indicator=1
+    break
+  fi
+done
+
+if [ "$has_indicator" -eq 0 ]; then
+  echo
+  echo "Note: your system does not appear to have an AppIndicator/StatusNotifier host installed."
+  echo "Without it the tray (indicator) icon may not appear on some desktop environments."
+
+  # Try to detect apt-based distro to print install command
+  install_cmd="sudo apt install -y libappindicator3-1 indicator-application"
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    case "$ID" in
+      ubuntu|debian|pop|elementary)
+        # use apt
+        install_cmd="sudo apt update && sudo apt install -y libappindicator3-1 indicator-application || sudo apt install -y libayatana-appindicator3-1 indicator-application"
+        ;;
+      *)
+        # fallback to generic suggestion
+        install_cmd="sudo apt install -y libappindicator3-1 indicator-application"
+        ;;
+    esac
+  fi
+
+  echo "Suggested command to install indicator support (run in a terminal):"
+  echo
+  echo "  $install_cmd"
+  echo
+  echo "Or use the AppImage release which bundles more runtime pieces and often
+works without distribution-specific indicator packages."
+fi
+
+exit 0
+#!/bin/bash
+set -e
+
+# Update icon cache and desktop database on install
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications || true
+fi
+
+exit 0

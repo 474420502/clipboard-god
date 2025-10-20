@@ -1,0 +1,39 @@
+#!/bin/sh
+set -e
+
+# postrm for clipboard-god
+# - update icon cache and desktop db after removal/upgrade to keep system state
+# - do NOT remove user data under ~/.local/share/clipboard-god
+
+echo "postrm: running clipboard-god post-removal steps..."
+
+# update icon cache if available
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  if [ -d /usr/share/icons/hicolor ]; then
+    echo "Updating icon cache..."
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+  fi
+fi
+
+# update desktop database if available
+if command -v update-desktop-database >/dev/null 2>&1; then
+  if [ -d /usr/share/applications ]; then
+    echo "Updating desktop database..."
+    update-desktop-database /usr/share/applications || true
+  fi
+fi
+
+exit 0
+#!/bin/bash
+set -e
+
+# Update caches on removal
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications || true
+fi
+
+exit 0

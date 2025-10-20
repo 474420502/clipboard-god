@@ -1,0 +1,20 @@
+Package: clipboard-god
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+# Runtime dependencies - keep these conservative so the package installs cleanly on
+# older LTS releases (Ubuntu 20.04+) while still providing a good desktop
+# experience on newer releases. Do not list optional UX packages in Depends if
+# they can be Recommended instead.
+#
+# Use alternation (|) for indicator libraries because different Ubuntu/derivs
+# provide either libappindicator3-1 or libayatana-appindicator3-1.
+# The package manager will accept either one.
+Depends: libc6 (>= 2.17), libgtk-3-0, libnotify4, libnss3, libx11-6, libxss1, libgconf-2-4, libasound2, libxkbfile1, libsecret-1-0, libappindicator3-1 | libayatana-appindicator3-1
+# indicator-application improves tray integration on some desktops (Recommends
+# kept so minimal systems can still install the app without extra packages)
+Recommends: indicator-application
+Maintainer: Clipboard God Packager <packager@example.com>
+Description: A powerful clipboard manager built with Electron and React
+ A small clipboard manager.

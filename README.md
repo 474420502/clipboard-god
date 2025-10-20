@@ -16,22 +16,26 @@ A powerful clipboard manager built with Electron and React.
 ### From Source
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/your-username/clipboard-god.git
 cd clipboard-god
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Start development:
+
 ```bash
 npm run dev
 ```
 
 4. Build for production:
+
 ```bash
 npm run build
 npm start
@@ -42,15 +46,18 @@ npm start
 Download the latest release from the [Releases](https://github.com/your-username/clipboard-god/releases) page.
 
 #### Linux (AppImage)
+
 ```bash
 chmod +x "Clipboard God-1.0.0.AppImage"
 ./"Clipboard God-1.0.0.AppImage"
 ```
 
 #### Windows
+
 Run the `.exe` installer from the releases.
 
 #### macOS
+
 Open the `.dmg` file and drag the app to Applications.
 
 ## Building from Source
@@ -63,6 +70,11 @@ Open the `.dmg` file and drag the app to Applications.
 ### Build Commands
 
 ```bash
+# gfw 
+npm config set registry https://registry.npmmirror.com
+ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+ELECTRON_BUILDER_BINARIES_MIRROR="https://registry.npmmirror.com/-/binary/electron-builder-binaries/"
+
 # Install dependencies
 npm install
 
@@ -82,6 +94,7 @@ npm run dist:all    # All platforms
 ## Configuration
 
 The app stores its configuration in:
+
 - **Linux**: `~/.config/clipboard-god/config.json`
 - **Windows**: `%APPDATA%\clipboard-god\config.json`
 - **macOS**: `~/Library/Application Support/clipboard-god/config.json`
@@ -129,5 +142,5 @@ MIT License - see LICENSE file for details.
 
 ## Author
 
-Eson <474420502@qq.com></content>
-<parameter name="filePath">/home/eson/workspace/clipboard-god/README.md
+Eson <474420502@qq.com>`</content>`
+`<parameter name="filePath">`/home/eson/workspace/clipboard-god/README.md
