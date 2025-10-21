@@ -11,7 +11,13 @@ jobs:
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
-                os: [ubuntu-latest, macos-latest, windows-latest]
+                include:
+                    - os: ubuntu-latest
+                      dist_cmd: npm run dist:linux
+                    - os: macos-latest
+                      dist_cmd: npm run dist:mac
+                    - os: windows-latest
+                      dist_cmd: npm run dist:win
 
         steps:
             - name: Checkout repository
@@ -26,19 +32,38 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
+            - name: Ensure 512px icon exists (cross-platform, uses sharp)
+              shell: bash
+              run: |
+                  set -e
+                  ICON_SRC=assets/icon-256.png
+                  ICON_DST=assets/icon-512.png
+                  if [ -f "$ICON_DST" ]; then
+                    echo "$ICON_DST already exists"
+                    exit 0
+                  fi
+                  if [ ! -f "$ICON_SRC" ]; then
+                    echo "Source icon not found: $ICON_SRC" >&2
+                    exit 1
+                  fi
+                  echo "Installing sharp temporarily"
+                  npm i --no-save sharp
+                  echo "Resizing with sharp"
+                  node -e "require('sharp')(process.env.ICON_SRC).resize(512,512).toFile(process.env.ICON_DST).then(()=>console.log('created')).catch(err=>{console.error(err); process.exit(1)})" \
+                    ICON_SRC="$ICON_SRC" ICON_DST="$ICON_DST"
+
             - name: Build renderer (vite)
               run: npm run build
 
             - name: Build Electron app
-              # Build only the platform corresponding to the runner to avoid cross-building
+              run: ${{ matrix.dist_cmd }}
+
+            - name: Show build output
               run: |
-                  if [ "${{ matrix.os }}" = "windows-latest" ]; then
-                    npm run dist:win
-                  elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-                    npm run dist:mac
-                  else
-                    npm run dist:linux
-                  fi
+                  echo "Contents of dist-electron:"
+                  ls -la dist-electron || true
+                  echo "Find artifacts:" 
+                  find dist-electron -maxdepth 2 -type f -print || true
 
             - name: Upload build artifacts
               uses: actions/upload-artifact@v4
@@ -51,22 +76,32 @@ jobs:
         needs: build
         runs-on: ubuntu-latest
         steps:
-            - name: Download artifacts
+            - name: Download linux artifact
               uses: actions/download-artifact@v4
               with:
                   name: app-ubuntu-latest
+                  path: artifacts/linux
 
             - name: Download mac artifact
               uses: actions/download-artifact@v4
               with:
                   name: app-macos-latest
+                  path: artifacts/macos
                   continue-on-error: true
 
             - name: Download windows artifact
               uses: actions/download-artifact@v4
               with:
                   name: app-windows-latest
+                  path: artifacts/windows
                   continue-on-error: true
+
+            - name: Collect release assets
+              run: |
+                  mkdir -p release-assets
+                  echo "Looking for known package types to include in the release"
+                  find artifacts -type f \( -iname "*.deb" -o -iname "*.AppImage" -o -iname "*.dmg" -o -iname "*.exe" -o -iname "*.msi" -o -iname "*.zip" \) -print -exec cp {} release-assets/ \;
+                  echo "Release assets:" && ls -la release-assets || true
 
             - name: Create GitHub Release
               uses: ncipollo/release-action@v1
@@ -74,4 +109,4 @@ jobs:
                   tag: ${{ github.ref_name }}
                   name: ${{ github.ref_name }}
                   files: |
-                      dist-electron/**
+                      release-assets/**
