@@ -115,6 +115,76 @@ class ScreenshotManager {
 
     this.screenshots.startCapture();
   }
+
+  // Capture a single screenshot and return a Promise resolving to { base64Full, base64Raw }
+  captureImage(timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
+      // If using desktopCapturer fallback, capture immediately and resolve
+      if (this._useDesktopCapturer) {
+        desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } })
+          .then(sources => {
+            if (!sources || sources.length === 0) return reject(new Error('未找到屏幕源'));
+            const src = sources[0];
+            const dataUrl = src.thumbnail.toDataURL();
+            const base64Full = dataUrl;
+            const base64Raw = dataUrl.split(',')[1];
+            resolve({ base64Full, base64Raw });
+          })
+          .catch(err => reject(err));
+        return;
+      }
+
+      // Otherwise use electron-screenshots which emits 'ok' with buffer
+      try {
+        if (!this.screenshots) this.init();
+
+        let settled = false;
+        const onOk = (_event, buffer) => {
+          try {
+            if (settled) return;
+            settled = true;
+            const image = nativeImage.createFromBuffer(buffer);
+            const base64Full = image.toDataURL();
+            const base64Raw = base64Full.split(',')[1];
+            cleanup();
+            resolve({ base64Full, base64Raw });
+          } catch (err) {
+            cleanup();
+            reject(err);
+          }
+        };
+
+        const onCancel = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error('截图已取消'));
+        };
+
+        const cleanup = () => {
+          try { this.screenshots.removeListener('ok', onOk); } catch (_) { }
+          try { this.screenshots.removeListener('cancel', onCancel); } catch (_) { }
+        };
+
+        this.screenshots.once('ok', onOk);
+        this.screenshots.once('cancel', onCancel);
+
+        // start capture UI
+        this.screenshots.startCapture();
+
+        // timeout guard
+        const to = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error('截图超时'));
+        }, timeoutMs);
+
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
 }
 
 module.exports = ScreenshotManager;

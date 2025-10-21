@@ -6,9 +6,6 @@ const TrayManager = require('./trayManager');
 const PasteHandler = require('./pasteHandler');
 const ScreenshotManager = require('./screenshotManager');
 const Config = require('./config');
-// ai helpers (extracted)
-const ai = require('./ai');
-const { AiService } = require('./ai/service');
 
 // 安全的console包装器，防止EPIPE错误
 const safeConsole = {
@@ -45,7 +42,6 @@ class MainProcess {
   constructor() {
     this.mainWindow = null;
     this.tooltipWindow = null;
-    this.aiWindow = null;
     this.tooltipPayload = null;
     this.tooltipSize = null;
     this.tooltipWindow = null;
@@ -62,51 +58,14 @@ class MainProcess {
     this._lastPaste = { id: null, time: 0 };
     this._pasteLock = false;
     this._registeredShortcut = null;
+    // map of shortcut -> llmName for registered LLM shortcuts
+    this._registeredLlmShortcuts = {};
     // 当正在执行粘贴操作时，短暂抑制任何会显示主窗口的自动行为
     this._isPasting = false;
     // config file watcher state
     this._configWatcher = null;
     this._configWatchTimer = null;
     this._lastConfigSnapshot = null;
-    // conversation state for AI chat (per named llm entry)
-    // structure: { [entryName]: [{ role: 'user'|'assistant'|'system', content: '...' }, ...] }
-    this._aiConversations = {};
-    // streaming buffer and current active conversation name while streaming
-    this._aiStreamingBuffer = '';
-    this._aiStreamingActiveName = null;
-
-    this.aiService = new AiService({
-      mainProcess: this,
-      safeConsole,
-      Config,
-      clipboard,
-      BrowserWindow,
-      globalShortcut,
-      Notification,
-      ipcMain,
-    });
-
-    this.registerLlmShortcut = (...args) => this.aiService.registerShortcuts(...args);
-    this._triggerLlmFromClipboard = (...args) => this.aiService.triggerFromClipboard(...args);
-    this._triggerLlmFromClipboardForEntry = (...args) => this.aiService.triggerFromClipboardForEntry(...args);
-    this._callOllamaStream = (...args) => this.aiService.callOllamaStream(...args);
-    this._callOllamaChatStream = (...args) => this.aiService.callOllamaChatStream(...args);
-    this._callOpenApiStream = (...args) => this.aiService.callOpenApiStream(...args);
-    this._streamResponseToRenderer = (...args) => this.aiService.streamResponseToRenderer(...args);
-    this._onAiStreamToken = (...args) => this.aiService.onStreamToken(...args);
-  }
-
-  // Create a dedicated AI chat window for streaming LLM output (delegated to ai module)
-  createAiWindow() {
-    try {
-      const w = ai.createAiWindow(this);
-      this.aiWindow = w;
-      return w;
-    } catch (e) {
-      safeConsole.error('createAiWindow failed:', e);
-      this.aiWindow = null;
-      return null;
-    }
   }
 
   // Create the tooltip BrowserWindow (lazy)
@@ -326,6 +285,185 @@ class MainProcess {
 
     // 检查快捷键是否注册成功
     safeConsole.log('全局快捷键是否注册:', globalShortcut.isRegistered(shortcut));
+
+    // Also register per-LLM shortcuts defined in config.llms
+    try {
+      this.registerLlmShortcuts();
+    } catch (err) {
+      safeConsole.warn('注册 LLM 快捷键失败:', err);
+    }
+  }
+
+  // Register shortcuts for configured LLM entries (each entry may specify llmShortcut)
+  registerLlmShortcuts() {
+    // Unregister previously registered LLM shortcuts
+    for (const sc of Object.keys(this._registeredLlmShortcuts || {})) {
+      try { globalShortcut.unregister(sc); } catch (_) { }
+    }
+    this._registeredLlmShortcuts = {};
+
+    const cfg = Config.getAll();
+    const llms = (cfg && cfg.llms) || {};
+    for (const [name, entry] of Object.entries(llms)) {
+      if (!entry || !entry.llmShortcut) continue;
+      const shortcut = String(entry.llmShortcut).trim();
+      if (!shortcut) continue;
+
+      try {
+        const ok = globalShortcut.register(shortcut, async () => {
+          safeConsole.log(`LLM 快捷键 ${shortcut} (name=${name}) 被触发`);
+          const trigger = (entry.triggerType || 'text').toString().toLowerCase();
+          // get selected text from clipboard PRIMARY selection if available
+          let selectedText = '';
+          try {
+            // Try electron clipboard selection (Linux PRIMARY)
+            selectedText = clipboard.readText('selection') || '';
+          } catch (e) {
+            selectedText = '';
+          }
+
+          // fallback to clipboard default if nothing in selection
+          if (!selectedText) {
+            try { selectedText = clipboard.readText() || ''; } catch (e) { selectedText = ''; }
+          }
+
+          // Decide behavior based on trigger type
+          let prompt = (entry.prompt || '') + '';
+          let initialImages = undefined;
+
+          if (trigger === 'image') {
+            // Ensure screenshotManager exists
+            if (!this.screenshotManager) this.screenshotManager = new ScreenshotManager(this.mainWindow, this.clipboardManager);
+            try {
+              const img = await this.screenshotManager.captureImage();
+              // initialImages is an array of { base64Full, base64Raw }
+              initialImages = [img];
+              // Substitute known placeholders with the selected text
+              if (prompt && typeof prompt === 'string') {
+                // support both English/short placeholder {{text}} and the previous Chinese variant
+                prompt = prompt.replace(/{{\s*text\s*}}/gi, selectedText || '');
+                prompt = prompt.replace(/{{\s*鼠标正在选择的文本\s*}}/g, selectedText || '');
+              }
+            } catch (err) {
+              safeConsole.error('捕获截图失败:', err);
+              // fallback to text flow
+              if (!prompt || !prompt.trim()) prompt = `Summarize ${selectedText || ''}`.trim();
+            }
+          } else {
+            // text flow: substitute selected text into prompt
+            if (prompt && typeof prompt === 'string') {
+              prompt = prompt.replace(/{{\s*text\s*}}/gi, selectedText || '');
+              prompt = prompt.replace(/{{\s*鼠标正在选择的文本\s*}}/g, selectedText || '');
+            }
+            if (!prompt || !prompt.trim()) {
+              prompt = `Summarize ${selectedText || ''}`.trim();
+            }
+          }
+
+          // Open chat window with entry config, including prompt and initialImages if any
+          try {
+            const cfg = Object.assign({}, entry, { prompt });
+            if (initialImages) cfg.initialImages = initialImages;
+            this.openLlmChatWindow(name, cfg);
+          } catch (err) {
+            safeConsole.error('打开 LLM 窗口失败:', err);
+          }
+        });
+
+        if (ok) {
+          this._registeredLlmShortcuts[shortcut] = name;
+        } else {
+          safeConsole.warn('无法注册 LLM 快捷键:', shortcut);
+        }
+      } catch (err) {
+        safeConsole.warn('注册 LLM 快捷键时出现异常:', err);
+      }
+    }
+  }
+
+  // Open a dedicated chat window for a named LLM entry, injecting config
+  openLlmChatWindow(llmName, llmEntry) {
+    try {
+      // Create a small BrowserWindow for chat UI
+      const initialTitle = `Chat Window (${llmName})`;
+      const chatWin = new BrowserWindow({
+        width: 640,
+        height: 600,
+        show: true,
+        title: initialTitle,
+        webPreferences: {
+          contextIsolation: true,
+          preload: path.join(__dirname, '../preload/ai-preload.js')
+        }
+      });
+
+      // Remove default application menu for this window so users cannot toggle alwaysOnTop from a menu
+      try { chatWin.setMenu(null); } catch (e) { /* ignore */ }
+
+      // Open devtools by default for debugging convenience
+      try { chatWin.webContents.openDevTools({ mode: 'detach' }); } catch (e) { /* ignore */ }
+
+      // Set native window title to include the LLM key (e.g., "Chat Window (测试)")
+      try { chatWin.setTitle(`Chat Window (${llmName})`); } catch (e) { /* ignore */ }
+
+      // Build chatConfig object expected by chatPage.html
+      // Do not rely on an injected title; instead provide llmKey so the page
+      // can render a fixed "Chat Window" label and append the llm key in ()
+      const chatConfig = {
+        llmKey: llmName,
+        api: {
+          type: llmEntry.apitype || 'ollama',
+          model: llmEntry.model || '',
+          baseUrl: llmEntry.baseurl || llmEntry.baseUrl || '',
+          apiKey: llmEntry.apikey || llmEntry.apiKey || ''
+        },
+        initialPrompt: llmEntry.prompt || '',
+        llmParams: {
+          temperature: typeof llmEntry.temperature !== 'undefined' ? llmEntry.temperature : 0.7,
+          top_p: typeof llmEntry.top_p !== 'undefined' ? llmEntry.top_p : 0.95,
+          top_k: typeof llmEntry.top_k !== 'undefined' ? llmEntry.top_k : 0.9,
+          context_window: typeof llmEntry.context_window !== 'undefined' ? llmEntry.context_window : 32768,
+          max_tokens: typeof llmEntry.max_tokens !== 'undefined' ? llmEntry.max_tokens : 32768,
+          presence_penalty: typeof llmEntry.presence_penalty !== 'undefined' ? llmEntry.presence_penalty : 1.0
+        }
+      };
+
+      // Allow caller to override prompt by passing a prompt in llmEntry object
+      if (llmEntry && llmEntry.prompt) chatConfig.initialPrompt = llmEntry.prompt;
+
+      // Load chat page and then send the chatConfig via a secure IPC channel
+      const fileUrl = `file://${path.join(__dirname, 'ai', 'chatPage.html')}`;
+      chatWin.loadURL(fileUrl);
+
+      // After the page finishes loading, send the config over IPC to avoid URL length / exposure issues
+      chatWin.webContents.once('did-finish-load', () => {
+        try {
+          chatWin.webContents.send('ai-init-config', chatConfig);
+        } catch (e) {
+          safeConsole.warn('发送 ai-init-config 失败:', e);
+        }
+
+        // Re-apply the native window title and also set the document.title inside the
+        // renderer. Some platforms or the loaded page may override the title set before
+        // navigation, so set it again after load to ensure the LLM key is visible.
+        try {
+          const fullTitle = `Chat Window (${llmName})`;
+          try { chatWin.setTitle(fullTitle); } catch (e) { /* ignore */ }
+          try { chatWin.webContents.executeJavaScript(`document.title = ${JSON.stringify(fullTitle)}`); } catch (e) { /* ignore */ }
+        } catch (err) {
+          // ignore any errors when setting titles
+        }
+      });
+
+      chatWin.on('closed', () => {
+        // no-op
+      });
+
+      return chatWin;
+    } catch (err) {
+      safeConsole.error('openLlmChatWindow 错误:', err);
+      throw err;
+    }
   }
 
   // 注册截图快捷键
@@ -371,8 +509,6 @@ class MainProcess {
 
   // 设置IPC通信处理
   setupIpcHandlers() {
-    // Ensure AI-specific handlers are owned by AiService
-    try { this.aiService.registerIpcHandlers(); } catch (err) { safeConsole.warn('AI IPC handler registration failed:', err); }
 
     // 获取历史记录
     ipcMain.on('get-history', (event) => {
@@ -396,14 +532,38 @@ class MainProcess {
     });
 
     ipcMain.handle('set-settings', async (event, values) => {
-      safeConsole.log('保存设置:', values);
+      safeConsole.log('保存设置 (原始):', values);
       try { safeConsole.log('配置文件路径 (Config.configPath):', Config.configPath); } catch (e) { }
+
+      // 规范化传入的配置：确保每个 llms 条目包含 triggerType（默认 'text'），
+      // 避免渲染器未包含该字段导致主进程/磁盘上缺失。
+      const toSave = { ...values };
+      try {
+        if (toSave.llms && typeof toSave.llms === 'object') {
+          const normalized = {};
+          for (const [name, entry] of Object.entries(toSave.llms)) {
+            if (!entry || typeof entry !== 'object') {
+              normalized[name] = entry;
+              continue;
+            }
+            const copy = { ...entry };
+            // 如果没有显式设置 triggerType，则默认使用 'text'
+            if (!('triggerType' in copy) || copy.triggerType === null || typeof copy.triggerType === 'undefined' || String(copy.triggerType).trim() === '') {
+              copy.triggerType = 'text';
+            }
+            normalized[name] = copy;
+          }
+          toSave.llms = normalized;
+        }
+      } catch (err) {
+        safeConsole.warn('规范化 llms 条目时出错，继续使用原始值:', err);
+      }
 
       // 获取保存前的旧配置以便比较哪些设置发生了变化
       const oldConfig = Config.getAll();
 
-      // 使用异步 API 持久化配置
-      const result = await Config.setMany(values); // { success, config }
+      // 使用异步 API 持久化配置（使用规范化后的 toSave）
+      const result = await Config.setMany(toSave); // { success, config }
       if (!result || result.success !== true) {
         safeConsole.error('Config.setMany 失败，路径:', Config.configPath, '返回:', result);
       }
@@ -418,13 +578,13 @@ class MainProcess {
           // 直接调用实例方法，确保 this 上下文正确
           this.registerGlobalShortcuts();
         }
+        if (changedKeys.includes('llms') || changedKeys.includes('_selectedLlm')) {
+          try { this.registerLlmShortcuts(); } catch (e) { safeConsole.warn('更新 LLM 快捷键失败:', e); }
+        }
         if (changedKeys.includes('screenshotShortcut')) {
           this.registerScreenshotShortcut();
           // 重新构建菜单以更新快捷键显示
           this.buildAppMenu();
-        }
-        if (changedKeys.includes('llmShortcut') || changedKeys.includes('llms') || changedKeys.includes('llm')) {
-          try { this.registerLlmShortcut(); } catch (err) { safeConsole.warn('registerLlmShortcut failed:', err); }
         }
         if (changedKeys.includes('maxHistoryItems')) {
           // 更新剪贴板管理器的最大历史记录数
@@ -456,8 +616,7 @@ class MainProcess {
       return result; // { success, config }
     });
 
-    // Delegate AI/LLM related IPC handlers to AiService
-    this.aiService.registerIpcHandlers();
+
 
     // 粘贴项目
     ipcMain.on('paste-item', (event, item) => {
@@ -669,12 +828,9 @@ class MainProcess {
 
     this.createWindow();
     this.trayManager.createTray(this.mainWindow, this);
-    // Setup IPC handlers early so helper methods like registerLlmShortcut are defined
     this.setupIpcHandlers();
     this.registerGlobalShortcuts();
     this.registerScreenshotShortcut();
-    // register optional LLM shortcut from config (defined inside setupIpcHandlers)
-    try { this.registerLlmShortcut(); } catch (err) { safeConsole.warn('registerLlmShortcut during init failed:', err); }
     this.startClipboardMonitoring();
     // 构建应用顶部菜单（将截图/设置从主窗口移到菜单）
     this.buildAppMenu();

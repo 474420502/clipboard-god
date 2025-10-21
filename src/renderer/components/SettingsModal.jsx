@@ -354,7 +354,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                             apitype: 'ollama',
                             model: '',
                             prompt: 'Summarize {{text}}',
-                            inputType: 'text',
+                            triggerType: 'text',
                             baseurl: 'http://localhost:11434',
                             apikey: '',
                             temperature: 0.7,
@@ -403,18 +403,18 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                           </select>
                         </div>
                         <div className="setting-row">
-                          <label>输入类型</label>
+                          <label>触发类型</label>
                           <select
-                            value={entry.inputType || 'text'}
+                            value={entry.triggerType || 'text'}
                             onChange={(e) => {
                               const val = e.target.value;
-                              const nextEntry = { ...(entry || {}), inputType: val };
+                              const nextEntry = { ...(entry || {}), triggerType: val };
                               // when switching to text, if prompt empty, set default template
                               if (val === 'text' && (!nextEntry.prompt || String(nextEntry.prompt).trim() === '')) {
-                                nextEntry.prompt = 'Summarize {{text}}';
+                                nextEntry.prompt = 'Summarize \{\{text\}\}';
                               }
                               // when switching to image and prompt is the text-template, clear it
-                              if (val === 'image' && nextEntry.prompt === 'Summarize {{text}}') {
+                              if (val === 'image' && nextEntry.prompt === 'Summarize \{\{text\}\}') {
                                 nextEntry.prompt = '';
                               }
                               handleChange('llms', { ...(settings.llms || {}), [name]: nextEntry });
@@ -423,7 +423,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                             <option value="text">文本</option>
                             <option value="image">图片</option>
                           </select>
-                          <div className="small">选择此条目期望接收的输入类型。文本输入会在提示词中用 {'{{text}}'} 占位原文。</div>
+                          <div className="small">选择此条目期望接收的触发类型。文本触发会在提示词中用 {'{{text}}'} 占位原文，图片触发会调用截图并把图像作为参数。</div>
                         </div>
                         <div className="setting-row">
                           <label>Model</label>
@@ -442,7 +442,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                           <textarea
                             rows={3}
                             value={entry.prompt || ''}
-                            placeholder={(!entry.prompt || String(entry.prompt).trim() === '') && (entry.inputType || 'text') === 'text' ? 'Summarize {{text}}' : ''}
+                            placeholder={(!entry.prompt || String(entry.prompt).trim() === '') && (entry.triggerType || 'text') === 'text' ? 'Summarize {{text}}' : ''}
                             onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), prompt: e.target.value } })}
                             style={{ width: '100%', minHeight: '80px', resize: 'vertical' }}
                           />

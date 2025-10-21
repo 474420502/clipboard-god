@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Chat Window</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src *; img-src data:;">
+  <style>
+    :root {
+      --bg-color: #1a1a1a;
+      --text-color: #e0e0e0;
+      --primary-color: #007bff;
+      --user-msg-bg: #004a99;
+      --assistant-msg-bg: #333333;
+      --input-bg: #252525;
+      --border-color: #444444;
+      --status-color: #888888;
+      --error-color: #ff4d4d;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+      background: var(--input-bg);
+      border-bottom: 1px solid var(--border-color);
+      font-size: 16px;
+      font-weight: 600;
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      max-width: 85%;
+      word-wrap: break-word;
+    }
+
+    .message .content {
+      padding: 10px 14px;
+      border-radius: 18px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    
+    .message .content .message-text {
+        margin-bottom: 8px;
+    }
+
+    .message .content .message-images {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .message .content .message-images img {
+        max-width: 100px;
+        max-height: 100px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+
+    .message.user .content {
+      background: var(--primary-color);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      align-items: flex-start;
+    }
+
+    .message.assistant .content {
+      background: var(--assistant-msg-bg);
+      border-bottom-left-radius: 4px;
+    }
+
+    .typing-indicator span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status-color);
+      margin: 0 2px;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1.0); }
+    }
+
+    .chat-input-area {
+      padding: 12px;
+      border-top: 1px solid var(--border-color);
+      background: var(--input-bg);
+      flex-shrink: 0;
+    }
+
+    .input-form {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    textarea {
+      flex: 1;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-color);
+      color: var(--text-color);
+      resize: none;
+      font-size: 14px;
+      line-height: 1.4;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
+    }
+    
+    /* --- 新增样式 --- */
+    #image-preview-container {
+      display: flex;
+      gap: 10px;
+      padding: 0 0 10px 0;
+      flex-wrap: wrap;
+    }
+
+    .img-preview-wrapper {
+        position: relative;
+    }
+    
+    .img-preview-wrapper img {
+        width: 70px;
+        height: 70px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+
+    .remove-img-btn {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        line-height: 1;
+        padding: 0;
+    }
+
+    .icon-button {
+      padding: 8px;
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      border: none;
+      background: var(--assistant-msg-bg);
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon-button:hover { background: #444; }
+
+    #ai-send {
+      height: 40px;
+      padding: 10px 18px;
+    }
+    /* --- 样式结束 --- */
+
+    button:disabled { background: #555; cursor: not-allowed; }
+
+    .status-bar {
+      padding: 6px 12px;
+      color: var(--status-color);
+      font-size: 12px;
+      text-align: center;
+      background: rgba(0,0,0,0.1);
+    }
+    .status-bar.error {
+      color: white;
+      background-color: var(--error-color);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="chat-container">
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+      <div id="image-preview-container"></div>
+      <form id="input-form" class="input-form">
+        <!-- 新增: 隐藏的文件输入框 -->
+        <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
+        <!-- 新增: 附加图片按钮 -->
+        <button type="button" id="attach-file-btn" class="icon-button" title="附加图片">📎</button>
+        
+        <textarea id="ai-input" placeholder="输入消息... (Shift+Enter 换行)" rows="1"></textarea>
+        <button id="ai-send" type="submit">发送</button>
+      </form>
+    </div>
+    <div class="status-bar" id="status-bar">准备就绪</div>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------
+    // 1. 在此处配置您的聊天窗口参数
+    // -------------------------------------------------------------
+    // Attempt to obtain injected config via IPC (preferred). If IPC isn't
+    // available (older versions), fall back to ?cfg=<base64 JSON> URL param.
+    let _injectedFromIpc = null;
+    if (window.aiAPI && typeof window.aiAPI.onInitConfig === 'function') {
+      try {
+        window.aiAPI.onInitConfig((cfg) => {
+          try {
+            _injectedFromIpc = cfg || null;
+            // If the page is already initialized, apply the injected config immediately
+            try { applyInjectedConfig(_injectedFromIpc); } catch (e) { /* ignore */ }
+          } catch (e) { /* ignore */ }
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    function loadInjectedConfig() {
+      // Prefer IPC-supplied config
+      if (_injectedFromIpc) return _injectedFromIpc;
+
+      // Fallback to URL param approach (keeps backward compatibility)
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const enc = params.get('cfg');
+        if (!enc) return null;
+
+        const b64 = decodeURIComponent(enc);
+        const binStr = atob(b64);
+        const len = binStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binStr.charCodeAt(i);
+        }
+        const json = new TextDecoder('utf-8').decode(bytes);
+        return JSON.parse(json);
+      } catch (e) {
+        console.warn('无法解析注入的配置(cfg):', e);
+        return null;
+      }
+    }
+
+    const defaultConfig = {
+      // title is intentionally not used from injected config. The page will display
+      // a fixed title 'Chat Window' and append the provided llmKey in parentheses.
+      title: 'Chat Window',
+      api: {
+        type: 'ollama',
+        model: '',
+        baseUrl: '',
+        apiKey: ''
+      },
+      initialPrompt: '',
+      llmParams: {
+        temperature: 0.7,
+        top_p: 0.95,
+        top_k: 0.9,
+        context_window: 32768,
+        max_tokens: 32768,
+        presence_penalty: 1.0
+      }
+    };
+
+    // Merge injected config over defaults (shallow merge for nested api and llmParams)
+    const injected = loadInjectedConfig();
+    const chatConfig = Object.assign({}, defaultConfig, injected || {});
+    if (injected && injected.api) chatConfig.api = Object.assign({}, defaultConfig.api, injected.api);
+    if (injected && injected.llmParams) chatConfig.llmParams = Object.assign({}, defaultConfig.llmParams, injected.llmParams);
+
+    // -------------------------------------------------------------
+    // 2. 聊天窗口功能实现
+    // -------------------------------------------------------------
+ 
+  // DOM Elements (note: internal title element removed; native window title used)
+  const messagesEl = document.getElementById('chat-messages');
+      const formEl = document.getElementById('input-form');
+      const inputEl = document.getElementById('ai-input');
+      const sendBtn = document.getElementById('ai-send');
+      const statusBar = document.getElementById('status-bar');
+      // 新增 DOM 元素
+      const attachBtn = document.getElementById('attach-file-btn');
+      const imageInput = document.getElementById('image-input');
+      const imagePreviewContainer = document.getElementById('image-preview-container');
+      
+      // Conversation history and state
+      let conversationHistory = [];
+      let isGenerating = false;
+      // 新增: 用于存储待发送图片的数组
+      let stagedImages = []; // 存储 { id, base64Full, base64Raw }
+      
+      // --- Initialization ---
+      function initializeChat() {
+  // Native window title is used (set by main process). No internal title element to render.
+        inputEl.addEventListener('input', autoResizeTextarea);
+        formEl.addEventListener('submit', handleFormSubmit);
+        
+        // 新增: 按钮事件监听
+        attachBtn.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', handleImageSelection);
+
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleFormSubmit(e);
+            }
+        });
+
+        // Apply any injected config that may have been provided before initialization
+        if (_injectedFromIpc) {
+          try { applyInjectedConfig(_injectedFromIpc); } catch (e) { /* ignore */ }
+        } else {
+          // If no injected config, fall back to initialPrompt/initialImages in chatConfig
+          if (chatConfig.initialPrompt && chatConfig.initialPrompt.trim() !== '') {
+            const initialMessage = { role: 'user', content: chatConfig.initialPrompt };
+            addMessageToUI('user', initialMessage);
+            conversationHistory.push(initialMessage);
+            fetchAIResponse();
+          }
+
+          if (chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0) {
+            const imgs = chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw }));
+            const imgMessage = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs };
+            addMessageToUI('user', imgMessage);
+            const apiMsg = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs.map(x => x.base64Raw) };
+            conversationHistory.push(apiMsg);
+            if (!chatConfig.initialPrompt || !chatConfig.initialPrompt.trim()) {
+              fetchAIResponse();
+            }
+          }
+        }
+      }
+
+
+    // Apply a config object received via IPC at any time. This merges into chatConfig
+    // and triggers initial prompt/images if present.
+    function applyInjectedConfig(cfg) {
+      if (!cfg || typeof cfg !== 'object') return;
+      // Merge into chatConfig (shallow)
+      try {
+        // Do not accept injected title; prefer fixed 'Chat Window' and use llmKey.
+        if (cfg.llmKey) chatConfig.llmKey = cfg.llmKey;
+        if (cfg.api) chatConfig.api = Object.assign({}, chatConfig.api, cfg.api);
+        if (cfg.llmParams) chatConfig.llmParams = Object.assign({}, chatConfig.llmParams, cfg.llmParams);
+        // override initialPrompt if provided
+        if (typeof cfg.initialPrompt !== 'undefined') chatConfig.initialPrompt = cfg.initialPrompt;
+        // merge initialImages if provided
+        if (Array.isArray(cfg.initialImages)) chatConfig.initialImages = cfg.initialImages.slice();
+      } catch (e) { /* ignore merge errors */ }
+
+      // If the UI isn't yet initialized, do nothing: initializeChat will pick this up.
+      // Otherwise, if already initialized, immediately render and/or fetch.
+      try {
+  // Native window title is used (set by main process). No internal title element to update.
+
+        if (chatConfig.initialPrompt && chatConfig.initialPrompt.trim() !== '') {
+          const initialMessage = { role: 'user', content: chatConfig.initialPrompt };
+          addMessageToUI('user', initialMessage);
+          conversationHistory.push(initialMessage);
+          fetchAIResponse();
+          return;
+        }
+
+        if (chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0) {
+          const imgs = chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw }));
+          const imgMessage = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs };
+          addMessageToUI('user', imgMessage);
+          const apiMsg = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs.map(x => x.base64Raw) };
+          conversationHistory.push(apiMsg);
+          if (!chatConfig.initialPrompt || !chatConfig.initialPrompt.trim()) {
+            fetchAIResponse();
+          }
+        }
+      } catch (e) { /* ignore UI errors */ }
+    }
+      // --- UI Helper Functions ---
+      // 修改: addMessageToUI 现在接受一个消息对象
+      function addMessageToUI(sender, message) {
+          const messageWrapper = document.createElement('div');
+          messageWrapper.className = `message ${sender}`;
+          
+          const contentDiv = document.createElement('div');
+          contentDiv.className = 'content';
+
+          // 如果有文本内容，则添加文本
+          if (message.content) {
+              const textEl = document.createElement('div');
+              textEl.className = 'message-text';
+              textEl.textContent = message.content;
+              contentDiv.appendChild(textEl);
+          }
+          
+          // 如果有图片，则显示图片
+          if (message.images && message.images.length > 0) {
+              const imagesContainer = document.createElement('div');
+              imagesContainer.className = 'message-images';
+              
+              // 在用户消息中，我们有完整的 data URL
+              const imageSources = sender === 'user' ? message.images.map(img => img.base64Full) : [];
+              
+              for (const src of imageSources) {
+                  const imgEl = document.createElement('img');
+                  imgEl.src = src;
+                  imagesContainer.appendChild(imgEl);
+              }
+              contentDiv.appendChild(imagesContainer);
+          }
+
+          messageWrapper.appendChild(contentDiv);
+          messagesEl.appendChild(messageWrapper);
+          scrollToBottom();
+          return messageWrapper;
+      }
+      
+      function createAssistantMessageContainer() {
+        const messageWrapper = document.createElement('div');
+        messageWrapper.className = 'message assistant';
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'content';
+        const typingIndicator = document.createElement('div');
+        typingIndicator.className = 'typing-indicator';
+        typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+        contentDiv.appendChild(typingIndicator);
+        messageWrapper.appendChild(contentDiv);
+        messagesEl.appendChild(messageWrapper);
+        scrollToBottom();
+        return contentDiv;
+      }
+
+      function updateAssistantMessage(container, chunk, isFinal = false) {
+        if (container.querySelector('.typing-indicator')) {
+            container.innerHTML = '';
+        }
+        container.textContent += chunk;
+        if(isFinal) scrollToBottom();
+      }
+
+      function scrollToBottom() {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function autoResizeTextarea() {
+        inputEl.style.height = 'auto';
+        inputEl.style.height = (inputEl.scrollHeight) + 'px';
+      }
+
+      function setStatus(text, isError = false) {
+        statusBar.textContent = text;
+        statusBar.classList.toggle('error', isError);
+      }
+
+      function toggleInput(enabled) {
+        isGenerating = !enabled;
+        inputEl.disabled = !enabled;
+        sendBtn.disabled = !enabled;
+        attachBtn.disabled = !enabled;
+        if (enabled) {
+          inputEl.focus();
+          setStatus('准备就绪');
+        } else {
+          setStatus('正在生成...');
+        }
+      }
+
+      // --- Event Handlers ---
+      function handleFormSubmit(event) {
+        event.preventDefault();
+        if (isGenerating) return;
+
+        const userInput = inputEl.value.trim();
+        if (!userInput && stagedImages.length === 0) return;
+        
+        // 构建消息对象，包含文本和图片
+        const userMessage = {
+            role: 'user',
+            content: userInput,
+            // 传递给 UI 的是完整对象，传递给 API 的是 raw base64
+            images: stagedImages 
+        };
+
+        addMessageToUI('user', userMessage);
+        
+        // 准备要发送到 API 的历史记录
+        const apiMessage = {
+            role: 'user',
+            content: userInput,
+            images: stagedImages.map(img => img.base64Raw) // 只取 raw base64
+        };
+        conversationHistory.push(apiMessage);
+        
+        // 清理输入框和暂存区
+        inputEl.value = '';
+        autoResizeTextarea();
+        clearStagedImages();
+        
+        fetchAIResponse();
+      }
+      
+      // --- 新增: 图片处理功能 ---
+      function handleImageSelection(event) {
+        const files = event.target.files;
+        if (!files) return;
+
+        for (const file of files) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64Full = e.target.result;
+                // Ollama API 需要不带 "data:image/jpeg;base64," 前缀的纯 base64
+                const base64Raw = base64Full.split(',')[1];
+                const imageId = Date.now() + Math.random(); // 创建唯一ID
+                
+                stagedImages.push({ id: imageId, base64Full, base64Raw });
+                updateImagePreviews();
+            };
+            reader.readAsDataURL(file);
+        }
+        // 清空 input 的值，这样用户可以再次选择相同的文件
+        imageInput.value = '';
+      }
+
+      function updateImagePreviews() {
+        imagePreviewContainer.innerHTML = '';
+        stagedImages.forEach(image => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'img-preview-wrapper';
+
+            const imgEl = document.createElement('img');
+            imgEl.src = image.base64Full;
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-img-btn';
+            removeBtn.textContent = '×';
+            removeBtn.onclick = () => {
+                stagedImages = stagedImages.filter(img => img.id !== image.id);
+                updateImagePreviews();
+            };
+            
+            wrapper.appendChild(imgEl);
+            wrapper.appendChild(removeBtn);
+            imagePreviewContainer.appendChild(wrapper);
+        });
+      }
+
+      function clearStagedImages() {
+          stagedImages = [];
+          updateImagePreviews();
+      }
+
+      // --- API Call ---
+      async function fetchAIResponse() {
+        toggleInput(false);
+        const assistantMsgContainer = createAssistantMessageContainer();
+        let fullResponse = '';
+
+        try {
+          const { baseUrl, model, apiKey } = chatConfig.api;
+          const url = new URL('/api/chat', baseUrl).toString();
+          
+          const body = {
+              model: model,
+              messages: conversationHistory,
+              stream: true,
+              options: chatConfig.llmParams
+          };
+
+          const headers = { 'Content-Type': 'application/json' };
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body)
+          });
+          
+          if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
+          }
+          
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let partialLine = '';
+
+          while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = (partialLine + chunk).split('\n');
+              partialLine = lines.pop() || '';
+
+              for (const line of lines) {
+                  if (line.trim() === '') continue;
+                  try {
+                      const parsed = JSON.parse(line);
+                      if (parsed.message && parsed.message.content) {
+                          const contentChunk = parsed.message.content;
+                          fullResponse += contentChunk;
+                          updateAssistantMessage(assistantMsgContainer, contentChunk);
+                      }
+                  } catch (e) {
+                      console.warn('Failed to parse stream line:', line, e);
+                  }
+              }
+          }
+
+          conversationHistory.push({ role: 'assistant', content: fullResponse });
+
+        } catch (error) {
+            console.error('Fetch error:', error);
+            const errorMessage = `出错了: ${error.message}`;
+            updateAssistantMessage(assistantMsgContainer, errorMessage, true);
+            setStatus(errorMessage, true);
+            // 将错误消息作为回复, 但不加入历史记录, 以便用户可以重试
+            // 从历史中移除最后一条用户消息，以便重试
+            conversationHistory.pop(); 
+            return;
+        } finally {
+            toggleInput(true);
+            updateAssistantMessage(assistantMsgContainer, '', true);
+        }
+      }
+
+      // Start the application
+      initializeChat();
+
+  </script>
+</body>
+
+</html>
