@@ -67,6 +67,26 @@ class Config {
     } catch (err) { }
     // 启动时同步加载一份到内存（主进程启动时做一次）
     this.config = this._loadSync();
+    // Migration: ensure each llms entry has inputType set to 'text' if missing
+    try {
+      let migrated = false;
+      if (this.config && this.config.llms && typeof this.config.llms === 'object') {
+        for (const [k, v] of Object.entries(this.config.llms)) {
+          if (v && typeof v === 'object') {
+            if (!Object.prototype.hasOwnProperty.call(v, 'inputType')) {
+              v.inputType = 'text';
+              migrated = true;
+            }
+          }
+        }
+      }
+      if (migrated) {
+        // Persist migration asynchronously but don't block startup
+        this._enqueueWrite(() => this._saveAtomic()).catch(() => { /* ignore */ });
+      }
+    } catch (err) {
+      try { console.error('配置迁移失败:', err); } catch (e) { }
+    }
     // 用于串行化所有写入操作，避免并发写覆盖
     this._writeLock = Promise.resolve();
   }

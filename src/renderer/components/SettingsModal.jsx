@@ -353,7 +353,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                           next[name] = {
                             apitype: 'ollama',
                             model: '',
-                            prompt: 'Summarize \{\{\}\}',
+                            prompt: 'Summarize {{text}}',
+                            inputType: 'text',
                             baseurl: 'http://localhost:11434',
                             apikey: '',
                             temperature: 0.7,
@@ -410,10 +411,10 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               const nextEntry = { ...(entry || {}), inputType: val };
                               // when switching to text, if prompt empty, set default template
                               if (val === 'text' && (!nextEntry.prompt || String(nextEntry.prompt).trim() === '')) {
-                                nextEntry.prompt = '总结内容 {{text}}';
+                                nextEntry.prompt = 'Summarize {{text}}';
                               }
                               // when switching to image and prompt is the text-template, clear it
-                              if (val === 'image' && nextEntry.prompt === '总结内容 {{text}}') {
+                              if (val === 'image' && nextEntry.prompt === 'Summarize {{text}}') {
                                 nextEntry.prompt = '';
                               }
                               handleChange('llms', { ...(settings.llms || {}), [name]: nextEntry });
