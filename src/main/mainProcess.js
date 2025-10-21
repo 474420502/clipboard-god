@@ -550,6 +550,8 @@ class MainProcess {
       }
     });
 
+    // NOTE: system notifications removed; chat window will use internal UI notifications only
+
     ipcMain.handle('set-settings', async (event, values) => {
       safeConsole.log('保存设置 (原始):', values);
       try { safeConsole.log('配置文件路径 (Config.configPath):', Config.configPath); } catch (e) { }

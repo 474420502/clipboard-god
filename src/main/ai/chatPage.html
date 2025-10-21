@@ -603,7 +603,10 @@
           
           if (!response.ok) {
               const errorText = await response.text();
-              throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
+        const errMsg = `API Error: ${response.status} ${response.statusText} - ${errorText}`;
+        // Show internal UI notification (status bar and assistant message)
+        try { setStatus(errMsg, true); } catch (e) { }
+        throw new Error(errMsg);
           }
           
           const reader = response.body.getReader();
@@ -622,13 +625,32 @@
                   if (line.trim() === '') continue;
                   try {
                       const parsed = JSON.parse(line);
-                      if (parsed.message && parsed.message.content) {
-                          const contentChunk = parsed.message.content;
-                          fullResponse += contentChunk;
-                          updateAssistantMessage(assistantMsgContainer, contentChunk);
-                      }
+            // If the server returned an explicit error object, notify the user
+            if (parsed.error || (parsed.message && parsed.message.error)) {
+              const errText = parsed.error || (parsed.message && parsed.message.error) || JSON.stringify(parsed);
+              // Show internal UI notification
+              try { setStatus(String(errText), true); } catch (e) { }
+              updateAssistantMessage(assistantMsgContainer, `出错了: ${errText}`, true);
+              // Stop processing further
+              throw new Error(String(errText));
+            }
+
+            if (parsed.message && parsed.message.content) {
+              const contentChunk = parsed.message.content;
+              fullResponse += contentChunk;
+              updateAssistantMessage(assistantMsgContainer, contentChunk);
+            }
                   } catch (e) {
-                      console.warn('Failed to parse stream line:', line, e);
+            // If parsing failed, the line might still contain a plain-text error
+            try {
+            const lower = String(line).toLowerCase();
+                        if (lower.includes('error') || lower.includes('failed') || lower.includes('this model is missing data')) {
+                          try { setStatus(String(line), true); } catch (e2) { }
+                          updateAssistantMessage(assistantMsgContainer, `出错了: ${line}`, true);
+                          throw new Error(String(line));
+                        }
+            } catch (inner) { /* ignore */ }
+            console.warn('Failed to parse stream line:', line, e);
                   }
               }
           }
@@ -638,6 +660,7 @@
         } catch (error) {
             console.error('Fetch error:', error);
             const errorMessage = `出错了: ${error.message}`;
+            // internal UI notification only
             updateAssistantMessage(assistantMsgContainer, errorMessage, true);
             setStatus(errorMessage, true);
             // 将错误消息作为回复, 但不加入历史记录, 以便用户可以重试
