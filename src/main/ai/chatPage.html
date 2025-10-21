@@ -254,45 +254,8 @@
     // -------------------------------------------------------------
     // 1. 在此处配置您的聊天窗口参数
     // -------------------------------------------------------------
-    // Attempt to obtain injected config via IPC (preferred). If IPC isn't
-    // available (older versions), fall back to ?cfg=<base64 JSON> URL param.
-    let _injectedFromIpc = null;
-    if (window.aiAPI && typeof window.aiAPI.onInitConfig === 'function') {
-      try {
-        window.aiAPI.onInitConfig((cfg) => {
-          try {
-            _injectedFromIpc = cfg || null;
-            // If the page is already initialized, apply the injected config immediately
-            try { applyInjectedConfig(_injectedFromIpc); } catch (e) { /* ignore */ }
-          } catch (e) { /* ignore */ }
-        });
-      } catch (e) { /* ignore */ }
-    }
-
-    function loadInjectedConfig() {
-      // Prefer IPC-supplied config
-      if (_injectedFromIpc) return _injectedFromIpc;
-
-      // Fallback to URL param approach (keeps backward compatibility)
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const enc = params.get('cfg');
-        if (!enc) return null;
-
-        const b64 = decodeURIComponent(enc);
-        const binStr = atob(b64);
-        const len = binStr.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binStr.charCodeAt(i);
-        }
-        const json = new TextDecoder('utf-8').decode(bytes);
-        return JSON.parse(json);
-      } catch (e) {
-        console.warn('无法解析注入的配置(cfg):', e);
-        return null;
-      }
-    }
+    // Obtain injected config via IPC invoke (preferred). Older versions may not
+    // support this; in that case, chatConfig will remain defaults.
 
     const defaultConfig = {
       // title is intentionally not used from injected config. The page will display
@@ -315,11 +278,8 @@
       }
     };
 
-    // Merge injected config over defaults (shallow merge for nested api and llmParams)
-    const injected = loadInjectedConfig();
-    const chatConfig = Object.assign({}, defaultConfig, injected || {});
-    if (injected && injected.api) chatConfig.api = Object.assign({}, defaultConfig.api, injected.api);
-    if (injected && injected.llmParams) chatConfig.llmParams = Object.assign({}, defaultConfig.llmParams, injected.llmParams);
+  // We'll fetch injected config during initialization via aiAPI.getConfig();
+  const chatConfig = Object.assign({}, defaultConfig);
 
     // -------------------------------------------------------------
     // 2. 聊天窗口功能实现
@@ -359,11 +319,25 @@
             }
         });
 
-        // Apply any injected config that may have been provided before initialization
-        if (_injectedFromIpc) {
-          try { applyInjectedConfig(_injectedFromIpc); } catch (e) { /* ignore */ }
-        } else {
-          // If no injected config, fall back to initialPrompt/initialImages in chatConfig
+        // Attempt to fetch injected config from main process via IPC
+        (async () => {
+          try {
+            if (window.aiAPI && typeof window.aiAPI.getConfig === 'function') {
+              const injected = await window.aiAPI.getConfig();
+              if (injected && typeof injected === 'object') {
+                // Merge injected over defaults (shallow)
+                if (injected.api) injected.api = Object.assign({}, defaultConfig.api, injected.api);
+                if (injected.llmParams) injected.llmParams = Object.assign({}, defaultConfig.llmParams, injected.llmParams);
+                Object.assign(chatConfig, injected);
+                if (injected.api) chatConfig.api = injected.api;
+                if (injected.llmParams) chatConfig.llmParams = injected.llmParams;
+              }
+            }
+          } catch (e) {
+            // ignore errors fetching config; continue with defaults
+          }
+
+          // If initialPrompt or initialImages are present after merge, apply them
           if (chatConfig.initialPrompt && chatConfig.initialPrompt.trim() !== '') {
             const initialMessage = { role: 'user', content: chatConfig.initialPrompt };
             addMessageToUI('user', initialMessage);
@@ -381,7 +355,7 @@
               fetchAIResponse();
             }
           }
-        }
+        })();
       }
 
 

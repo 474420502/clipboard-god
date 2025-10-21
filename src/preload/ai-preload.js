@@ -13,11 +13,11 @@ contextBridge.exposeInMainWorld('aiAPI', {
             ipcRenderer.on('ai-stream-complete', (_event, info) => cb(info));
         } catch (e) { /* ignore */ }
     },
-    // Receive initial injected config from main process via IPC
-    onInitConfig: (cb) => {
+    // Request initial injected config from main process via invoke
+    getConfig: async () => {
         try {
-            ipcRenderer.on('ai-init-config', (_event, cfg) => cb(cfg));
-        } catch (e) { /* ignore */ }
+            return await ipcRenderer.invoke('ai-get-config');
+        } catch (e) { return null; }
     },
     // Send an LLM request (renderer -> main). Returns a promise.
     sendInput: (payload) => {

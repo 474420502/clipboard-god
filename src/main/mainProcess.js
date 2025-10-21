@@ -60,6 +60,8 @@ class MainProcess {
     this._registeredShortcut = null;
     // map of shortcut -> llmName for registered LLM shortcuts
     this._registeredLlmShortcuts = {};
+    // Map of webContents.id -> chatConfig for ai windows (used by IPC invoke)
+    this._aiWindowConfigs = new Map();
     // 当正在执行粘贴操作时，短暂抑制任何会显示主窗口的自动行为
     this._isPasting = false;
     // config file watcher state
@@ -435,17 +437,14 @@ class MainProcess {
       const fileUrl = `file://${path.join(__dirname, 'ai', 'chatPage.html')}`;
       chatWin.loadURL(fileUrl);
 
-      // After the page finishes loading, send the config over IPC to avoid URL length / exposure issues
-      chatWin.webContents.once('did-finish-load', () => {
-        try {
-          chatWin.webContents.send('ai-init-config', chatConfig);
-        } catch (e) {
-          safeConsole.warn('发送 ai-init-config 失败:', e);
-        }
+      // Store config keyed by webContents id so the renderer can request it via invoke
+      try {
+        const wcId = chatWin.webContents.id;
+        this._aiWindowConfigs.set(String(wcId), chatConfig);
+      } catch (e) { /* ignore */ }
 
-        // Re-apply the native window title and also set the document.title inside the
-        // renderer. Some platforms or the loaded page may override the title set before
-        // navigation, so set it again after load to ensure the LLM key is visible.
+      // After the page finishes loading, re-apply the title to guard against page overrides
+      chatWin.webContents.once('did-finish-load', () => {
         try {
           const fullTitle = `Chat Window (${llmName})`;
           try { chatWin.setTitle(fullTitle); } catch (e) { /* ignore */ }
@@ -455,9 +454,15 @@ class MainProcess {
         }
       });
 
-      chatWin.on('closed', () => {
-        // no-op
-      });
+      // Clean up stored config when window closes
+      try {
+        const storedWcId = String(chatWin.webContents.id);
+        chatWin.on('closed', () => {
+          try { this._aiWindowConfigs.delete(storedWcId); } catch (e) { /* ignore */ }
+        });
+      } catch (e) {
+        chatWin.on('closed', () => { /* no-op */ });
+      }
 
       return chatWin;
     } catch (err) {
@@ -529,6 +534,20 @@ class MainProcess {
       const config = Config.getAll();
       safeConsole.log('获取设置:', config);
       return config;
+    });
+
+    // Provide ai window config via invoke: renderer calls ipcRenderer.invoke('ai-get-config')
+    ipcMain.handle('ai-get-config', async (event) => {
+      try {
+        const wcId = String(event.sender.id);
+        const cfg = this._aiWindowConfigs.get(wcId) || null;
+        // Optionally remove after first read to avoid stale memory
+        // this._aiWindowConfigs.delete(wcId);
+        return cfg;
+      } catch (e) {
+        safeConsole.warn('ai-get-config 处理失败:', e);
+        return null;
+      }
     });
 
     ipcMain.handle('set-settings', async (event, values) => {
