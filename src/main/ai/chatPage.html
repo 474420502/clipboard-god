@@ -268,6 +268,7 @@
         apiKey: ''
       },
       initialPrompt: '',
+  initialImages: [],
       llmParams: {
         temperature: 0.7,
         top_p: 0.95,
@@ -280,6 +281,8 @@
 
   // We'll fetch injected config during initialization via aiAPI.getConfig();
   const chatConfig = Object.assign({}, defaultConfig);
+  // Guard to avoid applying injected config twice (from getConfig + pushed injected-config)
+  let _injectedConfigApplied = false;
 
     // -------------------------------------------------------------
     // 2. 聊天窗口功能实现
@@ -337,31 +340,61 @@
             // ignore errors fetching config; continue with defaults
           }
 
-          // If initialPrompt or initialImages are present after merge, apply them
-          if (chatConfig.initialPrompt && chatConfig.initialPrompt.trim() !== '') {
-            const initialMessage = { role: 'user', content: chatConfig.initialPrompt };
-            addMessageToUI('user', initialMessage);
-            conversationHistory.push(initialMessage);
-            fetchAIResponse();
-          }
+          // If initialPrompt or initialImages are present after merge, apply them atomically
+          const hasInitialPrompt = chatConfig.initialPrompt && chatConfig.initialPrompt.trim() !== '';
+          const hasInitialImages = chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0;
 
-          if (chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0) {
-            const imgs = chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw }));
-            const imgMessage = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs };
-            addMessageToUI('user', imgMessage);
-            const apiMsg = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs.map(x => x.base64Raw) };
-            conversationHistory.push(apiMsg);
-            if (!chatConfig.initialPrompt || !chatConfig.initialPrompt.trim()) {
-              fetchAIResponse();
-            }
+          if (!_injectedConfigApplied && (hasInitialPrompt || hasInitialImages)) {
+            // prepare UI message (with full base64s)
+            const uiMessage = {
+              role: 'user',
+              content: chatConfig.initialPrompt || '',
+              images: hasInitialImages ? chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw })) : []
+            };
+
+            // prepare API message (raw base64 only)
+            const apiMessage = {
+              role: 'user',
+              content: chatConfig.initialPrompt || '',
+              images: hasInitialImages ? chatConfig.initialImages.map(i => i.base64Raw) : []
+            };
+
+            addMessageToUI('user', uiMessage);
+            conversationHistory.push(apiMessage);
+            fetchAIResponse();
+
+            // mark applied so a pushed injected-config won't re-apply
+            _injectedConfigApplied = true;
           }
         })();
       }
+
+      // Also register a proactive listener for injected config pushed by main process
+      try {
+        if (window.aiAPI && typeof window.aiAPI.onInjectedConfig === 'function') {
+          window.aiAPI.onInjectedConfig((cfg) => {
+            try {
+              if (_injectedConfigApplied) return; // already applied via getConfig
+              applyInjectedConfig(cfg);
+              _injectedConfigApplied = true;
+            } catch (e) { /* ignore */ }
+          });
+        }
+      } catch (e) { /* ignore */ }
 
 
     // Apply a config object received via IPC at any time. This merges into chatConfig
     // and triggers initial prompt/images if present.
     function applyInjectedConfig(cfg) {
+      // safeConsoleLog was not defined here and referencing hasInitialImages
+      // before it exists caused a ReferenceError. Log safely instead.
+      try {
+        const hasInitialImagesPreview = cfg && Array.isArray(cfg.initialImages) && cfg.initialImages.length > 0;
+        console.log('ChatPage: applyInjectedConfig hasInitialImages=', hasInitialImagesPreview);
+      } catch (e) {
+        console.warn('ChatPage: applyInjectedConfig logging failed', e);
+      }
+
       if (!cfg || typeof cfg !== 'object') return;
       // Merge into chatConfig (shallow)
       try {
@@ -373,6 +406,7 @@
         if (typeof cfg.initialPrompt !== 'undefined') chatConfig.initialPrompt = cfg.initialPrompt;
         // merge initialImages if provided
         if (Array.isArray(cfg.initialImages)) chatConfig.initialImages = cfg.initialImages.slice();
+        try { console.log('ChatPage: applyInjectedConfig: initialPromptLen=', String(chatConfig.initialPrompt || '').length, 'initialImages=', (chatConfig.initialImages||[]).length); } catch (e) {}
       } catch (e) { /* ignore merge errors */ }
 
       // If the UI isn't yet initialized, do nothing: initializeChat will pick this up.
@@ -380,23 +414,25 @@
       try {
   // Native window title is used (set by main process). No internal title element to update.
 
-        if (chatConfig.initialPrompt && chatConfig.initialPrompt.trim() !== '') {
-          const initialMessage = { role: 'user', content: chatConfig.initialPrompt };
-          addMessageToUI('user', initialMessage);
-          conversationHistory.push(initialMessage);
-          fetchAIResponse();
-          return;
-        }
+        const hasInitialPrompt = chatConfig.initialPrompt && chatConfig.initialPrompt.trim() !== '';
+        const hasInitialImages = chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0;
+    
+        if (hasInitialPrompt || hasInitialImages) {
+          const uiMessage = {
+            role: 'user',
+            content: chatConfig.initialPrompt || '',
+            images: hasInitialImages ? chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw })) : []
+          };
+          
+          const apiMessage = {
+            role: 'user',
+            content: chatConfig.initialPrompt || '',
+            images: hasInitialImages ? chatConfig.initialImages.map(i => i.base64Raw) : []
+          };
 
-        if (chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0) {
-          const imgs = chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw }));
-          const imgMessage = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs };
-          addMessageToUI('user', imgMessage);
-          const apiMsg = { role: 'user', content: chatConfig.initialPrompt || '', images: imgs.map(x => x.base64Raw) };
-          conversationHistory.push(apiMsg);
-          if (!chatConfig.initialPrompt || !chatConfig.initialPrompt.trim()) {
-            fetchAIResponse();
-          }
+          addMessageToUI('user', uiMessage);
+          conversationHistory.push(apiMessage);
+          fetchAIResponse();
         }
       } catch (e) { /* ignore UI errors */ }
     }
@@ -589,6 +625,52 @@
               stream: true,
               options: chatConfig.llmParams
           };
+
+          // Debug: print API endpoint and a redacted, JSON-stringified payload summary
+          try {
+            console.log('ChatPage: sending API request to', url);
+
+            const msgs = Array.isArray(conversationHistory) ? conversationHistory : [];
+            const messagesCount = msgs.length;
+            const hasImages = msgs.some(m => Array.isArray(m.images) && m.images.length > 0);
+
+            // preview of the last user message (if any)
+            let lastPreview = '';
+            try {
+              const last = msgs.length ? msgs[msgs.length - 1] : null;
+              if (last && last.content) lastPreview = String(last.content).slice(0, 120);
+            } catch (e) { lastPreview = ''; }
+
+            // count images and estimate bytes from base64 length (approx: 3/4 of base64 chars)
+            let totalImages = 0;
+            let totalBase64Chars = 0;
+            for (const m of msgs) {
+              if (Array.isArray(m.images) && m.images.length > 0) {
+                totalImages += m.images.length;
+                for (const im of m.images) {
+                  try {
+                    if (typeof im === 'string') totalBase64Chars += im.length;
+                    else if (im && typeof im.base64Raw === 'string') totalBase64Chars += im.base64Raw.length;
+                  } catch (e) { /* ignore per-image errors */ }
+                }
+              }
+            }
+            const approxImageBytes = Math.round(totalBase64Chars * 0.75);
+
+            let apiOrigin = '';
+            try { apiOrigin = (new URL(baseUrl || '')).origin || baseUrl || ''; } catch (e) { apiOrigin = baseUrl || ''; }
+
+            const summary = {
+              messagesCount,
+              hasImages,
+              totalImages,
+              approxImageBytes,
+              lastPreview,
+              api: { model: model || '', origin: apiOrigin }
+            };
+
+            console.log('ChatPage: payload summary', JSON.stringify(summary));
+          } catch (e) { console.warn('ChatPage: payload summary logging failed', e); }
 
           const headers = { 'Content-Type': 'application/json' };
           if (apiKey) {

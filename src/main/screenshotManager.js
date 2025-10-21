@@ -38,10 +38,15 @@ class ScreenshotManager {
       }
     });
 
-    // 监听截图完成事件
-    this.screenshots.on('ok', (event, buffer) => {
-      this._processScreenshotBuffer(buffer);
-    });
+    // 监听截图完成事件。我们使用一个可控的默认 handler（this._defaultOkHandler）
+    // 当通过 captureImage() 发起的截图需要仅返回数据时，会临时抑制该 handler，
+    // 避免把图像写入系统剪贴板或保存到历史。
+    this._allowDefaultOk = true;
+    this._defaultOkHandler = (event, buffer) => {
+      if (!this._allowDefaultOk) return;
+      this._processScreenshotBuffer(buffer, { writeToClipboard: true });
+    };
+    this.screenshots.on('ok', this._defaultOkHandler);
 
     // 监听取消事件
     this.screenshots.on('cancel', (event) => {
@@ -55,27 +60,32 @@ class ScreenshotManager {
   }
 
   // 私有方法：处理截图缓冲区
-  _processScreenshotBuffer(buffer) {
+  _processScreenshotBuffer(buffer, { writeToClipboard = true } = {}) {
     try {
       const image = nativeImage.createFromBuffer(buffer);
       if (image.isEmpty()) return;
 
-      clipboard.writeImage(image);
+      // Only write to system clipboard when explicitly requested.
+      if (writeToClipboard) {
+        try { clipboard.writeImage(image); } catch (_) { }
 
-      const newItem = {
-        id: Date.now(),
-        type: 'image',
-        content: image.toDataURL(),
-        timestamp: new Date()
-      };
+        const newItem = {
+          id: Date.now(),
+          type: 'image',
+          content: image.toDataURL(),
+          timestamp: new Date()
+        };
 
-      if (this.clipboardManager && typeof this.clipboardManager.addItem === 'function') {
-        this.clipboardManager.addItem(newItem);
+        if (this.clipboardManager && typeof this.clipboardManager.addItem === 'function') {
+          this.clipboardManager.addItem(newItem);
+        }
+
+        if (this.mainWindow && this.mainWindow.isVisible()) {
+          this.mainWindow.hide();
+        }
       }
-
-      if (this.mainWindow && this.mainWindow.isVisible()) {
-        this.mainWindow.hide();
-      }
+      // If writeToClipboard is false, we still accept the buffer and the caller
+      // will receive the base64 via captureImage(). Do not mutate clipboard or history here.
     } catch (error) {
       console.error('保存截图失败:', error);
       if (this.mainWindow && this.mainWindow.webContents) {
@@ -113,6 +123,8 @@ class ScreenshotManager {
       this.init();
     }
 
+    // Ensure the default handler is enabled so the screenshot writes to clipboard/history
+    try { this._allowDefaultOk = true; } catch (_) { }
     this.screenshots.startCapture();
   }
 
@@ -121,6 +133,7 @@ class ScreenshotManager {
     return new Promise((resolve, reject) => {
       // If using desktopCapturer fallback, capture immediately and resolve
       if (this._useDesktopCapturer) {
+        console.log('ScreenshotManager.captureImage: using desktopCapturer fallback');
         desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } })
           .then(sources => {
             if (!sources || sources.length === 0) return reject(new Error('未找到屏幕源'));
@@ -139,6 +152,12 @@ class ScreenshotManager {
         if (!this.screenshots) this.init();
 
         let settled = false;
+        // Temporarily disable the global ok handler so the capture only resolves via our
+        // once('ok') listener and does not write to clipboard or history.
+        try {
+          console.log('ScreenshotManager.captureImage: disabling default ok handler');
+          this._allowDefaultOk = false;
+        } catch (_) { }
         const onOk = (_event, buffer) => {
           try {
             if (settled) return;
@@ -147,6 +166,8 @@ class ScreenshotManager {
             const base64Full = image.toDataURL();
             const base64Raw = base64Full.split(',')[1];
             cleanup();
+            // Restore default handler allowance after we processed the buffer
+            try { console.log('ScreenshotManager.captureImage: restoring default ok handler'); this._allowDefaultOk = true; } catch (_) { }
             resolve({ base64Full, base64Raw });
           } catch (err) {
             cleanup();
@@ -158,6 +179,7 @@ class ScreenshotManager {
           if (settled) return;
           settled = true;
           cleanup();
+          try { this._allowDefaultOk = true; } catch (_) { }
           reject(new Error('截图已取消'));
         };
 

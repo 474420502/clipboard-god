@@ -336,8 +336,10 @@ class MainProcess {
           if (trigger === 'image') {
             // Ensure screenshotManager exists
             if (!this.screenshotManager) this.screenshotManager = new ScreenshotManager(this.mainWindow, this.clipboardManager);
+            safeConsole.log(`LLM flow (name=${name}): trigger=image; prompt(before)="${String(prompt).slice(0, 120)}"; selectedTextLength=${String(selectedText || '').length}`);
             try {
               const img = await this.screenshotManager.captureImage();
+              safeConsole.log(`LLM flow (name=${name}): captureImage resolved: base64Full length=${img && img.base64Full ? img.base64Full.length : 0}`);
               // initialImages is an array of { base64Full, base64Raw }
               initialImages = [img];
               // Substitute known placeholders with the selected text
@@ -346,12 +348,14 @@ class MainProcess {
                 prompt = prompt.replace(/{{\s*text\s*}}/gi, selectedText || '');
                 prompt = prompt.replace(/{{\s*鼠标正在选择的文本\s*}}/g, selectedText || '');
               }
+              safeConsole.log(`LLM flow (name=${name}): prompt(after)="${String(prompt).slice(0, 120)}"; initialImagesCount=${initialImages.length}`);
             } catch (err) {
               safeConsole.error('捕获截图失败:', err);
               // fallback to text flow
               if (!prompt || !prompt.trim()) prompt = `Summarize ${selectedText || ''}`.trim();
             }
           } else {
+            safeConsole.log(`LLM flow (name=${name}): trigger=text; prompt(before)="${String(prompt).slice(0, 120)}"; selectedTextLength=${String(selectedText || '').length}`);
             // text flow: substitute selected text into prompt
             if (prompt && typeof prompt === 'string') {
               prompt = prompt.replace(/{{\s*text\s*}}/gi, selectedText || '');
@@ -360,12 +364,15 @@ class MainProcess {
             if (!prompt || !prompt.trim()) {
               prompt = `Summarize ${selectedText || ''}`.trim();
             }
+            safeConsole.log(`LLM flow (name=${name}): prompt(after)="${String(prompt).slice(0, 120)}"`);
           }
 
           // Open chat window with entry config, including prompt and initialImages if any
           try {
             const cfg = Object.assign({}, entry, { prompt });
             if (initialImages) cfg.initialImages = initialImages;
+
+            safeConsole.log(`LLM flow (name=${name}): opening chat window with cfg: llmKey=${name}, apiType=${cfg.apitype || cfg.apitype}, promptLen=${String(cfg.prompt || '').length}, initialImages=${cfg.initialImages ? cfg.initialImages.length : 0}`);
             this.openLlmChatWindow(name, cfg);
           } catch (err) {
             safeConsole.error('打开 LLM 窗口失败:', err);
@@ -432,6 +439,10 @@ class MainProcess {
 
       // Allow caller to override prompt by passing a prompt in llmEntry object
       if (llmEntry && llmEntry.prompt) chatConfig.initialPrompt = llmEntry.prompt;
+      // If caller provided initialImages (e.g., from screenshot capture), forward them
+      if (llmEntry && Array.isArray(llmEntry.initialImages) && llmEntry.initialImages.length > 0) {
+        try { chatConfig.initialImages = llmEntry.initialImages.slice(); } catch (e) { /* ignore */ }
+      }
 
       // Load chat page and then send the chatConfig via a secure IPC channel
       const fileUrl = `file://${path.join(__dirname, 'ai', 'chatPage.html')}`;
@@ -449,6 +460,15 @@ class MainProcess {
           const fullTitle = `Chat Window (${llmName})`;
           try { chatWin.setTitle(fullTitle); } catch (e) { /* ignore */ }
           try { chatWin.webContents.executeJavaScript(`document.title = ${JSON.stringify(fullTitle)}`); } catch (e) { /* ignore */ }
+          // Also proactively push the injected chat config to the renderer via an IPC message
+          // This avoids race conditions where the renderer might call ai-get-config too early
+          // or the preload/invoke path fails for timing reasons. The chat page listens for
+          // 'injected-config' and will merge/apply it when received.
+          try {
+            chatWin.webContents.send('injected-config', chatConfig);
+          } catch (e) {
+            safeConsole.warn('Failed to send injected-config to chat window:', e);
+          }
         } catch (err) {
           // ignore any errors when setting titles
         }

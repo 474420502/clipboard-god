@@ -13,6 +13,7 @@
 // - use the preload's ipcRenderer wrapper only for the legacy 'history-data' channel.
 // - avoid overwriting settings keys with undefined when mapping payloads.
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useMemo } from 'react';
 import HistoryList from './components/HistoryList';
 import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
@@ -520,7 +521,7 @@ function App() {
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
         onSave={handleSaveSettings}
-        initialSettings={{
+        initialSettings={useMemo(() => ({
           previewLength: settings.previewLength,
           maxHistoryItems: settings.maxHistoryItems,
           useNumberShortcuts: settings.useNumberShortcuts,
@@ -529,7 +530,16 @@ function App() {
           screenshotShortcut: settings.screenshotShortcut,
           theme: settings.theme,
           llms: settings.llms || {}
-        }}
+        }), [
+          settings.previewLength,
+          settings.maxHistoryItems,
+          settings.useNumberShortcuts,
+          settings.enableTooltips,
+          settings.globalShortcut,
+          settings.screenshotShortcut,
+          settings.theme,
+          settings.llms
+        ])}
       />
     </div>
   );

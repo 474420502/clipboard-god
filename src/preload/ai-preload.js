@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('aiAPI', {
             return await ipcRenderer.invoke('ai-get-config');
         } catch (e) { return null; }
     },
+    // Listen for proactive injected config pushed from main (avoid race conditions)
+    onInjectedConfig: (cb) => {
+        try {
+            ipcRenderer.on('injected-config', (_event, cfg) => cb(cfg));
+        } catch (e) { /* ignore */ }
+    },
     // Send an LLM request (renderer -> main). Returns a promise.
     sendInput: (payload) => {
         try {
