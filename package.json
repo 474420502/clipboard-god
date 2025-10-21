@@ -27,6 +27,8 @@
     "dist:all": "npm run build && electron-builder --win --mac --linux"
   },
   "dependencies": {
+    "i18next": "^23.0.0",
+    "react-i18next": "^13.0.0",
     "better-sqlite3": "^12.4.1",
     "electron-screenshots": "^0.5.27",
     "react": "^18.2.0",

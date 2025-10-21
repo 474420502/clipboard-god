@@ -32,3 +32,23 @@ contextBridge.exposeInMainWorld('aiAPI', {
         } catch (e) { return Promise.reject(e); }
     }
 });
+
+// Expose the same locale API to AI chat windows so static pages can load translations
+try {
+    contextBridge.exposeInMainWorld('localeAPI', {
+        getLocale: async () => {
+            try { return await ipcRenderer.invoke('get-locale'); } catch (e) { return null; }
+        },
+        setLocale: async (locale) => {
+            try { return await ipcRenderer.invoke('set-locale', locale); } catch (e) { return { success: false, error: e && e.message }; }
+        },
+        getTranslations: async (locale) => {
+            try { return await ipcRenderer.invoke('get-translations', locale); } catch (e) { return null; }
+        },
+        onLocaleChanged: (cb) => {
+            try { ipcRenderer.on('locale-changed', (_event, locale) => cb(locale)); } catch (e) { /* ignore */ }
+        }
+    });
+} catch (e) {
+    // ignore failures exposing localeAPI
+}

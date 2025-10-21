@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import i18next from '../i18n';
+import { useTranslation } from 'react-i18next';
 import ShortcutCapture from './ShortcutCapture';
 
 function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(initialSettings || {
     previewLength: 120,
@@ -10,14 +13,15 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     globalShortcut: 'CommandOrControl+Alt+V',
     screenshotShortcut: 'CommandOrControl+Shift+S',
     theme: 'light',
-    enableTooltips: true
+    enableTooltips: true,
+    locale: 'zh-CN' // 默认语言
   });
 
   const tabs = [
-    { id: 'general', label: '通用', icon: '⚙️' },
-    { id: 'appearance', label: '外观', icon: '🎨' },
-    { id: 'shortcuts', label: '快捷键', icon: '⌨️' },
-    { id: 'llm', label: '大模型', icon: '🤖' }
+    { id: 'general', label: t('settings.tabs.general'), icon: '⚙️' },
+    { id: 'appearance', label: t('settings.tabs.appearance'), icon: '🎨' },
+    { id: 'shortcuts', label: t('settings.tabs.shortcuts'), icon: '⌨️' },
+    { id: 'llm', label: t('settings.tabs.llm'), icon: '🤖' }
   ];
 
   // 控制每个条目的参数面板是否展开（默认折叠 -> false）
@@ -105,6 +109,18 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
               onSave(mappedResult);
             }
 
+            // If locale was changed, persist via localeAPI and update i18next
+            try {
+              const newLocale = settings.locale;
+              if (newLocale && window.localeAPI && typeof window.localeAPI.setLocale === 'function') {
+                window.localeAPI.setLocale(newLocale).then(() => {
+                  try { i18next.changeLanguage(newLocale); } catch (e) { }
+                }).catch(() => { try { i18next.changeLanguage(newLocale); } catch (e) { } });
+              } else if (newLocale) {
+                try { i18next.changeLanguage(newLocale); } catch (e) { }
+              }
+            } catch (e) { }
+
             // also ensure tooltip is hidden if saved config disables it
             try {
               if (mappedResult && mappedResult.enableTooltips === false && window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
@@ -146,8 +162,6 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   useEffect(() => {
     if (!isOpen) return; // 仅在打开模态框时同步
     try {
-      // Debug: print incoming initialSettings so we can verify what renderer received
-      try { console.log('SettingsModal: initialSettings received:', initialSettings); } catch (e) { }
       const src = initialSettings || {};
       setSettings(prev => ({
         previewLength: typeof src.previewLength !== 'undefined' ? src.previewLength : 120,
@@ -157,6 +171,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
         screenshotShortcut: typeof src.screenshotShortcut !== 'undefined' ? src.screenshotShortcut : 'CommandOrControl+Shift+S',
         theme: typeof src.theme !== 'undefined' ? src.theme : 'light',
         enableTooltips: typeof src.enableTooltips !== 'undefined' ? src.enableTooltips : true,
+        locale: typeof src.locale !== 'undefined' ? src.locale : 'zh-CN',
         llms: src.llms || {},
         _selectedLlm: src._selectedLlm || ''
       }));
@@ -177,7 +192,6 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   }, [settings._selectedLlm]);
 
   if (!isOpen) return null;
-
   return (
     <div className="settings-overlay" onClick={onClose} style={{ height: '100%' }}>
       <div
@@ -186,19 +200,20 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="settingsTitle"
-        onClick={(e) => e.stopPropagation()} // 防止点击模态框内部时关闭
+        onClick={(e) => e.stopPropagation()}
       >
         <header className="settings-header">
-          <h3 id="settingsTitle">设置</h3>
+          <h3 id="settingsTitle">{t('settings.title')}</h3>
           <button
             id="closeSettingsBtn"
             className="settings-close"
-            aria-label="Close"
+            aria-label={t('settings.close')}
             onClick={onClose}
           >
             ✕
           </button>
         </header>
+
         <div className="settings-body">
           <nav className="settings-nav">
             {tabs.map(tab => (
@@ -212,12 +227,23 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
               </button>
             ))}
           </nav>
+
           <div className="settings-content">
             {activeTab === 'general' && (
               <div className="settings-section">
-                <h4>通用设置</h4>
+                <h4>{t('settings.general.title')}</h4>
+
                 <div className="setting-row">
-                  <label htmlFor="previewLengthInput">预览长度 (字符)</label>
+                  <label htmlFor="localeSelect">{t('settings.general.locale.label')}</label>
+                  <select id="localeSelect" value={settings.locale || 'zh-CN'} onChange={(e) => handleChange('locale', e.target.value)}>
+                    <option value="zh-CN">简体中文</option>
+                    <option value="en">English</option>
+                  </select>
+                  <div className="small">{t('settings.general.locale.help')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label htmlFor="previewLengthInput">{t('settings.general.previewLength.label')}</label>
                   <input
                     id="previewLengthInput"
                     type="number"
@@ -226,10 +252,11 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     value={settings.previewLength}
                     onChange={(e) => handleChange('previewLength', parseInt(e.target.value) || 120)}
                   />
-                  <div className="small">设置列表预览中显示的字符数。较长的预览占用更多空间。</div>
+                  <div className="small">{t('settings.general.previewLength.help')}</div>
                 </div>
+
                 <div className="setting-row">
-                  <label htmlFor="maxHistoryItemsInput">历史记录数量上限</label>
+                  <label htmlFor="maxHistoryItemsInput">{t('settings.general.maxHistory.label')}</label>
                   <input
                     id="maxHistoryItemsInput"
                     type="number"
@@ -238,8 +265,9 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     value={settings.maxHistoryItems}
                     onChange={(e) => handleChange('maxHistoryItems', parseInt(e.target.value) || 500)}
                   />
-                  <div className="small">设置保存的历史记录最大条数。超过此数量时会自动删除最旧的记录。</div>
+                  <div className="small">{t('settings.general.maxHistory.help')}</div>
                 </div>
+
                 <div className="setting-row">
                   <label>
                     <input
@@ -248,10 +276,11 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                       checked={settings.useNumberShortcuts}
                       onChange={(e) => handleChange('useNumberShortcuts', e.target.checked)}
                     />
-                    启用数字快捷键 (1-9) 触发粘贴
+                    {t('settings.general.useNumberShortcuts.label')}
                   </label>
-                  <div className="small">关闭后按数字 1-9 不会触发快速粘贴，且列表中不会显示数字提示。</div>
+                  <div className="small">{t('settings.general.useNumberShortcuts.help')}</div>
                 </div>
+
                 <div className="setting-row">
                   <label>
                     <input
@@ -260,74 +289,76 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                       checked={settings.enableTooltips}
                       onChange={(e) => handleChange('enableTooltips', e.target.checked)}
                     />
-                    启用工具提示
+                    {t('settings.general.enableTooltips.label')}
                   </label>
-                  <div className="small">关闭后应用将不再显示条目预览的工具提示（包括主进程的外部 tooltip 窗口）。</div>
+                  <div className="small">{t('settings.general.enableTooltips.help')}</div>
                 </div>
               </div>
             )}
+
             {activeTab === 'appearance' && (
               <div className="settings-section">
-                <h4>外观设置</h4>
+                <h4>{t('settings.appearance.title')}</h4>
                 <div className="setting-row">
-                  <label htmlFor="themeSelect">主题</label>
+                  <label htmlFor="themeSelect">{t('settings.appearance.theme.label')}</label>
                   <select
                     id="themeSelect"
                     value={settings.theme}
                     onChange={(e) => handleChange('theme', e.target.value)}
                   >
-                    <option value="light">经典浅色</option>
-                    <option value="dark">经典深色</option>
-                    <option value="blue">蓝色主题</option>
-                    <option value="purple">紫色主题</option>
-                    <option value="green">绿色主题</option>
-                    <option value="orange">橙色主题</option>
-                    <option value="pink">粉色主题</option>
-                    <option value="gray">灰色主题</option>
-                    <option value="eye-protection">护眼模式</option>
-                    <option value="high-contrast">高对比度</option>
+                    <option value="light">{t('settings.appearance.theme.options.light')}</option>
+                    <option value="dark">{t('settings.appearance.theme.options.dark')}</option>
+                    <option value="blue">{t('settings.appearance.theme.options.blue')}</option>
+                    <option value="purple">{t('settings.appearance.theme.options.purple')}</option>
+                    <option value="green">{t('settings.appearance.theme.options.green')}</option>
+                    <option value="orange">{t('settings.appearance.theme.options.orange')}</option>
+                    <option value="pink">{t('settings.appearance.theme.options.pink')}</option>
+                    <option value="gray">{t('settings.appearance.theme.options.gray')}</option>
+                    <option value="eye-protection">{t('settings.appearance.theme.options.eye-protection')}</option>
+                    <option value="high-contrast">{t('settings.appearance.theme.options.high-contrast')}</option>
                   </select>
-                  <div className="small">选择应用程序的主题风格。</div>
+                  <div className="small">{t('settings.appearance.theme.help')}</div>
                 </div>
               </div>
             )}
+
             {activeTab === 'shortcuts' && (
               <div className="settings-section">
-                <h4>快捷键设置</h4>
+                <h4>{t('settings.shortcuts.title')}</h4>
                 <div className="setting-row">
-                  <label>全局快捷键</label>
+                  <label>{t('settings.shortcuts.globalShortcut.label')}</label>
                   <ShortcutCapture
                     value={settings.globalShortcut}
                     onChange={(value) => handleChange('globalShortcut', value)}
-                    placeholder="点击设置全局快捷键"
+                    placeholder={t('settings.shortcuts.globalShortcut.placeholder')}
                   />
-                  <div className="small">显示/隐藏剪贴板窗口的快捷键。使用 Ctrl+Alt+V (Windows/Linux) 或 Cmd+Alt+V (macOS)。常见替代：Ctrl+Shift+V, F12</div>
+                  <div className="small">{t('settings.shortcuts.globalShortcut.help')}</div>
                 </div>
                 <div className="setting-row">
-                  <label>截图快捷键</label>
+                  <label>{t('settings.shortcuts.screenshotShortcut.label')}</label>
                   <ShortcutCapture
                     value={settings.screenshotShortcut}
                     onChange={(value) => handleChange('screenshotShortcut', value)}
-                    placeholder="点击设置截图快捷键"
+                    placeholder={t('settings.shortcuts.screenshotShortcut.placeholder')}
                   />
-                  <div className="small">触发截图功能的快捷键。使用 Ctrl+Shift+S (Windows/Linux) 或 Cmd+Shift+S (macOS)。</div>
+                  <div className="small">{t('settings.shortcuts.screenshotShortcut.help')}</div>
                 </div>
               </div>
             )}
+
             {activeTab === 'llm' && (
               <div className="settings-section">
-                <h4>大模型设置（多条目）</h4>
-                <div className="small">可创建多个命名的 LLM 条目，每个条目可配置 model/prompt/baseurl/apikey/params 及快捷键。</div>
+                <h4>{t('settings.llm.title')}</h4>
+                <div className="small">{t('settings.llm.description')}</div>
 
                 {/* list of named entries: select or type name to add */}
                 <div className="setting-row">
-                  <label>条目名称（选择或输入）</label>
+                  <label>{t('settings.llm.entryName.label')}</label>
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    {/* wrap input and button so they behave as a single unit */}
                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: '1 1 auto', minWidth: 0 }}>
                       <input
                         list="llm-names"
-                        placeholder="选择已有或输入新名称，例如：备注1"
+                        placeholder={t('settings.llm.entryName.placeholder')}
                         value={settings._selectedLlm || ''}
                         onChange={(e) => handleChange('_selectedLlm', e.target.value)}
                         style={{ flex: '1 1 auto', minWidth: 0 }}
@@ -339,13 +370,12 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                       </datalist>
                       <button
                         type="button"
-                        title="新增或选择条目"
+                        title={t('settings.llm.addButton')}
                         style={{ flex: '0 0 auto', padding: '6px 10px' }}
                         onClick={() => {
                           const name = (settings._selectedLlm || '').trim();
                           if (!name) return;
                           if (settings.llms && settings.llms[name]) {
-                            // already exists -> just select it
                             handleChange('_selectedLlm', name);
                             return;
                           }
@@ -376,7 +406,6 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                   </div>
                 </div>
 
-                {/* If an entry is selected, show its fields */}
                 {settings._selectedLlm && settings.llms && settings.llms[settings._selectedLlm] && (
                   (() => {
                     const name = settings._selectedLlm;
@@ -385,60 +414,57 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                       <div key={name} style={{ borderTop: '1px solid #eee', marginTop: '12px', paddingTop: '12px' }}>
                         <h5>{name}</h5>
                         <div className="setting-row">
-                          <label>API 类型</label>
+                          <label>{t('settings.llm.apiTypeLabel')}</label>
                           <select
                             value={entry.apitype || 'ollama'}
                             onChange={(e) => {
                               const v = e.target.value;
                               const nextEntry = { ...(entry || {}), apitype: v };
-                              // If switching to ollama, ensure a reasonable default baseurl
                               if (v === 'ollama' && (!nextEntry.baseurl || String(nextEntry.baseurl).trim() === '')) {
                                 nextEntry.baseurl = 'http://localhost:11434';
                               }
                               handleChange('llms', { ...(settings.llms || {}), [name]: nextEntry });
                             }}
                           >
-                            <option value="ollama">Ollama</option>
-                            <option value="openapi">OpenAPI</option>
+                            <option value="ollama">{t('settings.llm.apiTypeOptions.ollama')}</option>
+                            <option value="openapi">{t('settings.llm.apiTypeOptions.openapi')}</option>
                           </select>
                         </div>
                         <div className="setting-row">
-                          <label>触发类型</label>
+                          <label>{t('settings.llm.triggerTypeLabel')}</label>
                           <select
                             value={entry.triggerType || 'text'}
                             onChange={(e) => {
                               const val = e.target.value;
                               const nextEntry = { ...(entry || {}), triggerType: val };
-                              // when switching to text, if prompt empty, set default template
                               if (val === 'text' && (!nextEntry.prompt || String(nextEntry.prompt).trim() === '')) {
-                                nextEntry.prompt = 'Summarize \{\{text\}\}';
+                                nextEntry.prompt = 'Summarize {{text}}';
                               }
-                              // when switching to image and prompt is the text-template, clear it
-                              if (val === 'image' && nextEntry.prompt === 'Summarize \{\{text\}\}') {
+                              if (val === 'image' && nextEntry.prompt === 'Summarize {{text}}') {
                                 nextEntry.prompt = '';
                               }
                               handleChange('llms', { ...(settings.llms || {}), [name]: nextEntry });
                             }}
                           >
-                            <option value="text">文本</option>
-                            <option value="image">图片</option>
+                            <option value="text">{t('settings.llm.triggerTypeOptions.text')}</option>
+                            <option value="image">{t('settings.llm.triggerTypeOptions.image')}</option>
                           </select>
-                          <div className="small">选择此条目期望接收的触发类型。文本触发会在提示词中用 {'{{text}}'} 占位原文，图片触发会调用截图并把图像作为参数。</div>
+                          <div className="small">{t('settings.llm.triggerHelp')}</div>
                         </div>
                         <div className="setting-row">
-                          <label>Model</label>
+                          <label>{t('settings.llm.modelLabel')}</label>
                           <input type="text" value={entry.model || ''} onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), model: e.target.value } })} />
                         </div>
                         <div className="setting-row">
-                          <label>Base URL</label>
+                          <label>{t('settings.llm.baseUrlLabel')}</label>
                           <input type="text" placeholder="http://localhost:11434" value={entry.baseurl || ''} onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), baseurl: e.target.value } })} />
                         </div>
                         <div className="setting-row">
-                          <label>API Key</label>
+                          <label>{t('settings.llm.apiKeyLabel')}</label>
                           <input type="password" value={entry.apikey || ''} onChange={(e) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), apikey: e.target.value } })} />
                         </div>
                         <div className="setting-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <label>Prompt</label>
+                          <label>{t('settings.llm.promptLabel')}</label>
                           <textarea
                             rows={3}
                             value={entry.prompt || ''}
@@ -449,32 +475,31 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                         </div>
 
                         <div className="setting-row">
-                          <label>条目快捷键</label>
+                          <label>{t('settings.llm.entryShortcutLabel')}</label>
                           <ShortcutCapture
                             value={entry.llmShortcut || ''}
                             onChange={(value) => handleChange('llms', { ...(settings.llms || {}), [name]: { ...(entry || {}), llmShortcut: value } })}
-                            placeholder="设置此条目的快捷键（可选）"
+                            placeholder={t('settings.llm.shortcutPlaceholder')}
                           />
-                          <div className="small">为此 LLM 条目设置快捷键，设置后可使用全局快捷键触发指定条目的处理。</div>
+                          <div className="small">{t('settings.llm.shortcutHelp')}</div>
                         </div>
 
                         <div className="params-group" style={{ borderTop: '1px solid #f0f0f0', paddingTop: '12px', marginTop: '12px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <h6 style={{ margin: 0 }}>参数</h6>
-                            {/* 默认折叠，点击展开/收起 */}
+                            <h6 style={{ margin: 0 }}>{t('settings.llm.paramsTitle')}</h6>
                             <button
                               type="button"
                               className="params-toggle"
                               onClick={() => setParamsExpanded(prev => ({ ...(prev || {}), [name]: !prev[name] }))}
                               style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--settings-text)' }}
                             >
-                              {(paramsExpanded && paramsExpanded[name]) ? '▾ 收起' : '▸ 展开'}
+                              {(paramsExpanded && paramsExpanded[name]) ? t('settings.llm.collapse') : t('settings.llm.expand')}
                             </button>
                           </div>
                           {(paramsExpanded && paramsExpanded[name]) ? (
                             <div className="params-content" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
                               <div className="setting-row">
-                                <label>Temperature</label>
+                                <label>{t('settings.llm.temperature')}</label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -486,7 +511,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               </div>
 
                               <div className="setting-row">
-                                <label>Top P</label>
+                                <label>{t('settings.llm.topP')}</label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -498,7 +523,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               </div>
 
                               <div className="setting-row">
-                                <label>Top K</label>
+                                <label>{t('settings.llm.topK')}</label>
                                 <input
                                   type="number"
                                   step="1"
@@ -509,7 +534,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               </div>
 
                               <div className="setting-row">
-                                <label>Context Window</label>
+                                <label>{t('settings.llm.contextWindow')}</label>
                                 <input
                                   type="number"
                                   step="1"
@@ -520,7 +545,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               </div>
 
                               <div className="setting-row">
-                                <label>Max Tokens</label>
+                                <label>{t('settings.llm.maxTokens')}</label>
                                 <input
                                   type="number"
                                   step="1"
@@ -531,7 +556,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               </div>
 
                               <div className="setting-row">
-                                <label>Min P</label>
+                                <label>{t('settings.llm.minP')}</label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -543,7 +568,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               </div>
 
                               <div className="setting-row">
-                                <label>Presence Penalty</label>
+                                <label>{t('settings.llm.presencePenalty')}</label>
                                 <input
                                   type="number"
                                   step="0.1"
@@ -555,21 +580,20 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                               </div>
                             </div>
                           ) : (
-                            <div style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>参数已折叠，点击展开查看/编辑</div>
+                            <div style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>{t('settings.llm.paramsCollapsed')}</div>
                           )}
                         </div>
 
                         <div className="setting-row">
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <button type="button" onClick={() => {
-                              // delete
-                              if (!confirm(`删除条目 "${name}" ?`)) return;
+                              if (!confirm(t('settings.llm.deleteConfirm', { name }))) return;
                               const next = { ...(settings.llms || {}) };
                               delete next[name];
                               handleChange('llms', next);
                               handleChange('_selectedLlm', '');
-                            }}>删除</button>
-                            <div className="small">保存时会把所有条目写回配置文件；同名条目不允许存在。</div>
+                            }}>{t('settings.llm.delete')}</button>
+                            <div className="small">{t('settings.llm.saveNote')}</div>
                           </div>
                         </div>
                       </div>
@@ -580,9 +604,10 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
             )}
           </div>
         </div>
+
         <footer className="settings-footer">
-          <button id="saveSettingsBtn" className="btn-primary" onClick={handleSave}>保存</button>
-          <button id="cancelSettingsBtn" onClick={handleCancel}>取消</button>
+          <button id="saveSettingsBtn" className="btn-primary" onClick={handleSave}>{t('settings.save')}</button>
+          <button id="cancelSettingsBtn" onClick={handleCancel}>{t('settings.cancel')}</button>
         </footer>
       </div>
     </div>

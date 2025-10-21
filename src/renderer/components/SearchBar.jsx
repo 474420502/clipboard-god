@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true }) {
   const [isAdvancedSearch, setIsAdvancedSearch] = useState(false);
   const [searchType, setSearchType] = useState('all'); // 'all', 'text', 'image'
   const [sortBy, setSortBy] = useState('time'); // 'time', 'length'
   const inputRef = useRef(null);
+  const { t } = useTranslation();
 
   const handleChange = (e) => {
     try {
@@ -73,7 +75,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
           ref={inputRef}
           type="text"
           id="searchInput"
-          placeholder="Search clipboard history..."
+          placeholder={t('search.placeholder')}
           value={searchTerm || ''}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
@@ -103,19 +105,19 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
         }}>
           <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div>
-              <label style={{ marginRight: '5px' }}>Type:</label>
+              <label style={{ marginRight: '5px' }}>{t('search.advanced.typeLabel')}</label>
               <select value={searchType} onChange={handleTypeChange}>
-                <option value="all">All</option>
-                <option value="text">Text</option>
-                <option value="image">Image</option>
+                <option value="all">{t('search.advanced.types.all')}</option>
+                <option value="text">{t('search.advanced.types.text')}</option>
+                <option value="image">{t('search.advanced.types.image')}</option>
               </select>
             </div>
 
             <div>
-              <label style={{ marginRight: '5px' }}>Sort by:</label>
+              <label style={{ marginRight: '5px' }}>{t('search.advanced.sortLabel')}</label>
               <select value={sortBy} onChange={handleSortChange}>
-                <option value="time">Time</option>
-                <option value="length">Length</option>
+                <option value="time">{t('search.advanced.sortOptions.time')}</option>
+                <option value="length">{t('search.advanced.sortOptions.length')}</option>
               </select>
             </div>
 
@@ -124,7 +126,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
               onClick={handleAdvancedSearch}
               style={{ marginLeft: 'auto' }}
             >
-              Apply
+              {t('search.advanced.apply')}
             </button>
           </div>
         </div>

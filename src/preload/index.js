@@ -33,3 +33,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('settings-updated');
   }
 });
+
+// 简单的 locale API，供纯静态页面（如 chatPage.html）或渲染器使用
+contextBridge.exposeInMainWorld('localeAPI', {
+  getLocale: () => ipcRenderer.invoke('get-locale'),
+  setLocale: (locale) => ipcRenderer.invoke('set-locale', locale),
+  // 返回整个 translations 对象（主进程负责读取本地 files）
+  getTranslations: (locale) => ipcRenderer.invoke('get-translations', locale),
+  onLocaleChanged: (cb) => ipcRenderer.on('locale-changed', (_event, locale) => cb(locale))
+});

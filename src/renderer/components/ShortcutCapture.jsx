@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import './ShortcutCapture.css';
 
-function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键" }) {
+function ShortcutCapture({ value, onChange, placeholder }) {
     const [isCapturing, setIsCapturing] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState('');
@@ -177,6 +178,8 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
         };
     }, []);
 
+    const { t } = useTranslation();
+
     return (
         <div className="shortcut-capture">
             <div className="shortcut-input-group">
@@ -193,18 +196,18 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                         onClick={startCapture}
                         className="capture-button"
                         disabled={isCapturing || isEditing}
-                        title="录制快捷键"
+                        title={t('shortcutCapture.captureTitle')}
                     >
-                        {isCapturing ? '录制中...' : '录制'}
+                        {isCapturing ? t('shortcutCapture.capturing') : t('shortcutCapture.capture')}
                     </button>
                     <button
                         type="button"
                         onClick={startEditing}
                         className="edit-button"
                         disabled={isCapturing || isEditing}
-                        title="手动输入快捷键"
+                        title={t('shortcutCapture.editTitle')}
                     >
-                        编辑
+                        {t('shortcutCapture.edit')}
                     </button>
                 </div>
             </div>
@@ -213,8 +216,8 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                 <div className="capture-overlay">
                     <div className="capture-modal">
                         <div className="capture-header">
-                            <h4>录制快捷键</h4>
-                            <p>按下你想要的快捷键组合</p>
+                            <h4>{t('shortcutCapture.recordingTitle')}</h4>
+                            <p>{t('shortcutCapture.recordingHelp')}</p>
                         </div>
 
                         <div className="capture-display">
@@ -224,17 +227,16 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                                         {formatShortcut(currentKeys)}
                                     </span>
                                 ) : (
-                                    <span className="placeholder">等待按键...</span>
+                                    <span className="placeholder">{t('shortcutCapture.waiting')}</span>
                                 )}
                             </div>
                         </div>
-
                         <div className="capture-instructions">
-                            <p><strong>操作说明：</strong></p>
+                            <p><strong>{t('shortcutCapture.instructionsTitle')}</strong></p>
                             <ul>
-                                <li>按下你想要的快捷键组合</li>
-                                <li>松开所有键后等待1秒自动确认，或按 <kbd>Enter</kbd> 立即确认</li>
-                                <li>按 <kbd>Esc</kbd> 取消</li>
+                                <li>{t('shortcutCapture.instructions.step1')}</li>
+                                <li>{t('shortcutCapture.instructions.step2')}</li>
+                                <li>{t('shortcutCapture.instructions.step3')}</li>
                             </ul>
                         </div>
 
@@ -244,7 +246,7 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                                 onClick={cancelCapture}
                                 className="cancel-button"
                             >
-                                取消 (Esc)
+                                {t('shortcutCapture.cancelWithKey', { key: 'Esc' })}
                             </button>
                             <button
                                 type="button"
@@ -252,7 +254,7 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                                 className="confirm-button"
                                 disabled={currentKeys.length === 0}
                             >
-                                确认 (Enter)
+                                {t('shortcutCapture.confirmWithKey', { key: 'Enter' })}
                             </button>
                         </div>
                     </div>
@@ -263,8 +265,8 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                 <div className="capture-overlay">
                     <div className="capture-modal">
                         <div className="capture-header">
-                            <h4>编辑快捷键</h4>
-                            <p>直接输入快捷键组合，例如：Ctrl+Shift+A</p>
+                            <h4>{t('shortcutCapture.editingTitle')}</h4>
+                            <p>{t('shortcutCapture.editingHelp')}</p>
                         </div>
 
                         <div className="edit-display">
@@ -279,17 +281,17 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                                         cancelEdit();
                                     }
                                 }}
-                                placeholder="例如：Ctrl+Shift+A"
+                                placeholder={t('shortcutCapture.editPlaceholder')}
                                 className="edit-input"
                                 autoFocus
                             />
                             <div className="edit-examples">
-                                <p><strong>常用格式：</strong></p>
+                                <p><strong>{t('shortcutCapture.examplesTitle')}</strong></p>
                                 <ul>
-                                    <li><code>Ctrl+A</code> - 基础组合</li>
-                                    <li><code>Ctrl+Shift+A</code> - 多修饰键</li>
-                                    <li><code>Alt+F4</code> - 功能键</li>
-                                    <li><code>F1</code> - 单独功能键</li>
+                                    <li><code>Ctrl+A</code> - {t('shortcutCapture.examples.basic')}</li>
+                                    <li><code>Ctrl+Shift+A</code> - {t('shortcutCapture.examples.modifiers')}</li>
+                                    <li><code>Alt+F4</code> - {t('shortcutCapture.examples.functionKey')}</li>
+                                    <li><code>F1</code> - {t('shortcutCapture.examples.singleKey')}</li>
                                 </ul>
                             </div>
                         </div>
@@ -300,7 +302,7 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                                 onClick={cancelEdit}
                                 className="cancel-button"
                             >
-                                取消 (Esc)
+                                {t('shortcutCapture.cancelWithKey', { key: 'Esc' })}
                             </button>
                             <button
                                 type="button"
@@ -308,7 +310,7 @@ function ShortcutCapture({ value, onChange, placeholder = "点击设置快捷键
                                 className="confirm-button"
                                 disabled={!editValue.trim()}
                             >
-                                确认 (Enter)
+                                {t('shortcutCapture.confirmWithKey', { key: 'Enter' })}
                             </button>
                         </div>
                     </div>

@@ -1,0 +1,180 @@
+{
+    "chat": {
+        "attachImage": "Attach image",
+        "placeholder": "Type a message... (Shift+Enter for newline)",
+        "send": "Send"
+    },
+    "status": {
+        "ready": "Ready",
+        "generating": "Generating..."
+    },
+    "toggle": {
+        "collapseTitle": "Collapse/Expand"
+    },
+    "error": {
+        "prefix": "Error: "
+    },
+    "settings": {
+        "title": "Settings",
+        "close": "Close",
+        "save": "Save",
+        "cancel": "Cancel",
+        "tabs": {
+            "general": "General",
+            "appearance": "Appearance",
+            "shortcuts": "Shortcuts",
+            "llm": "LLM"
+        },
+        "general": {
+            "title": "General",
+            "locale": {
+                "label": "Application language",
+                "help": "Switch the app language (saved to config and broadcast to all windows)."
+            },
+            "previewLength": {
+                "label": "Preview length (chars)",
+                "help": "Number of characters shown in list previews. Longer previews take more space."
+            },
+            "maxHistory": {
+                "label": "Max history items",
+                "help": "Maximum number of history items to keep. Oldest items are removed when exceeded."
+            },
+            "useNumberShortcuts": {
+                "label": "Enable number shortcuts (1-9)",
+                "help": "When disabled, pressing 1-9 won't trigger quick paste and numeric hints won't be shown."
+            },
+            "enableTooltips": {
+                "label": "Enable tooltips",
+                "help": "When disabled, the app won't show item preview tooltips (including main-process external tooltip windows)."
+            }
+        },
+        "appearance": {
+            "title": "Appearance",
+            "theme": {
+                "label": "Theme",
+                "options": {
+                    "light": "Light",
+                    "dark": "Dark",
+                    "blue": "Blue",
+                    "purple": "Purple",
+                    "green": "Green",
+                    "orange": "Orange",
+                    "pink": "Pink",
+                    "gray": "Gray",
+                    "eye-protection": "Eye protection",
+                    "high-contrast": "High contrast"
+                },
+                "help": "Choose the application theme."
+            }
+        },
+        "shortcuts": {
+            "title": "Shortcuts",
+            "globalShortcut": {
+                "label": "Global shortcut",
+                "placeholder": "Click to set global shortcut",
+                "help": "Set the global hotkey used to open the app."
+            },
+            "screenshotShortcut": {
+                "label": "Screenshot shortcut",
+                "placeholder": "Click to set screenshot shortcut",
+                "help": "Set the shortcut used to capture screenshots."
+            }
+        },
+        "llm": {
+            "title": "LLM Integrations",
+            "description": "Configure named LLM entries used by the AI tools.",
+            "apiTypeLabel": "API type",
+            "apiTypeOptions": {
+                "ollama": "Ollama",
+                "openapi": "OpenAPI"
+            },
+            "triggerTypeLabel": "Trigger type",
+            "triggerTypeOptions": {
+                "text": "Text",
+                "image": "Image"
+            },
+            "modelLabel": "Model",
+            "baseUrlLabel": "Base URL",
+            "apiKeyLabel": "API Key",
+            "promptLabel": "Prompt",
+            "entryShortcutLabel": "Entry shortcut",
+            "entryName": {
+                "label": "Entry name (select or type)",
+                "placeholder": "Choose or enter a name, e.g. Note1"
+            },
+            "addButton": "Add",
+            "triggerHelp": "Choose the trigger type. Text triggers use {{text}} in the prompt; image triggers will send the screenshot as input.",
+            "shortcutPlaceholder": "Set a shortcut for this entry (optional)",
+            "shortcutHelp": "Set an entry-specific shortcut to trigger this LLM via the global hotkey.",
+            "paramsTitle": "Parameters",
+            "expand": "Expand",
+            "collapse": "Collapse",
+            "paramsCollapsed": "Parameters are collapsed. Click to expand for edit.",
+            "temperature": "Temperature",
+            "topP": "Top P",
+            "topK": "Top K",
+            "contextWindow": "Context window",
+            "maxTokens": "Max tokens",
+            "minP": "Min P",
+            "presencePenalty": "Presence penalty",
+            "deleteConfirm": "Delete entry \"{{name}}\"?",
+            "delete": "Delete",
+            "saveNote": "All entries are written back to config on save."
+        }
+    },
+    "menu": {
+        "features": "Features",
+        "screenshot": "Screenshot",
+        "settings": "Settings",
+        "toggleDevTools": "Toggle Developer Tools"
+    },
+    "history": {
+        "empty": "No clipboard history yet",
+        "clickToPasteImage": "Click to paste image"
+    },
+    "search": {
+        "placeholder": "Search clipboard history...",
+        "advanced": {
+            "typeLabel": "Type:",
+            "sortLabel": "Sort by:",
+            "types": {
+                "all": "All",
+                "text": "Text",
+                "image": "Image"
+            },
+            "sortOptions": {
+                "time": "Time",
+                "length": "Length"
+            },
+            "apply": "Apply"
+        }
+    },
+    "shortcutCapture": {
+        "captureTitle": "Start capture",
+        "capturing": "Capturing...",
+        "capture": "Capture",
+        "editTitle": "Edit",
+        "edit": "Edit",
+        "recordingTitle": "Recording shortcut",
+        "recordingHelp": "Press the desired key combination. Press Esc to cancel, Enter to confirm.",
+        "waiting": "Waiting for key...",
+        "instructionsTitle": "Recording instructions",
+        "instructions": {
+            "step1": "Press the key combination you want to capture.",
+            "step2": "Press Esc to cancel or Enter to confirm.",
+            "step3": "Release all keys to auto-confirm the shortcut after a short delay."
+        },
+        "cancelWithKey": "Cancel ({{key}})",
+        "confirmWithKey": "Confirm ({{key}})",
+        "editingTitle": "Edit shortcut",
+        "editingHelp": "Manually type a shortcut or use the capture mode to record it.",
+        "editPlaceholder": "e.g. Ctrl+Alt+N",
+        "examplesTitle": "Common formats:",
+        "examples": {
+            "basic": "Basic combination",
+            "modifiers": "Multiple modifier keys",
+            "functionKey": "Function or system key",
+            "singleKey": "Single function key"
+        }
+    }
+}

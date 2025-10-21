@@ -286,14 +286,14 @@
       <div id="image-preview-container"></div>
       <form id="input-form" class="input-form">
         <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
-        <!-- attach image button -->
-        <button type="button" id="attach-file-btn" class="icon-button" title="附加图片">📎</button>
+  <!-- attach image button -->
+  <button type="button" id="attach-file-btn" class="icon-button" title="附加图片" data-i18n="chat.attachImage">📎</button>
         
-        <textarea id="ai-input" placeholder="输入消息... (Shift+Enter 换行)" rows="1"></textarea>
-        <button id="ai-send" type="submit">发送</button>
+  <textarea id="ai-input" placeholder="输入消息... (Shift+Enter 换行)" rows="1" data-i18n-placeholder="chat.placeholder"></textarea>
+  <button id="ai-send" type="submit" data-i18n="chat.send">发送</button>
       </form>
     </div>
-    <div class="status-bar" id="status-bar">准备就绪</div>
+    <div class="status-bar" id="status-bar" data-i18n="status.ready">准备就绪</div>
   </div>
 
   <script>
@@ -860,6 +860,24 @@
         }
       });
 
+  </script>
+  <script src="./i18n-dom.js"></script>
+  <script>
+    // initialize DOM i18n helper using persisted locale when possible
+    (async function(){
+      if (!window.i18nDom || typeof window.i18nDom.init !== 'function') return;
+      const docLang = (document.documentElement && document.documentElement.lang) ? document.documentElement.lang : 'en';
+      try {
+        if (window.localeAPI && typeof window.localeAPI.getLocale === 'function') {
+          const persisted = await window.localeAPI.getLocale();
+          await window.i18nDom.init(persisted || docLang || 'en');
+          return;
+        }
+      } catch (e) {
+        // ignore and fallback
+      }
+      await window.i18nDom.init(docLang || 'en');
+    })();
   </script>
 </body>
 

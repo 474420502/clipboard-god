@@ -1,4 +1,5 @@
 const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, screen, clipboard, Notification } = require('electron');
+const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ClipboardManager = require('./clipboardManager');
@@ -543,6 +544,83 @@ class MainProcess {
       event.reply('history-data', this.clipboardManager.getHistory());
     });
 
+    // --- i18n locale handlers ---
+    // Return persisted locale or system default
+    ipcMain.handle('get-locale', async () => {
+      try {
+        const persisted = Config.get('locale');
+        if (persisted) return persisted;
+        // fallback to system locale or 'en'
+        try { return (app && typeof app.getLocale === 'function') ? app.getLocale() : 'en'; } catch (e) { return 'en'; }
+      } catch (e) {
+        return 'en';
+      }
+    });
+
+    // Persist locale and notify all windows
+    ipcMain.handle('set-locale', async (_event, locale) => {
+      try {
+        await Config.set('locale', locale);
+        // broadcast to all renderer windows
+        try {
+          const wins = BrowserWindow.getAllWindows();
+          for (const w of wins) {
+            try { w.webContents.send('locale-changed', locale); } catch (e) { /* ignore per-window send errors */ }
+          }
+        } catch (e) { }
+        // Rebuild the app menu so menu labels reflect the new locale immediately
+        try {
+          this.buildAppMenu();
+        } catch (e) {
+          safeConsole.warn('重建应用菜单时出错:', e);
+        }
+
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    });
+
+    // Serve translations from the bundled locales folder
+    ipcMain.handle('get-translations', async (_event, locale) => {
+      try {
+        // In development, locales are in the project root
+        // In production (packaged), they should be in the app's resources
+        let localesDir;
+        if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
+          // Use absolute path to project root
+          const projectRoot = path.resolve(__dirname, '..', '..');
+          localesDir = path.join(projectRoot, 'locales');
+        } else {
+          // In packaged app, locales should be in app.getAppPath() or resources
+          localesDir = path.join(app.getAppPath(), 'locales');
+          // If not found, try resources path
+          if (!fs.existsSync(localesDir)) {
+            localesDir = path.join(process.resourcesPath, 'locales');
+          }
+        }
+
+        const tryList = [];
+        if (locale) tryList.push(locale);
+        // push language part (e.g., 'zh' from 'zh-CN')
+        if (locale && locale.indexOf('-') !== -1) tryList.push(locale.split('-')[0]);
+        tryList.push('en');
+
+        for (const l of tryList) {
+          try {
+            const candidate = path.join(localesDir, `${l}.json`);
+            if (fs.existsSync(candidate)) {
+              const txt = fs.readFileSync(candidate, 'utf8');
+              try { return JSON.parse(txt); } catch (e) { continue; }
+            }
+          } catch (e) { continue; }
+        }
+        return null;
+      } catch (e) {
+        return null;
+      }
+    });
+
     // 隐藏窗口
     ipcMain.on('hide-window', () => {
       safeConsole.log('收到隐藏窗口请求');
@@ -885,16 +963,48 @@ class MainProcess {
       // 从配置中获取实际的截图快捷键
       const screenshotShortcut = Config.get('screenshotShortcut') || 'CommandOrControl+Shift+S';
 
+      // attempt to load translations for the configured locale so menu labels are localized
+      let menuLabels = {};
+      try {
+        const locale = Config.get('locale') || (app && typeof app.getLocale === 'function' ? app.getLocale() : 'en');
+        let localesDir;
+        if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
+          const projectRoot = path.resolve(__dirname, '..', '..');
+          localesDir = path.join(projectRoot, 'locales');
+        } else {
+          localesDir = path.join(app.getAppPath(), 'locales');
+          if (!fs.existsSync(localesDir)) localesDir = path.join(process.resourcesPath, 'locales');
+        }
+
+        const tryList = [];
+        if (locale) tryList.push(locale);
+        if (locale && locale.indexOf('-') !== -1) tryList.push(locale.split('-')[0]);
+        tryList.push('en');
+
+        for (const l of tryList) {
+          const candidate = path.join(localesDir, `${l}.json`);
+          if (fs.existsSync(candidate)) {
+            try {
+              const txt = fs.readFileSync(candidate, 'utf8');
+              const json = JSON.parse(txt);
+              menuLabels = json.menu || {};
+              break;
+            } catch (e) { continue; }
+          }
+        }
+      } catch (e) {
+        // ignore, fall back to defaults below
+      }
+
       const template = [
         {
-          label: '功能',
+          label: menuLabels.features || 'Features',
           submenu: [
             {
-              label: '截图',
+              label: menuLabels.screenshot || 'Screenshot',
               accelerator: screenshotShortcut, // 使用配置中的实际快捷键
               click: () => {
                 safeConsole.log('菜单: 截图 被点击');
-                // 如果主进程已有 screenshotManager，直接触发；否则让渲染进程处理
                 if (this.screenshotManager) {
                   this.screenshotManager.startScreenshot();
                 } else if (this.mainWindow && this.mainWindow.webContents) {
@@ -903,7 +1013,7 @@ class MainProcess {
               }
             },
             {
-              label: '设置',
+              label: menuLabels.settings || 'Settings',
               accelerator: 'CmdOrCtrl+,',
               click: () => {
                 safeConsole.log('菜单: 设置 被点击');
@@ -913,7 +1023,7 @@ class MainProcess {
               }
             },
             {
-              label: 'Toggle Developer Tools',
+              label: menuLabels.toggleDevTools || 'Toggle Developer Tools',
               accelerator: 'CmdOrCtrl+Shift+I',
               click: () => {
                 safeConsole.log('菜单: Toggle Developer Tools 被点击');

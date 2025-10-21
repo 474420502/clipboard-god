@@ -1,0 +1,180 @@
+{
+    "chat": {
+        "attachImage": "附加图片",
+        "placeholder": "输入消息... (Shift+Enter 换行)",
+        "send": "发送"
+    },
+    "status": {
+        "ready": "准备就绪",
+        "generating": "正在生成..."
+    },
+    "toggle": {
+        "collapseTitle": "折叠/展开"
+    },
+    "error": {
+        "prefix": "出错了: "
+    },
+    "settings": {
+        "title": "设置",
+        "close": "关闭",
+        "save": "保存",
+        "cancel": "取消",
+        "tabs": {
+            "general": "常规",
+            "appearance": "外观",
+            "shortcuts": "快捷键",
+            "llm": "LLM"
+        },
+        "general": {
+            "title": "常规",
+            "locale": {
+                "label": "应用语言",
+                "help": "切换应用语言（会保存到配置并广播到所有窗口）。"
+            },
+            "previewLength": {
+                "label": "预览长度（字符）",
+                "help": "列表预览中显示的字符数。较长的预览占用更多空间。"
+            },
+            "maxHistory": {
+                "label": "历史记录数量上限",
+                "help": "保存的历史记录最大条数；超过时会删除最旧的记录。"
+            },
+            "useNumberShortcuts": {
+                "label": "启用数字快捷键 (1-9)",
+                "help": "关闭后按数字 1-9 不会触发快速粘贴，且列表中不会显示数字提示。"
+            },
+            "enableTooltips": {
+                "label": "启用工具提示",
+                "help": "关闭后应用将不再显示条目预览的工具提示（包括主进程的外部 tooltip 窗口）。"
+            }
+        },
+        "appearance": {
+            "title": "外观",
+            "theme": {
+                "label": "主题",
+                "options": {
+                    "light": "浅色",
+                    "dark": "深色",
+                    "blue": "蓝色",
+                    "purple": "紫色",
+                    "green": "绿色",
+                    "orange": "橙色",
+                    "pink": "粉色",
+                    "gray": "灰色",
+                    "eye-protection": "护眼",
+                    "high-contrast": "高对比"
+                },
+                "help": "选择应用主题。"
+            }
+        },
+        "shortcuts": {
+            "title": "快捷键",
+            "globalShortcut": {
+                "label": "全局快捷键",
+                "placeholder": "点击设置全局快捷键",
+                "help": "设置用于打开应用的全局热键。"
+            },
+            "screenshotShortcut": {
+                "label": "截图快捷键",
+                "placeholder": "点击设置截图快捷键",
+                "help": "设置用于截图的快捷键。"
+            }
+        },
+        "llm": {
+            "title": "LLM 集成",
+            "description": "配置 AI 工具使用的命名 LLM 条目。",
+            "apiTypeLabel": "API 类型",
+            "apiTypeOptions": {
+                "ollama": "Ollama",
+                "openapi": "OpenAPI"
+            },
+            "triggerTypeLabel": "触发类型",
+            "triggerTypeOptions": {
+                "text": "文本",
+                "image": "图片"
+            },
+            "modelLabel": "Model",
+            "baseUrlLabel": "Base URL",
+            "apiKeyLabel": "API Key",
+            "promptLabel": "Prompt",
+            "entryShortcutLabel": "条目快捷键",
+            "entryName": {
+                "label": "条目名称（选择或输入）",
+                "placeholder": "选择已有或输入新名称，例如：备注1"
+            },
+            "addButton": "新增",
+            "triggerHelp": "选择触发类型。文本触发会在提示词中用 {{text}} 占位原文；图片触发会把截图作为输入。",
+            "shortcutPlaceholder": "为此条目设置快捷键（可选）",
+            "shortcutHelp": "为此 LLM 条目设置快捷键，设置后可使用全局快捷键触发指定条目的处理。",
+            "paramsTitle": "参数",
+            "expand": "展开",
+            "collapse": "收起",
+            "paramsCollapsed": "参数已折叠，点击展开查看/编辑",
+            "temperature": "Temperature",
+            "topP": "Top P",
+            "topK": "Top K",
+            "contextWindow": "上下文窗口大小",
+            "maxTokens": "最大 tokens",
+            "minP": "Min P",
+            "presencePenalty": "Presence penalty",
+            "deleteConfirm": "删除条目 \"{{name}}\" ?",
+            "delete": "删除",
+            "saveNote": "保存时会把所有条目写回配置文件。"
+        }
+    },
+    "menu": {
+        "features": "功能",
+        "screenshot": "截图",
+        "settings": "设置",
+        "toggleDevTools": "切换开发者工具"
+    },
+    "history": {
+        "empty": "还没有剪贴板历史记录",
+        "clickToPasteImage": "点击以粘贴图片"
+    },
+    "search": {
+        "placeholder": "搜索剪贴板历史...",
+        "advanced": {
+            "typeLabel": "类型:",
+            "sortLabel": "排序:",
+            "types": {
+                "all": "全部",
+                "text": "文本",
+                "image": "图片"
+            },
+            "sortOptions": {
+                "time": "时间",
+                "length": "长度"
+            },
+            "apply": "应用"
+        }
+    },
+    "shortcutCapture": {
+        "captureTitle": "开始录制",
+        "capturing": "正在录制...",
+        "capture": "录制",
+        "editTitle": "编辑",
+        "edit": "编辑",
+        "recordingTitle": "录制快捷键",
+        "recordingHelp": "按下想要的快捷键组合。按 Esc 取消，按 Enter 确认。",
+        "waiting": "等待按键...",
+        "instructionsTitle": "录制说明",
+        "instructions": {
+            "step1": "按下你想要录制的快捷键组合。",
+            "step2": "按 Esc 取消或按 Enter 确认。",
+            "step3": "所有按键松开后会在短时间内自动确认快捷键。"
+        },
+        "cancelWithKey": "取消（{{key}}）",
+        "confirmWithKey": "确认（{{key}}）",
+        "editingTitle": "编辑快捷键",
+        "editingHelp": "手动输入快捷键或使用录制模式进行记录。",
+        "editPlaceholder": "例如：Ctrl+Alt+N",
+        "examplesTitle": "常用格式：",
+        "examples": {
+            "basic": "基础组合",
+            "modifiers": "多个修饰键",
+            "functionKey": "功能或系统键",
+            "singleKey": "单个功能键"
+        }
+    }
+}
