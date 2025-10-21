@@ -197,4 +197,21 @@ If you'd like, I can also:
 - Add example screenshots or a short GIF to the README,
 - Add badges for CI or release status.
 
+## Releases / CI
+
+This repository includes a GitHub Actions workflow that builds platform binaries and creates a Release when you push a tag that starts with `v` (for example: `v1.2.3`). The workflow builds on the matching OS runners and uploads the `dist-electron/` output as release assets.
+
+How to create a release tag locally and push:
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+Notes:
+- The action uses the repository's default `GITHUB_TOKEN` so no extra secrets are required for basic releases.
+- macOS code signing or notarization requires additional secrets/certificates and is not configured by default. If you need signed macOS builds, add the appropriate signing keys to the Actions secrets and update the workflow.
+- The workflow builds the platform-specific target on the corresponding runner (Linux on ubuntu-latest, macOS on macos-latest, Windows on windows-latest).
+
+
 `<parameter name="filePath">`/home/eson/workspace/clipboard-god/README.md

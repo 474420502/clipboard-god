@@ -1,0 +1,77 @@
+name: Build and Release on Tag
+
+on:
+    push:
+        tags:
+            - "v*"
+
+jobs:
+    build:
+        name: Build on ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest, windows-latest]
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Use Node.js 18
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build renderer (vite)
+              run: npm run build
+
+            - name: Build Electron app
+              # Build only the platform corresponding to the runner to avoid cross-building
+              run: |
+                  if [ "${{ matrix.os }}" = "windows-latest" ]; then
+                    npm run dist:win
+                  elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+                    npm run dist:mac
+                  else
+                    npm run dist:linux
+                  fi
+
+            - name: Upload build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: app-${{ matrix.os }}
+                  path: dist-electron/
+
+    publish:
+        name: Create GitHub Release
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - name: Download artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: app-ubuntu-latest
+
+            - name: Download mac artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: app-macos-latest
+                  continue-on-error: true
+
+            - name: Download windows artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: app-windows-latest
+                  continue-on-error: true
+
+            - name: Create GitHub Release
+              uses: ncipollo/release-action@v1
+              with:
+                  tag: ${{ github.ref_name }}
+                  name: ${{ github.ref_name }}
+                  files: |
+                      dist-electron/**
