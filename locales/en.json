@@ -130,7 +130,11 @@
     },
     "history": {
         "empty": "No clipboard history yet",
-        "clickToPasteImage": "Click to paste image"
+        "clickToPasteImage": "Click to paste image",
+        "download": "Download",
+        "view": "View",
+        "downloadSuccessTitle": "Download complete",
+        "downloadedMessage": "Saved to {{path}}"
     },
     "search": {
         "placeholder": "Search clipboard history...",

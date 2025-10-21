@@ -929,6 +929,67 @@ class MainProcess {
         return { success: false, error: error.message };
       }
     });
+
+    // Download image to user's Downloads directory
+    ipcMain.handle('download-image', async (_event, imagePath) => {
+      try {
+        if (!imagePath) return { success: false, error: 'no-path' };
+        const userHome = app.getPath('home');
+        const downloads = app.getPath('downloads') || path.join(userHome, 'Downloads');
+        const src = String(imagePath).replace(/^file:\/\//, '');
+        const base = path.basename(src);
+        const dest = path.join(downloads, base);
+        // copy file
+        fs.copyFileSync(src, dest);
+        return { success: true, path: dest };
+      } catch (err) {
+        safeConsole.error('download-image error:', err);
+        return { success: false, error: err.message };
+      }
+    });
+
+    // Open image (use default external opener)
+    ipcMain.handle('open-image', async (_event, imagePath) => {
+      try {
+        if (!imagePath) return { success: false, error: 'no-path' };
+        const src = String(imagePath).replace(/^file:\/\//, '');
+        // openExternal can handle file:// on many platforms; fallback to shell.openPath
+        try {
+          const { shell } = require('electron');
+          // Prefer shell.openPath for full platform support
+          const res = await shell.openPath(src);
+          if (res) {
+            // non-empty string indicates error on some platforms
+            return { success: false, error: res };
+          }
+          return { success: true };
+        } catch (e) {
+          // fallback
+          return { success: false, error: e.message };
+        }
+      } catch (err) {
+        safeConsole.error('open-image error:', err);
+        return { success: false, error: err.message };
+      }
+    });
+
+    // show a native notification
+    ipcMain.handle('show-notification', async (_event, payload) => {
+      try {
+        const { title = '', body = '' } = payload || {};
+        try {
+          const notif = new Notification({ title: String(title), body: String(body) });
+          notif.show();
+          return { success: true };
+        } catch (e) {
+          safeConsole.warn('Notification failed:', e);
+          return { success: false, error: e.message };
+        }
+      } catch (err) {
+        safeConsole.error('show-notification error:', err);
+        return { success: false, error: err.message };
+      }
+    });
   }
 
   // 初始化应用

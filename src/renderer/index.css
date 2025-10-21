@@ -487,6 +487,7 @@ html {
     max-width: 100%;
     box-sizing: border-box;
     color: var(--text-color);
+    overflow: hidden; /* hide animated overflow */
 }
 
 .history-item:hover {
@@ -574,7 +575,7 @@ html {
 
 .shortcut-hint {
     position: absolute;
-    top: -8px;
+    top: -4px;
     right: -8px;
     background-color: #e74c3c;
     color: white;
@@ -607,8 +608,6 @@ html {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    /* account for larger image icons */
-    max-width: calc(100% - 70px);
     transition: all 0.2s;
 }
 
@@ -629,6 +628,114 @@ html {
 
 .history-thumb:hover {
     transform: scale(1.05);
+}
+
+/* --- Improved inline actions for image items --- */
+/* Ensure the history item reserves space and hides overflow during animations */
+.history-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--item-border);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    max-width: 100%;
+    box-sizing: border-box;
+    color: var(--text-color);
+    overflow: hidden; /* hide animated overflow */
+}
+
+/* let content take remaining space */
+.item-content {
+    flex-grow: 1;
+    word-break: break-word;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+/* --- Traditional button-style actions for image items --- */
+/* Actions container stays to the right, always visible */
+.item-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto; /* push to far right */
+    padding-left: 12px;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+/* Traditional button styles - always visible, prominent */
+.item-actions .btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.15s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.item-actions .btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Download: primary action (solid, prominent) */
+.item-actions .btn-download {
+    background-color: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+.item-actions .btn-download:hover {
+    background-color: var(--accent-hover-color);
+    border-color: var(--accent-hover-color);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* View: secondary action (outlined, subtle) */
+.item-actions .btn-view {
+    background-color: transparent;
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+.item-actions .btn-view:hover {
+    background-color: var(--button-hover-bg);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Selected state adaptations - more prominent */
+.history-item.selected .item-actions .btn-download {
+    background-color: rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 255, 255, 0.9);
+    color: var(--item-selected-bg);
+    box-shadow: 0 2px 6px rgba(255, 255, 255, 0.3);
+}
+
+.history-item.selected .item-actions .btn-download:hover {
+    background-color: white;
+    box-shadow: 0 4px 10px rgba(255, 255, 255, 0.4);
+}
+
+.history-item.selected .item-actions .btn-view {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.6);
+    color: var(--item-selected-text);
+}
+
+.history-item.selected .item-actions .btn-view:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 .custom-tooltip {

@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Tooltip controls
   showTooltip: (payload) => ipcRenderer.send('show-tooltip', payload),
   hideTooltip: () => ipcRenderer.send('hide-tooltip'),
+  // Image utilities
+  downloadImage: (imagePath) => ipcRenderer.invoke('download-image', imagePath),
+  openImage: (imagePath) => ipcRenderer.invoke('open-image', imagePath),
+  showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
 
   // 清理所有监听器
   cleanupListeners: () => {

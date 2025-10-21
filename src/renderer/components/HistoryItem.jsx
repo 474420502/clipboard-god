@@ -155,6 +155,43 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
         {isText && <span className="text-preview">{displayText}</span>}
         {isImage}
       </div>
+      {isImage && (
+        <div className="item-actions">
+          <button type="button" className="btn btn-view" onClick={(e) => {
+            e.stopPropagation();
+            try {
+              const p = item.image_path || '';
+              if (window.electronAPI && typeof window.electronAPI.openImage === 'function') {
+                window.electronAPI.openImage(p).then((res) => {
+                  if (!res || !res.success) console.error('Open failed', res && res.error);
+                });
+              }
+            } catch (err) { console.error(err); }
+          }}>{t('history.view')}</button>
+          <button type="button" className="btn btn-download" onClick={(e) => {
+            e.stopPropagation();
+            try {
+              const p = item.image_path || '';
+              if (window.electronAPI && typeof window.electronAPI.downloadImage === 'function') {
+                window.electronAPI.downloadImage(p).then((res) => {
+                  if (!res || !res.success) {
+                    console.error('Download failed', res && res.error);
+                  } else {
+                    try {
+                      const { t } = i18nRef.current || { t: (k) => k };
+                      const title = t('history.downloadSuccessTitle');
+                      const body = t('history.downloadedMessage', { path: res.path });
+                      if (window.electronAPI && typeof window.electronAPI.showNotification === 'function') {
+                        window.electronAPI.showNotification(title, body);
+                      }
+                    } catch (err) { }
+                  }
+                });
+              }
+            } catch (err) { console.error(err); }
+          }}>{t('history.download')}</button>
+        </div>
+      )}
       {/* external tooltip window shown via main process; internal tooltip removed */}
     </li>
   );
