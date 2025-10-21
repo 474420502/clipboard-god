@@ -8,8 +8,11 @@ const ScreenshotManager = require('./screenshotManager');
 const Config = require('./config');
 
 // 安全的console包装器，防止EPIPE错误
+// Use DEBUG flag to control verbose logging. Default false in production.
+const DEBUG = false;
 const safeConsole = {
   log: (...args) => {
+    if (!DEBUG) return; // silence non-essential logs by default
     try {
       if (process.stdout.writable) {
         console.log(...args);
@@ -313,7 +316,7 @@ class MainProcess {
 
       try {
         const ok = globalShortcut.register(shortcut, async () => {
-          safeConsole.log(`LLM 快捷键 ${shortcut} (name=${name}) 被触发`);
+          safeConsole.log(`[LLM Shortcut] ${name} triggered (${shortcut})`);
           const trigger = (entry.triggerType || 'text').toString().toLowerCase();
           // get selected text from clipboard PRIMARY selection if available
           let selectedText = '';
@@ -336,10 +339,10 @@ class MainProcess {
           if (trigger === 'image') {
             // Ensure screenshotManager exists
             if (!this.screenshotManager) this.screenshotManager = new ScreenshotManager(this.mainWindow, this.clipboardManager);
-            safeConsole.log(`LLM flow (name=${name}): trigger=image; prompt(before)="${String(prompt).slice(0, 120)}"; selectedTextLength=${String(selectedText || '').length}`);
+            safeConsole.log(`[LLM Shortcut] ${name} trigger=image; selectedTextLength=${String(selectedText || '').length}`);
             try {
               const img = await this.screenshotManager.captureImage();
-              safeConsole.log(`LLM flow (name=${name}): captureImage resolved: base64Full length=${img && img.base64Full ? img.base64Full.length : 0}`);
+              safeConsole.log(`[LLM Shortcut] ${name} captureImage resolved`);
               // initialImages is an array of { base64Full, base64Raw }
               initialImages = [img];
               // Substitute known placeholders with the selected text
@@ -348,14 +351,14 @@ class MainProcess {
                 prompt = prompt.replace(/{{\s*text\s*}}/gi, selectedText || '');
                 prompt = prompt.replace(/{{\s*鼠标正在选择的文本\s*}}/g, selectedText || '');
               }
-              safeConsole.log(`LLM flow (name=${name}): prompt(after)="${String(prompt).slice(0, 120)}"; initialImagesCount=${initialImages.length}`);
+              safeConsole.log(`[LLM Shortcut] ${name} prompt prepared; initialImages=${initialImages ? initialImages.length : 0}`);
             } catch (err) {
               safeConsole.error('捕获截图失败:', err);
               // fallback to text flow
               if (!prompt || !prompt.trim()) prompt = `Summarize ${selectedText || ''}`.trim();
             }
           } else {
-            safeConsole.log(`LLM flow (name=${name}): trigger=text; prompt(before)="${String(prompt).slice(0, 120)}"; selectedTextLength=${String(selectedText || '').length}`);
+            safeConsole.log(`[LLM Shortcut] ${name} trigger=text; selectedTextLength=${String(selectedText || '').length}`);
             // text flow: substitute selected text into prompt
             if (prompt && typeof prompt === 'string') {
               prompt = prompt.replace(/{{\s*text\s*}}/gi, selectedText || '');
@@ -364,7 +367,7 @@ class MainProcess {
             if (!prompt || !prompt.trim()) {
               prompt = `Summarize ${selectedText || ''}`.trim();
             }
-            safeConsole.log(`LLM flow (name=${name}): prompt(after)="${String(prompt).slice(0, 120)}"`);
+            safeConsole.log(`[LLM Shortcut] ${name} prompt prepared`);
           }
 
           // Open chat window with entry config, including prompt and initialImages if any
@@ -372,7 +375,7 @@ class MainProcess {
             const cfg = Object.assign({}, entry, { prompt });
             if (initialImages) cfg.initialImages = initialImages;
 
-            safeConsole.log(`LLM flow (name=${name}): opening chat window with cfg: llmKey=${name}, apiType=${cfg.apitype || cfg.apitype}, promptLen=${String(cfg.prompt || '').length}, initialImages=${cfg.initialImages ? cfg.initialImages.length : 0}`);
+            safeConsole.log(`[LLM Shortcut] ${name} opening chat window (initialImages=${cfg.initialImages ? cfg.initialImages.length : 0})`);
             this.openLlmChatWindow(name, cfg);
           } catch (err) {
             safeConsole.error('打开 LLM 窗口失败:', err);
@@ -409,8 +412,7 @@ class MainProcess {
       // Remove default application menu for this window so users cannot toggle alwaysOnTop from a menu
       try { chatWin.setMenu(null); } catch (e) { /* ignore */ }
 
-      // Open devtools by default for debugging convenience
-      try { chatWin.webContents.openDevTools({ mode: 'detach' }); } catch (e) { /* ignore */ }
+      // Do not open devtools by default
 
       // Set native window title to include the LLM key (e.g., "Chat Window (测试)")
       try { chatWin.setTitle(`Chat Window (${llmName})`); } catch (e) { /* ignore */ }

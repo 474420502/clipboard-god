@@ -77,11 +77,35 @@
         gap: 8px;
     }
 
-    .message .content .message-images img {
-        max-width: 100px;
-        max-height: 100px;
-        border-radius: 8px;
-        object-fit: cover;
+  .message .content .message-images img {
+    max-width: 360px;
+    max-height: 360px;
+    border-radius: 8px;
+    object-fit: cover;
+    cursor: pointer;
+  }
+
+    /* Collapsible message support */
+  /* When collapsed, show a single-line preview and hide images */
+  .message.collapsed .content { max-height: 40px; overflow: hidden; }
+  .message.collapsed .content .message-images { display: none; }
+  .message.collapsed .content .message-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .message-toggle {
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      width: 20px;
+      height: 20px;
+      background: rgba(0,0,0,0.2);
+      border: none;
+      color: #fff;
+      border-radius: 3px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      padding: 0;
     }
 
     .message.user {
@@ -154,7 +178,7 @@
       border-color: var(--primary-color);
     }
     
-    /* --- 新增样式 --- */
+  /* Image preview styles */
     #image-preview-container {
       display: flex;
       gap: 10px;
@@ -214,7 +238,7 @@
       height: 40px;
       padding: 10px 18px;
     }
-    /* --- 样式结束 --- */
+  /* --- end styles --- */
 
     button:disabled { background: #555; cursor: not-allowed; }
 
@@ -238,9 +262,8 @@
     <div class="chat-input-area">
       <div id="image-preview-container"></div>
       <form id="input-form" class="input-form">
-        <!-- 新增: 隐藏的文件输入框 -->
         <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
-        <!-- 新增: 附加图片按钮 -->
+        <!-- attach image button -->
         <button type="button" id="attach-file-btn" class="icon-button" title="附加图片">📎</button>
         
         <textarea id="ai-input" placeholder="输入消息... (Shift+Enter 换行)" rows="1"></textarea>
@@ -251,9 +274,7 @@
   </div>
 
   <script>
-    // -------------------------------------------------------------
-    // 1. 在此处配置您的聊天窗口参数
-    // -------------------------------------------------------------
+  // Configuration defaults for the chat window
     // Obtain injected config via IPC invoke (preferred). Older versions may not
     // support this; in that case, chatConfig will remain defaults.
 
@@ -279,7 +300,7 @@
       }
     };
 
-  // We'll fetch injected config during initialization via aiAPI.getConfig();
+  // Fetch injected config during initialization via aiAPI.getConfig();
   const chatConfig = Object.assign({}, defaultConfig);
   // Guard to avoid applying injected config twice (from getConfig + pushed injected-config)
   let _injectedConfigApplied = false;
@@ -345,7 +366,7 @@
           const hasInitialImages = chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0;
 
           if (!_injectedConfigApplied && (hasInitialPrompt || hasInitialImages)) {
-            // prepare UI message (with full base64s)
+              // prepare UI message (with full base64s)
             const uiMessage = {
               role: 'user',
               content: chatConfig.initialPrompt || '',
@@ -369,12 +390,12 @@
         })();
       }
 
-      // Also register a proactive listener for injected config pushed by main process
+      // Listener for injected config pushed by main process
       try {
         if (window.aiAPI && typeof window.aiAPI.onInjectedConfig === 'function') {
           window.aiAPI.onInjectedConfig((cfg) => {
             try {
-              if (_injectedConfigApplied) return; // already applied via getConfig
+              if (_injectedConfigApplied) return;
               applyInjectedConfig(cfg);
               _injectedConfigApplied = true;
             } catch (e) { /* ignore */ }
@@ -386,14 +407,7 @@
     // Apply a config object received via IPC at any time. This merges into chatConfig
     // and triggers initial prompt/images if present.
     function applyInjectedConfig(cfg) {
-      // safeConsoleLog was not defined here and referencing hasInitialImages
-      // before it exists caused a ReferenceError. Log safely instead.
-      try {
-        const hasInitialImagesPreview = cfg && Array.isArray(cfg.initialImages) && cfg.initialImages.length > 0;
-        console.log('ChatPage: applyInjectedConfig hasInitialImages=', hasInitialImagesPreview);
-      } catch (e) {
-        console.warn('ChatPage: applyInjectedConfig logging failed', e);
-      }
+      // merge and apply injected config; avoid verbose logging here
 
       if (!cfg || typeof cfg !== 'object') return;
       // Merge into chatConfig (shallow)
@@ -438,12 +452,30 @@
     }
       // --- UI Helper Functions ---
       // 修改: addMessageToUI 现在接受一个消息对象
-      function addMessageToUI(sender, message) {
-          const messageWrapper = document.createElement('div');
-          messageWrapper.className = `message ${sender}`;
+    function addMessageToUI(sender, message) {
+      const messageWrapper = document.createElement('div');
+      messageWrapper.className = `message ${sender}`;
+      messageWrapper.style.position = 'relative';
           
-          const contentDiv = document.createElement('div');
-          contentDiv.className = 'content';
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'content';
+
+      // collapse/expand toggle
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'message-toggle';
+      toggleBtn.title = '折叠/展开';
+      toggleBtn.textContent = '▾';
+      toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (messageWrapper.classList.contains('collapsed')) {
+          messageWrapper.classList.remove('collapsed');
+          toggleBtn.textContent = '▾';
+        } else {
+          messageWrapper.classList.add('collapsed');
+          toggleBtn.textContent = '▸';
+        }
+      };
+      messageWrapper.appendChild(toggleBtn);
 
           // 如果有文本内容，则添加文本
           if (message.content) {
@@ -461,11 +493,11 @@
               // 在用户消息中，我们有完整的 data URL
               const imageSources = sender === 'user' ? message.images.map(img => img.base64Full) : [];
               
-              for (const src of imageSources) {
-                  const imgEl = document.createElement('img');
-                  imgEl.src = src;
-                  imagesContainer.appendChild(imgEl);
-              }
+        for (const src of imageSources) {
+          const imgEl = document.createElement('img');
+          imgEl.src = src;
+          imagesContainer.appendChild(imgEl);
+        }
               contentDiv.appendChild(imagesContainer);
           }
 
@@ -478,12 +510,31 @@
       function createAssistantMessageContainer() {
         const messageWrapper = document.createElement('div');
         messageWrapper.className = 'message assistant';
+        messageWrapper.style.position = 'relative';
+
+        // collapse toggle for assistant messages
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'message-toggle';
+        toggleBtn.title = '折叠/展开';
+        toggleBtn.textContent = '▾';
+        toggleBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (messageWrapper.classList.contains('collapsed')) {
+            messageWrapper.classList.remove('collapsed');
+            toggleBtn.textContent = '▾';
+          } else {
+            messageWrapper.classList.add('collapsed');
+            toggleBtn.textContent = '▸';
+          }
+        };
+
         const contentDiv = document.createElement('div');
         contentDiv.className = 'content';
         const typingIndicator = document.createElement('div');
         typingIndicator.className = 'typing-indicator';
         typingIndicator.innerHTML = '<span></span><span></span><span></span>';
         contentDiv.appendChild(typingIndicator);
+        messageWrapper.appendChild(toggleBtn);
         messageWrapper.appendChild(contentDiv);
         messagesEl.appendChild(messageWrapper);
         scrollToBottom();
@@ -757,6 +808,38 @@
 
       // Start the application
       initializeChat();
+
+      // --- Image modal for zoom ---
+      const imgModal = document.createElement('div');
+      imgModal.style.position = 'fixed';
+      imgModal.style.left = '0';
+      imgModal.style.top = '0';
+      imgModal.style.width = '100%';
+      imgModal.style.height = '100%';
+      imgModal.style.display = 'none';
+      imgModal.style.alignItems = 'center';
+      imgModal.style.justifyContent = 'center';
+      imgModal.style.background = 'rgba(0,0,0,0.85)';
+      imgModal.style.zIndex = '9999';
+      imgModal.onclick = () => { imgModal.style.display = 'none'; imgModal.innerHTML = ''; };
+      document.body.appendChild(imgModal);
+
+      // Delegate click for images to open modal
+      document.body.addEventListener('click', (e) => {
+        const t = e.target;
+        if (t && t.tagName === 'IMG' && t.closest('.message')) {
+          const src = t.src;
+          if (!src) return;
+          imgModal.style.display = 'flex';
+          const img = document.createElement('img');
+          img.src = src;
+          img.style.maxWidth = '90%';
+          img.style.maxHeight = '90%';
+          img.style.boxShadow = '0 4px 24px rgba(0,0,0,0.6)';
+          imgModal.innerHTML = '';
+          imgModal.appendChild(img);
+        }
+      });
 
   </script>
 </body>
