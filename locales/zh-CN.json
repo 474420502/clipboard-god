@@ -131,6 +131,10 @@
     "history": {
         "empty": "还没有剪贴板历史记录",
         "clickToPasteImage": "点击以粘贴图片",
+        "edit": "编辑",
+        "pin": "固定",
+        "unpin": "取消固定",
+        "editPrompt": "编辑内容",
         "download": "下载",
         "view": "查看",
         "downloadSuccessTitle": "下载完成",
@@ -150,7 +154,8 @@
                 "time": "时间",
                 "length": "长度"
             },
-            "apply": "应用"
+            "apply": "应用",
+            "onlyPinned": "仅固定"
         }
     },
     "shortcutCapture": {

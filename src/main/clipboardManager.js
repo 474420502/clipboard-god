@@ -13,10 +13,10 @@ class ClipboardManager {
     this.storageBackend = new SqliteStorage({ maxHistory: this.maxHistory });
     // load history from db
     const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-    // convert to expected in-memory format
+    // convert to expected in-memory format and keep db row id in _dbId
     this.history = rows.map(r => {
-      if (r.type === 'text') return { id: r.id || Date.now(), type: 'text', content: r.content, timestamp: new Date(r.timestamp) };
-      return { id: r.id || Date.now(), type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path };
+      if (r.type === 'text') return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'text', content: r.content, timestamp: new Date(r.timestamp), pinned: r.pinned ? 1 : 0 };
+      return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path, pinned: r.pinned ? 1 : 0 };
     });
   }
 
@@ -132,15 +132,17 @@ class ClipboardManager {
 
       const newItem = {
         id: result.id,
+        _dbId: result.id,
         type: item.type,
         content: item.type === 'text' ? item.content : (result.image_path || item.content),
         timestamp: new Date(item.timestamp || Date.now()),
         image_path: result.image_path,
-        image_thumb: result.image_thumb
+        image_thumb: result.image_thumb,
+        pinned: result.pinned ? 1 : 0
       };
 
       // 如果是更新时间戳，则找到旧项，移到最前面
-      const existingIndex = this.history.findIndex(h => h.id === result.id);
+      const existingIndex = this.history.findIndex(h => h._dbId === result.id || h.id === result.id);
       if (existingIndex > -1) {
         this.history.splice(existingIndex, 1);
       }
@@ -157,6 +159,46 @@ class ClipboardManager {
       return true;
     } catch (err) {
       console.error('添加历史项失败:', err);
+      return false;
+    }
+  }
+
+  // Update the text content for an existing item (edit in-place)
+  updateTextItem(dbId, newContent) {
+    try {
+      const res = this.storageBackend.updateTextItemByDbId(dbId, newContent);
+      if (!res || !res.success) return false;
+      const idx = this.history.findIndex(h => h._dbId === dbId);
+      if (idx > -1) {
+        this.history[idx].content = newContent;
+        this.history[idx].timestamp = new Date(res.timestamp || Date.now());
+        // move to front
+        const item = this.history.splice(idx, 1)[0];
+        this.history.unshift(item);
+        this.notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      console.error('updateTextItem failed:', e);
+      return false;
+    }
+  }
+
+  // Set pinned flag for an item (by db id)
+  setPinned(dbId, pinned = true) {
+    try {
+      const res = this.storageBackend.setPinnedByDbId(dbId, pinned ? 1 : 0);
+      if (!res || !res.success) return false;
+      const idx = this.history.findIndex(h => h._dbId === dbId);
+      if (idx > -1) {
+        this.history[idx].pinned = pinned ? 1 : 0;
+        // pinned items participate in ordering by timestamp but should NOT be
+        // forcibly moved when pinned/unpinned. Preserve original list order.
+        this.notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      console.error('setPinned failed:', e);
       return false;
     }
   }

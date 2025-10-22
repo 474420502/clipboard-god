@@ -162,3 +162,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
             release-assets/**
+          allowUpdates: true

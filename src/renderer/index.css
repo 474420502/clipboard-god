@@ -623,7 +623,152 @@ html {
     object-fit: cover;
     border-radius: 6px;
     display: block;
-    transition: transform 0.2s;
+}
+
+.history-context-menu {
+    min-width: 120px;
+}
+
+.history-item.pinned {
+    position: relative;
+}
+
+/* Add a pin icon indicator for pinned items */
+.history-item.pinned::before {
+    content: '📌';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 12px;
+    z-index: 2;
+}
+
+.history-context-menu {
+    background: var(--menu-bg, #222);
+    color: var(--menu-color, #fff);
+    border-radius: 8px;
+    padding: 6px;
+}
+
+.history-context-menu-item {
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.history-context-menu-item:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+/* Edit modal styles */
+.modal-overlay {
+    position: fixed;
+    left: 0; right: 0; top: 0; bottom: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.edit-modal {
+    width: 90%;
+    max-width: 90%;
+    background: var(--settings-bg, #fff);
+    color: var(--settings-text, #111);
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    height: 90%;
+}
+
+.edit-modal-header {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 16px;
+    flex-shrink: 0;
+}
+
+.edit-modal-body {
+    flex-grow: 1;
+    overflow: hidden;
+    margin-bottom: 4px;
+    position: relative;
+}
+
+.edit-modal-body textarea {
+    width: 100%;
+    resize: none;
+    padding: 8px;
+    font-family: inherit;
+    background-color: var(--settings-input-bg);
+    color: var(--settings-text);
+    border: 1px solid var(--settings-input-border);
+    border-radius: 4px;
+    box-sizing: border-box;
+    min-height: 80%;
+    max-height: calc(100% - 16px); /* 留出底部间距 */
+    height: 95%; /* 占满容器 */
+}
+
+.edit-modal-body textarea:focus {
+    outline: none;
+    height: 100%;
+    border-color: var(--settings-input-focus-border);
+    box-shadow: 0 0 0 2px var(--settings-input-focus-shadow);
+}
+
+.edit-modal-actions {
+    display: flex; 
+    justify-content: flex-end; 
+    gap: 12px; 
+    margin-top: 10px;
+    flex-shrink: 0;
+}
+
+.btn-close {
+    background: transparent; 
+    border: none; 
+    font-size: 24px; 
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.btn-close:hover {
+    background-color: var(--settings-button-hover-bg);
+}
+
+.btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border: 1px solid var(--settings-input-border);
+    background-color: var(--settings-button-bg);
+    color: var(--settings-text);
+}
+
+.btn:hover {
+    background-color: var(--settings-button-hover-bg);
+}
+
+.btn-primary {
+    background: var(--settings-button-active-bg);
+    color: var(--settings-button-active-text);
+    border: 1px solid var(--settings-button-active-bg);
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
 }
 
 .history-thumb:hover {

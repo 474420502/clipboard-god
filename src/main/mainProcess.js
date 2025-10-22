@@ -101,6 +101,12 @@ class MainProcess {
       if (this.mainWindow) {
         this.mainWindow.on('hide', () => {
           try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide(); } catch (_) { }
+          try {
+            // Notify renderer to hide any global context menu when main window hides
+            if (this.mainWindow && this.mainWindow.webContents) {
+              try { this.mainWindow.webContents.send('hide-context-menu'); } catch (e) { /* ignore send errors */ }
+            }
+          } catch (err) { }
         });
         this.mainWindow.on('show', () => {
           // tooltip remains hidden until explicitly requested by renderer
@@ -804,6 +810,30 @@ class MainProcess {
         if (this.mainWindow && this.mainWindow.webContents) {
           this.mainWindow.webContents.send('error', error.message);
         }
+      }
+    });
+
+    // 编辑历史项（修改文本内容）
+    ipcMain.handle('edit-item', async (_event, { dbId, newContent }) => {
+      try {
+        if (!dbId) return { success: false, error: 'no-id' };
+        const ok = this.clipboardManager.updateTextItem(dbId, newContent);
+        return { success: !!ok };
+      } catch (e) {
+        safeConsole.error('edit-item 处理失败:', e);
+        return { success: false, error: e.message };
+      }
+    });
+
+    // 钉住/取消钉住历史项
+    ipcMain.handle('pin-item', async (_event, { dbId, pinned }) => {
+      try {
+        if (!dbId) return { success: false, error: 'no-id' };
+        const ok = this.clipboardManager.setPinned(dbId, !!pinned);
+        return { success: !!ok };
+      } catch (e) {
+        safeConsole.error('pin-item 处理失败:', e);
+        return { success: false, error: e.message };
       }
     });
 
