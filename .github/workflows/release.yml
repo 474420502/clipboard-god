@@ -154,5 +154,6 @@ jobs:
               with:
                   tag: ${{ github.ref_name }}
                   name: ${{ github.ref_name }}
+                  token: ${{ secrets.GH_TOKEN }}
                   files: |
                       release-assets/**

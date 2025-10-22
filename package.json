@@ -56,7 +56,15 @@
       "mainProcess.js",
       "src/**/*",
       "assets/**/*",
+      "locales/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "locales/",
+        "to": "locales/",
+        "filter": ["**/*"]
+      }
     ],
     "mac": {
       "category": "public.app-category.productivity",

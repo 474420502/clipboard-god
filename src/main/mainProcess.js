@@ -592,11 +592,15 @@ class MainProcess {
           const projectRoot = path.resolve(__dirname, '..', '..');
           localesDir = path.join(projectRoot, 'locales');
         } else {
-          // In packaged app, locales should be in app.getAppPath() or resources
-          localesDir = path.join(app.getAppPath(), 'locales');
-          // If not found, try resources path
+          // In packaged app, locales should be in resources path
+          localesDir = path.join(process.resourcesPath, 'locales');
+          // If not found, try app path
           if (!fs.existsSync(localesDir)) {
-            localesDir = path.join(process.resourcesPath, 'locales');
+            localesDir = path.join(app.getAppPath(), 'locales');
+          }
+          // If still not found, try the directory where the executable is located
+          if (!fs.existsSync(localesDir)) {
+            localesDir = path.join(path.dirname(app.getPath('exe')), 'locales');
           }
         }
 

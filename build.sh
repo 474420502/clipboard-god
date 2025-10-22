@@ -146,6 +146,10 @@ mkdir -p "$STAGING/usr/bin"
 mkdir -p "$STAGING/usr/share/applications"
 mkdir -p "$STAGING/usr/share/icons/hicolor"
 
+# Copy locales directory to the package
+mkdir -p "$STAGING/opt/$PKG_NAME/locales"
+cp -r locales/*.json "$STAGING/opt/$PKG_NAME/locales/"
+
  # Copy electron-builder output into /opt if available (prefer dist-electron/linux-unpacked)
 UNPACKED_SRC=""
 if [ -d "dist-electron/linux-unpacked" ]; then
@@ -182,6 +186,9 @@ exec /opt/clipboard-god/clipboard-god "$@"
 EOF
 	chmod 0755 "$STAGING/usr/bin/clipboard-god"
 fi
+
+# Copy locales directory
+cp -r locales "$STAGING/opt/$PKG_NAME/"
 
 # Ensure desktop entry points to /usr/bin/clipboard-god and Icon name clipboard-god
 if [ -f clipboard-god.desktop ]; then
