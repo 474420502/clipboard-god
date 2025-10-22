@@ -1,9 +1,14 @@
 name: Build and Release on Tag
-
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 on:
   push:
     tags:
       - "v*"
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
   build:
@@ -14,10 +19,13 @@ jobs:
         include:
           - os: ubuntu-latest
             dist_cmd: npm run dist:linux
+            artifact_name: linux
           - os: macos-latest
             dist_cmd: npm run dist:mac
+            artifact_name: macos
           - os: windows-latest
             dist_cmd: npm run dist:win
+            artifact_name: windows
 
     steps:
       - name: Checkout repository
@@ -106,15 +114,12 @@ jobs:
 
       - name: Show build output
         run: |
-          echo "Contents of dist-electron:"
-          ls -la dist-electron || true
-          echo "Find artifacts:" 
-          find dist-electron -maxdepth 2 -type f -print || true
+          node -e 'const fs=require("fs"), path=require("path"); const dir="dist-electron"; console.log("Contents of "+dir+":"); try{ for(const name of fs.readdirSync(dir)) console.log(name); }catch(e){ console.log(dir+" not found"); } console.log("Find artifacts:"); function walk(d,depth){ if(depth<0) return; try{ for(const it of fs.readdirSync(d,{withFileTypes:true})){ const p=path.join(d,it.name); if(it.isFile()) console.log(p); else if(it.isDirectory()) walk(p,depth-1); } }catch(e){} } walk(dir,2);'
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-dist-${{ matrix.os }}
+          name: clipboard-god-${{ github.ref_name }}-${{ matrix.artifact_name }}
           path: |
             dist-electron/*.AppImage
             dist-electron/*.deb
@@ -129,18 +134,19 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Show downloaded artifacts structure
+      - name: Display downloaded artifacts
         run: ls -R artifacts
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "artifacts/**/*"
           tag: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "artifacts/**/*.AppImage,artifacts/**/*.deb,artifacts/**/*.dmg,artifacts/**/*.exe,artifacts/**/*.msi,artifacts/**/*.zip"
+          allowUpdates: true

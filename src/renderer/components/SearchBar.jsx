@@ -5,6 +5,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
   const [isAdvancedSearch, setIsAdvancedSearch] = useState(false);
   const [searchType, setSearchType] = useState('all'); // 'all', 'text', 'image'
   const [sortBy, setSortBy] = useState('time'); // 'time', 'length'
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const inputRef = useRef(null);
   const { t } = useTranslation();
 
@@ -49,6 +50,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
         term: searchTerm,
         type: searchType,
         sortBy: sortBy
+        , pinnedOnly: pinnedOnly
       });
     }
   };
@@ -119,6 +121,11 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
                 <option value="time">{t('search.advanced.sortOptions.time')}</option>
                 <option value="length">{t('search.advanced.sortOptions.length')}</option>
               </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input id="pinnedOnly" type="checkbox" checked={pinnedOnly} onChange={(e) => setPinnedOnly(e.target.checked)} />
+              <label htmlFor="pinnedOnly">{t('search.advanced.onlyPinned') || 'Only pinned'}</label>
             </div>
 
             <button

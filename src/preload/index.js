@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 渲染器 -> 主进程 (调用)
   getHistory: () => ipcRenderer.send('get-history'),
   pasteItem: (item) => ipcRenderer.send('paste-item', item),
+  editItem: (dbId, newContent) => ipcRenderer.invoke('edit-item', { dbId, newContent }),
+  pinItem: (dbId, pinned) => ipcRenderer.invoke('pin-item', { dbId, pinned }),
   startScreenshot: () => ipcRenderer.invoke('start-screenshot'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (settings) => ipcRenderer.invoke('set-settings', settings),
@@ -18,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTakeScreenshot: (callback) => ipcRenderer.on('take-screenshot', callback),
   onGlobalShortcut: (callback) => ipcRenderer.on('global-shortcut', callback),
   onSettingsUpdated: (callback) => ipcRenderer.on('settings-updated', (_event, value) => callback(value)),
+  onHideContextMenu: (callback) => ipcRenderer.on('hide-context-menu', (_event) => callback()),
   // Tooltip controls
   showTooltip: (payload) => ipcRenderer.send('show-tooltip', payload),
   hideTooltip: () => ipcRenderer.send('hide-tooltip'),
@@ -35,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('take-screenshot');
     ipcRenderer.removeAllListeners('global-shortcut');
     ipcRenderer.removeAllListeners('settings-updated');
+    ipcRenderer.removeAllListeners('hide-context-menu');
   }
 });
 

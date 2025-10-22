@@ -36,18 +36,19 @@ class SqliteStorage {
         this.db.exec('PRAGMA synchronous = NORMAL;');
 
         this.db.exec(`
-            CREATE TABLE IF NOT EXISTS history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        item_id TEXT,
-        type TEXT NOT NULL,
-        content TEXT,
-                image_path TEXT,
-                image_thumb TEXT,
-        hash TEXT,
-        timestamp INTEGER,
-        meta TEXT
-      );
-    `);
+                        CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id TEXT,
+                type TEXT NOT NULL,
+                content TEXT,
+                                image_path TEXT,
+                                image_thumb TEXT,
+                hash TEXT,
+                timestamp INTEGER,
+                meta TEXT,
+                pinned INTEGER DEFAULT 0
+            );
+        `);
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC);');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_history_hash ON history(hash);');
         // FTS table for text search
@@ -57,8 +58,9 @@ class SqliteStorage {
             // if FTS5 not available, ignore (search will not be available)
             console.warn('FTS5 not available in SQLite build, search disabled');
         }
-        // ensure image_thumb column exists for older DBs
+        // ensure image_thumb and pinned columns exist for older DBs
         this._ensureColumn('history', 'image_thumb', 'TEXT');
+        this._ensureColumn('history', 'pinned', 'INTEGER DEFAULT 0');
     }
 
     _ensureColumn(table, column, definition) {
@@ -153,25 +155,28 @@ class SqliteStorage {
     }
 
     getHistory(limit = 100, offset = 0) {
-        const stmt = this.db.prepare('SELECT item_id, type, content, image_path, image_thumb, hash, timestamp FROM history ORDER BY timestamp DESC LIMIT ? OFFSET ?');
+        const stmt = this.db.prepare('SELECT id, item_id, type, content, image_path, image_thumb, hash, timestamp, pinned FROM history ORDER BY timestamp DESC LIMIT ? OFFSET ?');
         return stmt.all(limit, offset).map(r => ({
-            id: r.item_id || null,
+            id: r.item_id || r.id || null,
+            _dbId: r.id,
             type: r.type,
             content: r.type === 'text' ? r.content : null,
             image_path: r.type === 'image' ? r.image_path : null,
             image_thumb: r.type === 'image' ? r.image_thumb : null,
             hash: r.hash,
-            timestamp: r.timestamp
+            timestamp: r.timestamp,
+            pinned: r.pinned ? 1 : 0
         }));
     }
 
     _pruneIfNeeded() {
-        const countRow = this.db.prepare('SELECT COUNT(*) AS c FROM history').get();
+        // Only count non-pinned items towards the maxHistory limit
+        const countRow = this.db.prepare('SELECT COUNT(*) AS c FROM history WHERE pinned = 0').get();
         const count = countRow ? countRow.c : 0;
         if (count > this.maxHistory) {
             const toDelete = count - this.maxHistory;
             // find oldest ids and their hashes
-            const rows = this.db.prepare('SELECT id, hash, type FROM history ORDER BY timestamp ASC LIMIT ?').all(toDelete);
+            const rows = this.db.prepare('SELECT id, hash, type FROM history WHERE pinned = 0 ORDER BY timestamp ASC LIMIT ?').all(toDelete);
             const ids = rows.map(r => r.id);
             if (ids.length) {
                 const placeholders = ids.map(() => '?').join(',');
@@ -202,6 +207,36 @@ class SqliteStorage {
                     }
                 } catch (e) { }
             }
+        }
+    }
+
+    // Update text content for an existing row (also update hash, FTS and timestamp)
+    updateTextItemByDbId(dbId, newContent) {
+        try {
+            const now = Date.now();
+            const hash = crypto.createHash('sha256').update(String(newContent || '')).digest('hex');
+            const tx = this.db.transaction((dbId, content, hash, now) => {
+                this.db.prepare('UPDATE history SET content = ?, hash = ?, timestamp = ? WHERE id = ?').run(content, hash, now, dbId);
+                try {
+                    if (this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) {
+                        this.db.prepare('UPDATE history_fts SET content = ? WHERE rowid = ?').run(content, dbId);
+                    }
+                } catch (e) { }
+            });
+            tx(dbId, newContent, hash, now);
+            return { success: true, hash, timestamp: now };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    }
+
+    setPinnedByDbId(dbId, pinned) {
+        try {
+            const v = pinned ? 1 : 0;
+            this.db.prepare('UPDATE history SET pinned = ? WHERE id = ?').run(v, dbId);
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
         }
     }
 

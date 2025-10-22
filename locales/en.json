@@ -131,6 +131,10 @@
     "history": {
         "empty": "No clipboard history yet",
         "clickToPasteImage": "Click to paste image",
+        "edit": "Edit",
+        "pin": "Pin",
+        "unpin": "Unpin",
+        "editPrompt": "Edit content",
         "download": "Download",
         "view": "View",
         "downloadSuccessTitle": "Download complete",
@@ -150,7 +154,8 @@
                 "time": "Time",
                 "length": "Length"
             },
-            "apply": "Apply"
+            "apply": "Apply",
+            "onlyPinned": "Only pinned"
         }
     },
     "shortcutCapture": {

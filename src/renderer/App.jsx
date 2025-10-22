@@ -18,6 +18,7 @@ import HistoryList from './components/HistoryList';
 import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
 import useNumberShortcuts from './hooks/useNumberShortcuts';
+import EditModal from './components/EditModal';
 
 function App() {
   const [history, setHistory] = useState([]);
@@ -25,13 +26,15 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOptions, setSearchOptions] = useState({
     type: 'all',
-    sortBy: 'time'
+    sortBy: 'time',
+    pinnedOnly: false
   });
   const [searchVisible, setSearchVisible] = useState(false); // hidden by default
   const [keyboardNavigationMode, setKeyboardNavigationMode] = useState(true); // keyboard navigation mode - always enabled
   const [selectedIndex, setSelectedIndex] = useState(0); // selected item index for keyboard navigation - start with first item
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [suppressMouseHover, setSuppressMouseHover] = useState(false);
+  const [editModalState, setEditModalState] = useState({ open: false, item: null });
   const [settings, setSettings] = useState({
     previewLength: 120,
     maxHistoryItems: 500,
@@ -210,6 +213,59 @@ function App() {
 
     window.electronAPI.onOpenSettings(openSettingsHandler);
     window.electronAPI.onTakeScreenshot(takeScreenshotHandler);
+    // hide context menu when main process requests it (e.g., window hidden/closed)
+    const hideContextMenuHandler = () => {
+      try {
+        const menu = document.getElementById('global-history-context-menu');
+        if (menu) {
+          try {
+            if (typeof menu.__hide === 'function') menu.__hide();
+            else {
+              menu.style.display = 'none';
+              menu.innerHTML = '';
+            }
+          } catch (err) {
+            try { menu.style.display = 'none'; menu.innerHTML = ''; } catch (e) { }
+          }
+        }
+      } catch (err) { }
+    };
+    if (window.electronAPI && typeof window.electronAPI.onHideContextMenu === 'function') {
+      window.electronAPI.onHideContextMenu(hideContextMenuHandler);
+    }
+
+    // Optimistic update for pin toggle (dispatched by HistoryItem)
+    const onLocalPinToggled = (e) => {
+      try {
+        const detail = e && e.detail;
+        if (!detail) return;
+        const { dbId, pinned } = detail;
+        setHistory((prev) => {
+          if (!prev || !prev.length) return prev;
+          return prev.map(it => {
+            const idMatch = (it._dbId && String(it._dbId) === String(dbId)) || (it.id && String(it.id) === String(dbId));
+            if (idMatch) {
+              // return a shallow-updated item with pinned toggled
+              return { ...it, pinned: !!pinned };
+            }
+            return it;
+          });
+        });
+
+        // request a fresh history in background to reconcile any differences
+        try { if (window.electronAPI && typeof window.electronAPI.getHistory === 'function') window.electronAPI.getHistory(); } catch (err) { }
+      } catch (err) { }
+    };
+    window.addEventListener('local-pin-toggled', onLocalPinToggled);
+
+    // listen for requests to open edit modal (dispatched by HistoryItem)
+    const onOpenEditModal = (e) => {
+      try {
+        const it = e && e.detail && e.detail.item;
+        if (it) setEditModalState({ open: true, item: it });
+      } catch (err) { }
+    };
+    window.addEventListener('open-edit-modal', onOpenEditModal);
 
     return () => {
       try {
@@ -217,6 +273,9 @@ function App() {
       } catch (err) {
         console.warn('清理菜单 ipc 监听器失败:', err);
       }
+      window.removeEventListener('open-edit-modal', onOpenEditModal);
+      window.removeEventListener('local-pin-toggled', onLocalPinToggled);
+      try { if (window.electronAPI && typeof window.electronAPI.cleanupListeners === 'function') window.electronAPI.cleanupListeners(); } catch (e) { }
     };
   }, []);
 
@@ -298,6 +357,11 @@ function App() {
     // 按类型过滤
     if (searchOptions.type !== 'all') {
       result = result.filter(item => item.type === searchOptions.type);
+    }
+
+    // 按 pinned 过滤（仅显示 pinned）
+    if (searchOptions.pinnedOnly) {
+      result = result.filter(item => !!item.pinned);
     }
 
     // 按搜索词过滤
@@ -472,6 +536,23 @@ function App() {
     setSearchOptions(options);
   };
 
+  const handleEditSave = async (newContent) => {
+    try {
+      const item = editModalState.item;
+      if (!item) return;
+      const dbId = item._dbId || item.id;
+      if (window.electronAPI && typeof window.electronAPI.editItem === 'function') {
+        const res = await window.electronAPI.editItem(dbId, newContent);
+        if (!res || !res.success) console.error('Edit failed', res && res.error);
+        // rely on main process broadcasting updated history; optionally we could update local state here
+      }
+    } catch (err) {
+      console.error('handleEditSave error', err);
+    } finally {
+      setEditModalState({ open: false, item: null });
+    }
+  };
+
   const handleKeyboardSelect = (index) => {
     if (index >= 0 && index < filteredHistory.length) {
       const selectedItem = filteredHistory[index];
@@ -519,6 +600,12 @@ function App() {
         setKeyboardNavigationMode={setKeyboardNavigationMode}
         suppressMouseHover={suppressMouseHover}
         setSuppressMouseHover={setSuppressMouseHover}
+      />
+      <EditModal
+        open={editModalState.open}
+        initialContent={editModalState.item?.content || ''}
+        onClose={() => setEditModalState({ open: false, item: null })}
+        onSave={handleEditSave}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
