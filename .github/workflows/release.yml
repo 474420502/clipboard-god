@@ -19,10 +19,13 @@ jobs:
         include:
           - os: ubuntu-latest
             dist_cmd: npm run dist:linux
+            artifact_name: linux
           - os: macos-latest
             dist_cmd: npm run dist:mac
+            artifact_name: macos
           - os: windows-latest
             dist_cmd: npm run dist:win
+            artifact_name: windows
 
     steps:
       - name: Checkout repository
@@ -116,7 +119,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: clipboard-god-${{ github.ref_name }}
+          name: clipboard-god-${{ github.ref_name }}-${{ matrix.artifact_name }}
           path: dist-electron/
 
   publish:
@@ -127,20 +130,20 @@ jobs:
       - name: Download linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: clipboard-god-${{ github.ref_name }}
+          name: clipboard-god-${{ github.ref_name }}-linux
           path: artifacts/linux
 
       - name: Download mac artifact
         uses: actions/download-artifact@v4
         with:
-          name: clipboard-god-${{ github.ref_name }}
+          name: clipboard-god-${{ github.ref_name }}-macos
           path: artifacts/macos
           continue-on-error: true
 
       - name: Download windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: clipboard-god-${{ github.ref_name }}
+          name: clipboard-god-${{ github.ref_name }}-windows
           path: artifacts/windows
           continue-on-error: true
 
