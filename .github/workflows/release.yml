@@ -1,158 +1,146 @@
 name: Build and Release on Tag
 
 on:
-    push:
-        tags:
-            - "v*"
+  push:
+    tags:
+      - "v*"
 
 jobs:
-    build:
-        name: Build on ${{ matrix.os }}
-        runs-on: ${{ matrix.os }}
-        strategy:
-            matrix:
-                include:
-                    - os: ubuntu-latest
-                      dist_cmd: npm run dist:linux
-                    - os: macos-latest
-                      dist_cmd: npm run dist:mac
-                    - os: windows-latest
-                      dist_cmd: npm run dist:win
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            dist_cmd: npm run dist:linux
+          - os: macos-latest
+            dist_cmd: npm run dist:mac
+          - os: windows-latest
+            dist_cmd: npm run dist:win
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Use Node.js 18
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "18"
-                  cache: "npm"
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
 
-            - name: Install dependencies
-              run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-            - name: Ensure 512px icon exists (cross-platform, uses sharp)
-              shell: bash
-              run: |
-                  set -e
-                  ICON_SRC=assets/icon-256.png
-                  ICON_DST=assets/icon-512.png
-                  if [ -f "$ICON_DST" ]; then
-                    echo "$ICON_DST already exists"
-                    exit 0
-                  fi
-                  if [ ! -f "$ICON_SRC" ]; then
-                    echo "Source icon not found: $ICON_SRC" >&2
-                    exit 1
-                  fi
-                  if [ "${{ matrix.os }}" = "macos-latest" ]; then
-                    echo "Using sips on macOS to generate 512 icon"
-                    if command -v sips >/dev/null 2>&1; then
-                      sips -Z 512 "$ICON_SRC" --out "$ICON_DST"
-                    else
-                      echo "sips not found, falling back to sharp"
-                      npm i --no-save sharp
-                      node -e "require('sharp')(process.env.ICON_SRC).resize(512,512).toFile(process.env.ICON_DST).then(()=>console.log('created')).catch(err=>{console.error(err); process.exit(1)})" \
-                        ICON_SRC="$ICON_SRC" ICON_DST="$ICON_DST"
-                    fi
-                  else
-                    echo "Using sharp to generate 512 icon"
-                    npm i --no-save sharp
-                    node -e "require('sharp')(process.env.ICON_SRC).resize(512,512).toFile(process.env.ICON_DST).then(()=>console.log('created')).catch(err=>{console.error(err); process.exit(1)})" \
-                      ICON_SRC="$ICON_SRC" ICON_DST="$ICON_DST"
-                  fi
+      - name: Ensure 512px icon exists (cross-platform, uses sharp)
+        shell: bash
+        run: |
+          set -e
+          ICON_SRC=assets/icon-256.png
+          ICON_DST=assets/icon-512.png
+          if [ -f "$ICON_DST" ]; then
+            echo "$ICON_DST already exists"
+            exit 0
+          fi
+          if [ ! -f "$ICON_SRC" ]; then
+            echo "Source icon not found: $ICON_SRC" >&2
+            exit 1
+          fi
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            echo "Using sips on macOS to generate 512 icon"
+            if command -v sips >/dev/null 2>&1; then
+              sips -Z 512 "$ICON_SRC" --out "$ICON_DST"
+            else
+              echo "sips not found, falling back to sharp"
+              npm i --no-save sharp
+              node -e "require('sharp')(process.env.ICON_SRC).resize(512,512).toFile(process.env.ICON_DST).then(()=>console.log('created')).catch(err=>{console.error(err); process.exit(1)})" \
+                ICON_SRC="$ICON_SRC" ICON_DST="$ICON_DST"
+            fi
+          else
+            echo "Using sharp to generate 512 icon"
+            npm i --no-save sharp
+            node -e "require('sharp')(process.env.ICON_SRC).resize(512,512).toFile(process.env.ICON_DST).then(()=>console.log('created')).catch(err=>{console.error(err); process.exit(1)})" \
+              ICON_SRC="$ICON_SRC" ICON_DST="$ICON_DST"
+          fi
 
-            - name: Point electron-builder to 512px icon (CI-only)
-              run: |
-                  node -e "const fs=require('fs'); const p=require('./package.json'); p.build = p.build || {}; if(process.env.RUNNER_OS==='macOS'){p.build.icon='assets/icon.icns'}else{p.build.icon='assets/icon-512.png'}; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)); console.log('updated package.json build.icon ->', p.build.icon)"
+      - name: Point electron-builder to 512px icon (CI-only)
+        run: |
+          node -e "const fs=require('fs'); const p=require('./package.json'); p.build = p.build || {}; if(process.env.RUNNER_OS==='macOS'){p.build.icon='assets/icon.icns'}else{p.build.icon='assets/icon-512.png'}; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)); console.log('updated package.json build.icon ->', p.build.icon)"
 
-            - name: Generate mac .icns (macOS only)
-              if: runner.os == 'macOS'
-              run: |
-                  set -e
-                  ICON_SRC=assets/icon-512.png
-                  ICONSET_DIR=assets/icon.iconset
-                  ICON_OUT=assets/icon.icns
-                  if [ -f "$ICON_OUT" ]; then
-                    echo "$ICON_OUT already exists"
-                    exit 0
-                  fi
-                  if [ ! -f "$ICON_SRC" ]; then
-                    echo "Source 512 png not found: $ICON_SRC" >&2
-                    exit 1
-                  fi
-                  mkdir -p "$ICONSET_DIR"
-                  sips -z 16 16 "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16.png"
-                  sips -z 32 32 "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16@2x.png"
-                  sips -z 32 32 "$ICON_SRC" --out "$ICONSET_DIR/icon_32x32.png"
-                  sips -z 64 64 "$ICON_SRC" --out "$ICONSET_DIR/icon_32x32@2x.png"
-                  sips -z 64 64 "$ICON_SRC" --out "$ICONSET_DIR/icon_64x64.png"
-                  sips -z 128 128 "$ICON_SRC" --out "$ICONSET_DIR/icon_64x64@2x.png"
-                  sips -z 128 128 "$ICON_SRC" --out "$ICONSET_DIR/icon_128x128.png"
-                  sips -z 256 256 "$ICON_SRC" --out "$ICONSET_DIR/icon_128x128@2x.png"
-                  sips -z 256 256 "$ICON_SRC" --out "$ICONSET_DIR/icon_256x256.png"
-                  sips -z 512 512 "$ICON_SRC" --out "$ICONSET_DIR/icon_256x256@2x.png"
-                  sips -z 512 512 "$ICON_SRC" --out "$ICONSET_DIR/icon_512x512.png"
-                  sips -z 1024 1024 "$ICON_SRC" --out "$ICONSET_DIR/icon_512x512@2x.png"
-                  iconutil -c icns "$ICONSET_DIR" -o "$ICON_OUT"
-                  echo "Generated $ICON_OUT"
+      - name: Generate mac .icns (macOS only)
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+          ICON_SRC=assets/icon-512.png
+          ICONSET_DIR=assets/icon.iconset
+          ICON_OUT=assets/icon.icns
+          if [ -f "$ICON_OUT" ]; then
+            echo "$ICON_OUT already exists"
+            exit 0
+          fi
+          if [ ! -f "$ICON_SRC" ]; then
+            echo "Source 512 png not found: $ICON_SRC" >&2
+            exit 1
+          fi
+          mkdir -p "$ICONSET_DIR"
+          sips -z 16 16 "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16.png"
+          sips -z 32 32 "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16@2x.png"
+          sips -z 32 32 "$ICON_SRC" --out "$ICONSET_DIR/icon_32x32.png"
+          sips -z 64 64 "$ICON_SRC" --out "$ICONSET_DIR/icon_32x32@2x.png"
+          sips -z 64 64 "$ICON_SRC" --out "$ICONSET_DIR/icon_64x64.png"
+          sips -z 128 128 "$ICON_SRC" --out "$ICONSET_DIR/icon_64x64@2x.png"
+          sips -z 128 128 "$ICON_SRC" --out "$ICONSET_DIR/icon_128x128.png"
+          sips -z 256 256 "$ICON_SRC" --out "$ICONSET_DIR/icon_128x128@2x.png"
+          sips -z 256 256 "$ICON_SRC" --out "$ICONSET_DIR/icon_256x256.png"
+          sips -z 512 512 "$ICON_SRC" --out "$ICONSET_DIR/icon_256x256@2x.png"
+          sips -z 512 512 "$ICON_SRC" --out "$ICONSET_DIR/icon_512x512.png"
+          sips -z 1024 1024 "$ICON_SRC" --out "$ICONSET_DIR/icon_512x512@2x.png"
+          iconutil -c icns "$ICONSET_DIR" -o "$ICON_OUT"
+          echo "Generated $ICON_OUT"
 
-            - name: Build renderer (vite)
-              run: npm run build
+      - name: Build renderer (vite)
+        run: npm run build
 
-            - name: Build Electron app
-              run: ${{ matrix.dist_cmd }}
+      - name: Build Electron app
+        run: ${{ matrix.dist_cmd }}
 
-            - name: Show build output
-              run: |
-                  echo "Contents of dist-electron:"
-                  ls -la dist-electron || true
-                  echo "Find artifacts:" 
-                  find dist-electron -maxdepth 2 -type f -print || true
+      - name: Show build output
+        run: |
+          echo "Contents of dist-electron:"
+          ls -la dist-electron || true
+          echo "Find artifacts:" 
+          find dist-electron -maxdepth 2 -type f -print || true
 
-            - name: Upload build artifacts
-              uses: actions/upload-artifact@v4
-              with:
-                  name: app-${{ matrix.os }}
-                  path: dist-electron/
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-dist-${{ matrix.os }}
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/*.deb
+            dist-electron/*.dmg
+            dist-electron/*.exe
+            dist-electron/*.msi
+            dist-electron/*.zip
+          if-no-files-found: error
 
-    publish:
-        name: Create GitHub Release
-        needs: build
-        runs-on: ubuntu-latest
-        steps:
-            - name: Download linux artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: app-ubuntu-latest
-                  path: artifacts/linux
+  publish:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-            - name: Download mac artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: app-macos-latest
-                  path: artifacts/macos
-                  continue-on-error: true
+      - name: Show downloaded artifacts structure
+        run: ls -R artifacts
 
-            - name: Download windows artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: app-windows-latest
-                  path: artifacts/windows
-                  continue-on-error: true
-
-            - name: Collect release assets
-              run: |
-                  mkdir -p release-assets
-                  echo "Looking for known package types to include in the release"
-                  find artifacts -type f \( -iname "*.deb" -o -iname "*.AppImage" -o -iname "*.dmg" -o -iname "*.exe" -o -iname "*.msi" -o -iname "*.zip" \) -print -exec cp {} release-assets/ \;
-                  echo "Release assets:" && ls -la release-assets || true
-
-            - name: Create GitHub Release
-              uses: ncipollo/release-action@v1
-              with:
-                  tag: ${{ github.ref_name }}
-                  name: ${{ github.ref_name }}
-                  files: |
-                      release-assets/**
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "artifacts/**/*"
+          tag: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
