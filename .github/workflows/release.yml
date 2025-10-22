@@ -1,6 +1,6 @@
 name: Build and Release on Tag
 env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 on:
   push:
     tags:
@@ -111,15 +111,12 @@ jobs:
 
       - name: Show build output
         run: |
-          echo "Contents of dist-electron:"
-          ls -la dist-electron || true
-          echo "Find artifacts:" 
-          find dist-electron -maxdepth 2 -type f -print || true
+          node -e 'const fs=require("fs"), path=require("path"); const dir="dist-electron"; console.log("Contents of "+dir+":"); try{ for(const name of fs.readdirSync(dir)) console.log(name); }catch(e){ console.log(dir+" not found"); } console.log("Find artifacts:"); function walk(d,depth){ if(depth<0) return; try{ for(const it of fs.readdirSync(d,{withFileTypes:true})){ const p=path.join(d,it.name); if(it.isFile()) console.log(p); else if(it.isDirectory()) walk(p,depth-1); } }catch(e){} } walk(dir,2);'
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-${{ matrix.os }}
+          name: clipboard-god-${{ github.ref_name }}
           path: dist-electron/
 
   publish:
@@ -130,20 +127,20 @@ jobs:
       - name: Download linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: app-ubuntu-latest
+          name: clipboard-god-${{ github.ref_name }}
           path: artifacts/linux
 
       - name: Download mac artifact
         uses: actions/download-artifact@v4
         with:
-          name: app-macos-latest
+          name: clipboard-god-${{ github.ref_name }}
           path: artifacts/macos
           continue-on-error: true
 
       - name: Download windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: app-windows-latest
+          name: clipboard-god-${{ github.ref_name }}
           path: artifacts/windows
           continue-on-error: true
 
