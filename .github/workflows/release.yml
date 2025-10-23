@@ -142,6 +142,17 @@ jobs:
       - name: Display downloaded artifacts
         run: ls -R artifacts
 
+      - name: Prune non-installer artifacts
+        run: |
+          echo "Pruning artifacts to only include installers/executables"
+          set -e
+          cd artifacts || exit 0
+          # Keep only common installer/executable extensions
+          find . -type f ! -name "*.AppImage" ! -name "*.deb" ! -name "*.dmg" ! -name "*.exe" ! -name "*.msi" ! -name "*.zip" -delete || true
+          # Remove any empty directories
+          find . -type d -empty -delete || true
+          echo "Remaining artifacts:" && ls -R . || true
+
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:

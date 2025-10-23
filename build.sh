@@ -97,6 +97,30 @@ npm run build
 echo "📦 Creating distributables..."
 npm run dist
 
+# After electron-builder runs, it often leaves intermediate unpacked folders and
+# auxiliary files (e.g. linux-unpacked, resources, latest.yml, *.blockmap, etc.)
+# For release packaging we want only final installer/executable files. Prune
+# dist-electron so only .AppImage .deb .dmg .exe .msi .zip remain.
+if [ -d dist-electron ]; then
+	echo "🗑️  Pruning non-installer artifacts from dist-electron..."
+	TMPDIR=$(mktemp -d)
+	# Move wanted installers to a temp dir, remove everything else, then restore
+	shopt -s nullglob
+	for pattern in "*.AppImage" "*.deb" "*.dmg" "*.exe" "*.msi" "*.zip"; do
+		for f in dist-electron/$pattern; do
+			if [ -e "$f" ]; then
+				mv "$f" "$TMPDIR/"
+			fi
+		done
+	done
+	# Remove remaining files and directories in dist-electron
+	rm -rf dist-electron/*
+	# Move installers back
+	mv "$TMPDIR"/* dist-electron/ 2>/dev/null || true
+	rmdir "$TMPDIR" 2>/dev/null || true
+	shopt -u nullglob
+fi
+
 echo "✅ Build complete!"
 echo ""
 echo "Generated files:"
