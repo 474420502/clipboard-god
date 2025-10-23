@@ -285,15 +285,15 @@
     <div class="chat-input-area">
       <div id="image-preview-container"></div>
       <form id="input-form" class="input-form">
-        <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
+    <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
   <!-- attach image button -->
-  <button type="button" id="attach-file-btn" class="icon-button" title="附加图片" data-i18n="chat.attachImage">📎</button>
+  <button type="button" id="attach-file-btn" class="icon-button" data-i18n="chat.attachImage" data-i18n-title="chat.attachImage" title="Attach image">📎</button>
         
-  <textarea id="ai-input" placeholder="输入消息... (Shift+Enter 换行)" rows="1" data-i18n-placeholder="chat.placeholder"></textarea>
-  <button id="ai-send" type="submit" data-i18n="chat.send">发送</button>
+  <textarea id="ai-input" placeholder="Type a message... (Shift+Enter for newline)" rows="1" data-i18n-placeholder="chat.placeholder"></textarea>
+  <button id="ai-send" type="submit" data-i18n="chat.send">Send</button>
       </form>
     </div>
-    <div class="status-bar" id="status-bar" data-i18n="status.ready">准备就绪</div>
+  <div class="status-bar" id="status-bar" data-i18n="status.ready">Ready</div>
   </div>
 
   <script>
@@ -327,6 +327,17 @@
   const chatConfig = Object.assign({}, defaultConfig);
   // Guard to avoid applying injected config twice (from getConfig + pushed injected-config)
   let _injectedConfigApplied = false;
+
+  // Lightweight translation helper with fallback support
+  const translate = (key, fallback = '', values) => {
+    if (window.i18nDom && typeof window.i18nDom.t === 'function') {
+      const result = window.i18nDom.t(key, values);
+      if (result != null && result !== '') {
+        return result;
+      }
+    }
+    return fallback;
+  };
 
     // -------------------------------------------------------------
     // 2. 聊天窗口功能实现
@@ -486,7 +497,8 @@
       // collapse/expand toggle
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'message-toggle';
-      toggleBtn.title = '折叠/展开';
+  toggleBtn.setAttribute('data-i18n-title', 'toggle.collapseTitle');
+  toggleBtn.title = translate('toggle.collapseTitle', 'Collapse/Expand');
       toggleBtn.textContent = '▾';
       // helper to toggle
       function toggleMessageCollapse(wrapper, btn) {
@@ -541,7 +553,8 @@
         // collapse toggle for assistant messages
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'message-toggle';
-        toggleBtn.title = '折叠/展开';
+  toggleBtn.setAttribute('data-i18n-title', 'toggle.collapseTitle');
+  toggleBtn.title = translate('toggle.collapseTitle', 'Collapse/Expand');
         toggleBtn.textContent = '▾';
         toggleBtn.onclick = (e) => { e.stopPropagation(); toggleMessageCollapse(messageWrapper, toggleBtn); };
 
@@ -589,9 +602,9 @@
         attachBtn.disabled = !enabled;
         if (enabled) {
           inputEl.focus();
-          setStatus('准备就绪');
+          setStatus(translate('status.ready', 'Ready'));
         } else {
-          setStatus('正在生成...');
+          setStatus(translate('status.generating', 'Generating...'));
         }
       }
 
@@ -684,6 +697,7 @@
         toggleInput(false);
         const assistantMsgContainer = createAssistantMessageContainer();
         let fullResponse = '';
+        const errorPrefix = translate('error.prefix', 'Error: ');
 
         try {
           const { baseUrl, model, apiKey } = chatConfig.api;
@@ -782,7 +796,7 @@
               const errText = parsed.error || (parsed.message && parsed.message.error) || JSON.stringify(parsed);
               // Show internal UI notification
               try { setStatus(String(errText), true); } catch (e) { }
-              updateAssistantMessage(assistantMsgContainer, `出错了: ${errText}`, true);
+              updateAssistantMessage(assistantMsgContainer, `${errorPrefix}${errText}`, true);
               // Stop processing further
               throw new Error(String(errText));
             }
@@ -798,7 +812,7 @@
             const lower = String(line).toLowerCase();
                         if (lower.includes('error') || lower.includes('failed') || lower.includes('this model is missing data')) {
                           try { setStatus(String(line), true); } catch (e2) { }
-                          updateAssistantMessage(assistantMsgContainer, `出错了: ${line}`, true);
+                          updateAssistantMessage(assistantMsgContainer, `${errorPrefix}${line}`, true);
                           throw new Error(String(line));
                         }
             } catch (inner) { /* ignore */ }
@@ -811,7 +825,7 @@
 
         } catch (error) {
             console.error('Fetch error:', error);
-            const errorMessage = `出错了: ${error.message}`;
+            const errorMessage = `${errorPrefix}${error.message}`;
             // internal UI notification only
             updateAssistantMessage(assistantMsgContainer, errorMessage, true);
             setStatus(errorMessage, true);
