@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Chat Window</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src *; img-src data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src *; img-src data:;">
   <style>
     :root {
       --bg-color: #1a1a1a;
@@ -259,7 +259,57 @@
 
     #ai-send {
       height: 40px;
-      padding: 10px 18px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 999px;
+      background: var(--primary-color);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.015em;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(0, 123, 255, 0.25);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+      min-width: 110px;
+    }
+
+    #ai-send:hover:not(:disabled) {
+      background: #1c86ff;
+      box-shadow: 0 12px 26px rgba(28, 134, 255, 0.35);
+      transform: translateY(-1px);
+    }
+
+    #ai-send:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: 0 6px 16px rgba(0, 90, 210, 0.35);
+    }
+
+    #ai-send:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.6);
+      outline-offset: 2px;
+    }
+
+    #ai-send:disabled {
+      background: #3a3a3a;
+      color: rgba(255, 255, 255, 0.6);
+      box-shadow: none;
+      cursor: not-allowed;
+      opacity: 0.85;
+    }
+
+    #ai-send .send-icon {
+      font-size: 13px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    #ai-send .send-label {
+      white-space: nowrap;
     }
   /* --- end styles --- */
 
@@ -287,10 +337,13 @@
       <form id="input-form" class="input-form">
     <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
   <!-- attach image button -->
-  <button type="button" id="attach-file-btn" class="icon-button" data-i18n="chat.attachImage" data-i18n-title="chat.attachImage" title="Attach image">📎</button>
+  <button type="button" id="attach-file-btn" class="icon-button" data-i18n-title="chat.attachImage" data-i18n-aria-label="chat.attachImage" title="Attach image" aria-label="Attach image">📎</button>
         
   <textarea id="ai-input" placeholder="Type a message... (Shift+Enter for newline)" rows="1" data-i18n-placeholder="chat.placeholder"></textarea>
-  <button id="ai-send" type="submit" data-i18n="chat.send">Send</button>
+  <button id="ai-send" type="submit" data-i18n="chat.send" data-i18n-aria-label="chat.send" aria-label="Send">
+  <span class="send-icon" aria-hidden="true">&#10148;</span>
+    <span class="send-label" data-i18n="chat.send">Send</span>
+  </button>
       </form>
     </div>
   <div class="status-bar" id="status-bar" data-i18n="status.ready">Ready</div>
@@ -348,6 +401,7 @@
       const formEl = document.getElementById('input-form');
       const inputEl = document.getElementById('ai-input');
       const sendBtn = document.getElementById('ai-send');
+    const sendLabelEl = sendBtn ? sendBtn.querySelector('.send-label') : null;
       const statusBar = document.getElementById('status-bar');
       // 新增 DOM 元素
       const attachBtn = document.getElementById('attach-file-btn');
@@ -358,11 +412,54 @@
       let conversationHistory = [];
       let isGenerating = false;
       // 新增: 用于存储待发送图片的数组
-      let stagedImages = []; // 存储 { id, base64Full, base64Raw }
+      let stagedImages = []; // 存储 { id, base64Full, base64Raw, mimeType }
+
+      const IMAGE_MIME_FALLBACK = 'image/png';
+
+      function extractMimeTypeFromDataUrl(dataUrl) {
+        const match = /^data:([^;]+);base64,/i.exec(dataUrl || '');
+        return match ? match[1] : '';
+      }
+
+      function normalizeImageForHistory(image) {
+        if (!image) return null;
+        if (typeof image === 'string') {
+          return image ? { base64Raw: image, mimeType: '' } : null;
+        }
+        const base64Raw = image.base64Raw || '';
+        if (!base64Raw) return null;
+        const mimeType = image.mimeType || extractMimeTypeFromDataUrl(image.base64Full) || '';
+        return { base64Raw, mimeType };
+      }
+
+      function ensureUiImageShape(image) {
+        if (!image) return null;
+        if (typeof image === 'string') {
+          const dataUrl = image.startsWith('data:') ? image : `data:${IMAGE_MIME_FALLBACK};base64,${image}`;
+          return { base64Full: dataUrl, base64Raw: image.replace(/^data:[^,]+,/, ''), mimeType: extractMimeTypeFromDataUrl(dataUrl) || '' };
+        }
+        const base64Full = image.base64Full || (image.base64Raw ? `data:${image.mimeType || IMAGE_MIME_FALLBACK};base64,${image.base64Raw}` : '');
+        if (!base64Full) return null;
+        const mimeType = image.mimeType || extractMimeTypeFromDataUrl(base64Full) || '';
+        return {
+          base64Full,
+          base64Raw: image.base64Raw || base64Full.replace(/^data:[^,]+,/, ''),
+          mimeType
+        };
+      }
       
       // --- Initialization ---
       function initializeChat() {
   // Native window title is used (set by main process). No internal title element to render.
+        if (sendLabelEl) {
+          const localized = translate('chat.send', 'Send');
+          if (localized) {
+            sendLabelEl.textContent = localized;
+            sendBtn.setAttribute('title', localized);
+            sendBtn.setAttribute('aria-label', localized);
+          }
+        }
+
         inputEl.addEventListener('input', autoResizeTextarea);
         formEl.addEventListener('submit', handleFormSubmit);
         
@@ -401,17 +498,18 @@
 
           if (!_injectedConfigApplied && (hasInitialPrompt || hasInitialImages)) {
               // prepare UI message (with full base64s)
+            const uiImages = hasInitialImages ? chatConfig.initialImages.map(ensureUiImageShape).filter(Boolean) : [];
             const uiMessage = {
               role: 'user',
               content: chatConfig.initialPrompt || '',
-              images: hasInitialImages ? chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw })) : []
+              images: uiImages
             };
 
             // prepare API message (raw base64 only)
             const apiMessage = {
               role: 'user',
               content: chatConfig.initialPrompt || '',
-              images: hasInitialImages ? chatConfig.initialImages.map(i => i.base64Raw) : []
+              images: uiImages.map(normalizeImageForHistory).filter(Boolean)
             };
 
             addMessageToUI('user', uiMessage);
@@ -466,16 +564,17 @@
         const hasInitialImages = chatConfig.initialImages && Array.isArray(chatConfig.initialImages) && chatConfig.initialImages.length > 0;
     
         if (hasInitialPrompt || hasInitialImages) {
+          const uiImages = hasInitialImages ? chatConfig.initialImages.map(ensureUiImageShape).filter(Boolean) : [];
           const uiMessage = {
             role: 'user',
             content: chatConfig.initialPrompt || '',
-            images: hasInitialImages ? chatConfig.initialImages.map(i => ({ base64Full: i.base64Full, base64Raw: i.base64Raw })) : []
+            images: uiImages
           };
           
           const apiMessage = {
             role: 'user',
             content: chatConfig.initialPrompt || '',
-            images: hasInitialImages ? chatConfig.initialImages.map(i => i.base64Raw) : []
+            images: uiImages.map(normalizeImageForHistory).filter(Boolean)
           };
 
           addMessageToUI('user', uiMessage);
@@ -615,22 +714,22 @@
 
         const userInput = inputEl.value.trim();
         if (!userInput && stagedImages.length === 0) return;
-        
+        const uiImages = stagedImages.map((img) => ({ ...img }));
         // 构建消息对象，包含文本和图片
         const userMessage = {
-            role: 'user',
-            content: userInput,
-            // 传递给 UI 的是完整对象，传递给 API 的是 raw base64
-            images: stagedImages 
+          role: 'user',
+          content: userInput,
+          // 传递给 UI 的是完整对象，传递给 API 的是 raw base64
+          images: uiImages
         };
 
         addMessageToUI('user', userMessage);
         
         // 准备要发送到 API 的历史记录
         const apiMessage = {
-            role: 'user',
-            content: userInput,
-            images: stagedImages.map(img => img.base64Raw) // 只取 raw base64
+          role: 'user',
+          content: userInput,
+          images: uiImages.map(normalizeImageForHistory).filter(Boolean) // 只取 raw base64 与 mime
         };
         conversationHistory.push(apiMessage);
         
@@ -654,8 +753,9 @@
                 // Ollama API 需要不带 "data:image/jpeg;base64," 前缀的纯 base64
                 const base64Raw = base64Full.split(',')[1];
                 const imageId = Date.now() + Math.random(); // 创建唯一ID
-                
-                stagedImages.push({ id: imageId, base64Full, base64Raw });
+        const mimeType = file.type || extractMimeTypeFromDataUrl(base64Full) || '';
+
+        stagedImages.push({ id: imageId, base64Full, base64Raw, mimeType });
                 updateImagePreviews();
             };
             reader.readAsDataURL(file);
@@ -698,34 +798,198 @@
         const assistantMsgContainer = createAssistantMessageContainer();
         let fullResponse = '';
         const errorPrefix = translate('error.prefix', 'Error: ');
+        const apiConfig = chatConfig.api || {};
+        const apiType = (apiConfig.type || 'ollama').toString().toLowerCase();
+
+        const extractTextFromOpenAiDelta = (delta) => {
+          if (!delta) return '';
+          if (typeof delta === 'string') return delta;
+          if (Array.isArray(delta)) {
+            return delta.map(extractTextFromOpenAiDelta).join('');
+          }
+          if (typeof delta === 'object') {
+            if (Array.isArray(delta.content)) {
+              return delta.content.map((part) => {
+                if (typeof part === 'string') return part;
+                if (!part || typeof part !== 'object') return '';
+                if (part.type === 'text' && typeof part.text === 'string') return part.text;
+                if (part.type === 'output_text' && typeof part.text === 'string') return part.text;
+                if (typeof part.text === 'string') return part.text;
+                if (part.text) return extractTextFromOpenAiDelta(part.text);
+                if (part.content) return extractTextFromOpenAiDelta(part.content);
+                return '';
+              }).join('');
+            }
+            if (typeof delta.text === 'string') return delta.text;
+            if (Array.isArray(delta.text)) return delta.text.map(extractTextFromOpenAiDelta).join('');
+            if (typeof delta.content === 'string') return delta.content;
+            if (delta.delta) return extractTextFromOpenAiDelta(delta.delta);
+            if (delta.message) return extractTextFromOpenAiDelta(delta.message);
+            if (delta.content) return extractTextFromOpenAiDelta(delta.content);
+          }
+          return '';
+        };
+
+        const getChunkTextFromOpenApi = (parsed) => {
+          if (!parsed || typeof parsed !== 'object') return '';
+          let collected = '';
+          if (Array.isArray(parsed.choices)) {
+            for (const choice of parsed.choices) {
+              if (choice.delta) collected += extractTextFromOpenAiDelta(choice.delta);
+              else if (choice.message) collected += extractTextFromOpenAiDelta(choice.message);
+            }
+          }
+          if (!collected && parsed.delta) collected += extractTextFromOpenAiDelta(parsed.delta);
+          if (!collected && parsed.message) collected += extractTextFromOpenAiDelta(parsed.message);
+          if (!collected && parsed.content) collected += extractTextFromOpenAiDelta(parsed.content);
+          return collected;
+        };
+
+        const getChunkTextFromOllama = (parsed) => {
+          if (!parsed || typeof parsed !== 'object') return '';
+          if (parsed.message && parsed.message.content) return parsed.message.content;
+          if (typeof parsed.content === 'string') return parsed.content;
+          return '';
+        };
+
+        const buildOllamaMessages = (history) => history.map((msg) => {
+          const payload = { role: msg.role, content: msg.content || '' };
+          if (Array.isArray(msg.images) && msg.images.length > 0) {
+            const imagePayload = msg.images
+              .map((img) => {
+                if (typeof img === 'string') return img;
+                if (img && typeof img.base64Raw === 'string') return img.base64Raw;
+                return '';
+              })
+              .filter(Boolean);
+            if (imagePayload.length > 0) payload.images = imagePayload;
+          }
+          return payload;
+        });
+
+        const buildOpenApiMessages = (history) => history.map((msg) => {
+          if (msg.role !== 'user') {
+            return { role: msg.role, content: msg.content || '' };
+          }
+          const parts = [];
+          const textContent = msg.content || '';
+          if (textContent) {
+            parts.push({ type: 'text', text: textContent });
+          }
+          if (Array.isArray(msg.images)) {
+            for (const img of msg.images) {
+              if (!img) continue;
+              let base64Raw = '';
+              let mimeType = '';
+              if (typeof img === 'string') {
+                base64Raw = img;
+              } else {
+                base64Raw = typeof img.base64Raw === 'string' ? img.base64Raw : '';
+                mimeType = img.mimeType || extractMimeTypeFromDataUrl(img.base64Full);
+              }
+              if (!base64Raw) continue;
+              const dataUrl = `data:${mimeType || IMAGE_MIME_FALLBACK};base64,${base64Raw}`;
+              parts.push({ type: 'image_url', image_url: { url: dataUrl } });
+            }
+          }
+          if (parts.length === 0) {
+            return { role: 'user', content: '' };
+          }
+          if (parts.length === 1 && parts[0].type === 'text') {
+            return { role: 'user', content: parts[0].text };
+          }
+          return { role: 'user', content: parts };
+        });
+
+        const resolveOpenApiUrl = (rawBaseUrl) => {
+          const trimmed = (rawBaseUrl || '').trim();
+          if (!trimmed) throw new Error('API base URL is not configured.');
+          try {
+            const parsed = new URL(trimmed);
+            const lowerPath = parsed.pathname.toLowerCase();
+            if (lowerPath.includes('/chat/completions')) {
+              return parsed.toString();
+            }
+            if (/\/v\d+\/?$/.test(lowerPath)) {
+              parsed.pathname = parsed.pathname.replace(/\/?$/, '') + '/chat/completions';
+              return parsed.toString();
+            }
+            if (lowerPath === '/' || lowerPath === '') {
+              parsed.pathname = parsed.pathname.replace(/\/?$/, '') + '/v1/chat/completions';
+              return parsed.toString();
+            }
+            parsed.pathname = parsed.pathname.replace(/\/?$/, '') + '/chat/completions';
+            return parsed.toString();
+          } catch (err) {
+            throw new Error('Invalid API base URL');
+          }
+        };
+
+        const sanitizeOpenApiParams = (params) => {
+          if (!params || typeof params !== 'object') return {};
+          const sanitized = {};
+          for (const [key, value] of Object.entries(params)) {
+            if (value === null || typeof value === 'undefined') continue;
+            if (key === 'context_window' || key === 'top_k' || key === 'min_p') continue;
+            sanitized[key] = value;
+          }
+          return sanitized;
+        };
 
         try {
-          const { baseUrl, model, apiKey } = chatConfig.api;
-          const url = new URL('/api/chat', baseUrl).toString();
-          
-          const body = {
-              model: model,
-              messages: conversationHistory,
-              stream: true,
-              options: chatConfig.llmParams
-          };
+          const { baseUrl = '', model = '', apiKey = '' } = apiConfig;
+          if (!model) {
+            throw new Error('Model is not configured.');
+          }
+          if (!baseUrl) {
+            throw new Error('API base URL is not configured.');
+          }
 
-          // Debug: print API endpoint and a redacted, JSON-stringified payload summary
+          const llmParams = chatConfig.llmParams || {};
+          const headers = { 'Content-Type': 'application/json' };
+          let url = '';
+          let body = {};
+
+          if (apiType === 'openapi') {
+            url = resolveOpenApiUrl(baseUrl);
+            if (apiKey) {
+              if (/\.azure\./i.test(url)) {
+                headers['api-key'] = apiKey;
+              } else {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+              }
+            }
+            body = Object.assign({
+              model,
+              messages: buildOpenApiMessages(conversationHistory),
+              stream: true
+            }, sanitizeOpenApiParams(llmParams));
+          } else {
+            url = new URL('/api/chat', baseUrl).toString();
+            if (apiKey) {
+              headers['Authorization'] = `Bearer ${apiKey}`;
+            }
+            body = {
+              model,
+              messages: buildOllamaMessages(conversationHistory),
+              stream: true,
+              options: llmParams
+            };
+          }
+
           try {
-            console.log('ChatPage: sending API request to', url);
+            console.log('ChatPage: sending API request to', url, 'type=', apiType);
 
             const msgs = Array.isArray(conversationHistory) ? conversationHistory : [];
             const messagesCount = msgs.length;
             const hasImages = msgs.some(m => Array.isArray(m.images) && m.images.length > 0);
 
-            // preview of the last user message (if any)
             let lastPreview = '';
             try {
               const last = msgs.length ? msgs[msgs.length - 1] : null;
               if (last && last.content) lastPreview = String(last.content).slice(0, 120);
             } catch (e) { lastPreview = ''; }
 
-            // count images and estimate bytes from base64 length (approx: 3/4 of base64 chars)
             let totalImages = 0;
             let totalBase64Chars = 0;
             for (const m of msgs) {
@@ -735,14 +999,14 @@
                   try {
                     if (typeof im === 'string') totalBase64Chars += im.length;
                     else if (im && typeof im.base64Raw === 'string') totalBase64Chars += im.base64Raw.length;
-                  } catch (e) { /* ignore per-image errors */ }
+                  } catch (err) { }
                 }
               }
             }
             const approxImageBytes = Math.round(totalBase64Chars * 0.75);
 
             let apiOrigin = '';
-            try { apiOrigin = (new URL(baseUrl || '')).origin || baseUrl || ''; } catch (e) { apiOrigin = baseUrl || ''; }
+            try { apiOrigin = (new URL(url || baseUrl || '')).origin || baseUrl || ''; } catch (e) { apiOrigin = baseUrl || ''; }
 
             const summary = {
               messagesCount,
@@ -750,92 +1014,120 @@
               totalImages,
               approxImageBytes,
               lastPreview,
-              api: { model: model || '', origin: apiOrigin }
+              api: { model: model || '', origin: apiOrigin, type: apiType }
             };
 
             console.log('ChatPage: payload summary', JSON.stringify(summary));
           } catch (e) { console.warn('ChatPage: payload summary logging failed', e); }
 
-          const headers = { 'Content-Type': 'application/json' };
-          if (apiKey) {
-            headers['Authorization'] = `Bearer ${apiKey}`;
-          }
-
           const response = await fetch(url, {
             method: 'POST',
-            headers: headers,
+            headers,
             body: JSON.stringify(body)
           });
-          
+
           if (!response.ok) {
-              const errorText = await response.text();
-        const errMsg = `API Error: ${response.status} ${response.statusText} - ${errorText}`;
-        // Show internal UI notification (status bar and assistant message)
-        try { setStatus(errMsg, true); } catch (e) { }
-        throw new Error(errMsg);
+            const errorText = await response.text();
+            const errMsg = `API Error: ${response.status} ${response.statusText} - ${errorText}`;
+            try { setStatus(errMsg, true); } catch (e) { }
+            throw new Error(errMsg);
           }
-          
+
+          if (!response.body) {
+            throw new Error('Empty response body.');
+          }
+
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let partialLine = '';
+          let streamClosed = false;
 
-          while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
+          while (!streamClosed) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = (partialLine + chunk).split('\n');
-              partialLine = lines.pop() || '';
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = (partialLine + chunk).split(/\r?\n/);
+            partialLine = lines.pop() || '';
 
-              for (const line of lines) {
-                  if (line.trim() === '') continue;
-                  try {
-                      const parsed = JSON.parse(line);
-            // If the server returned an explicit error object, notify the user
-            if (parsed.error || (parsed.message && parsed.message.error)) {
-              const errText = parsed.error || (parsed.message && parsed.message.error) || JSON.stringify(parsed);
-              // Show internal UI notification
-              try { setStatus(String(errText), true); } catch (e) { }
-              updateAssistantMessage(assistantMsgContainer, `${errorPrefix}${errText}`, true);
-              // Stop processing further
-              throw new Error(String(errText));
-            }
-
-            if (parsed.message && parsed.message.content) {
-              const contentChunk = parsed.message.content;
-              fullResponse += contentChunk;
-              updateAssistantMessage(assistantMsgContainer, contentChunk);
-            }
-                  } catch (e) {
-            // If parsing failed, the line might still contain a plain-text error
-            try {
-            const lower = String(line).toLowerCase();
-                        if (lower.includes('error') || lower.includes('failed') || lower.includes('this model is missing data')) {
-                          try { setStatus(String(line), true); } catch (e2) { }
-                          updateAssistantMessage(assistantMsgContainer, `${errorPrefix}${line}`, true);
-                          throw new Error(String(line));
-                        }
-            } catch (inner) { /* ignore */ }
-            console.warn('Failed to parse stream line:', line, e);
-                  }
+            for (const rawLine of lines) {
+              const line = rawLine.trim();
+              if (!line) continue;
+              if (line.startsWith('event:')) continue;
+              let dataLine = line;
+              if (line.startsWith('data:')) {
+                dataLine = line.slice(5).trim();
+                if (!dataLine) continue;
+                if (dataLine === '[DONE]') {
+                  streamClosed = true;
+                  break;
+                }
               }
+              try {
+                const parsed = JSON.parse(dataLine);
+                if (parsed.error || (parsed.message && parsed.message.error)) {
+                  const errText = parsed.error || (parsed.message && parsed.message.error) || JSON.stringify(parsed);
+                  try { setStatus(String(errText), true); } catch (e) { }
+                  updateAssistantMessage(assistantMsgContainer, `${errorPrefix}${errText}`, true);
+                  throw new Error(String(errText));
+                }
+                const chunkText = apiType === 'openapi'
+                  ? getChunkTextFromOpenApi(parsed)
+                  : getChunkTextFromOllama(parsed);
+
+                if (chunkText) {
+                  fullResponse += chunkText;
+                  updateAssistantMessage(assistantMsgContainer, chunkText);
+                }
+              } catch (parseError) {
+                try {
+                  const lower = String(dataLine || line).toLowerCase();
+                  if (lower.includes('error') || lower.includes('failed') || lower.includes('this model is missing data')) {
+                    try { setStatus(String(dataLine || line), true); } catch (e) { }
+                    updateAssistantMessage(assistantMsgContainer, `${errorPrefix}${dataLine || line}`, true);
+                    throw new Error(String(dataLine || line));
+                  }
+                } catch (_) { }
+                console.warn('Failed to parse stream line:', dataLine || line, parseError);
+              }
+            }
+
+            if (streamClosed) break;
+          }
+
+          if (!streamClosed && partialLine.trim()) {
+            try {
+              const parsed = JSON.parse(partialLine.trim());
+              if (parsed.error || (parsed.message && parsed.message.error)) {
+                const errText = parsed.error || (parsed.message && parsed.message.error) || JSON.stringify(parsed);
+                try { setStatus(String(errText), true); } catch (e) { }
+                updateAssistantMessage(assistantMsgContainer, `${errorPrefix}${errText}`, true);
+                throw new Error(String(errText));
+              }
+              const chunkText = apiType === 'openapi'
+                ? getChunkTextFromOpenApi(parsed)
+                : getChunkTextFromOllama(parsed);
+              if (chunkText) {
+                fullResponse += chunkText;
+                updateAssistantMessage(assistantMsgContainer, chunkText);
+              }
+            } catch (_) { }
           }
 
           conversationHistory.push({ role: 'assistant', content: fullResponse });
 
         } catch (error) {
-            console.error('Fetch error:', error);
-            const errorMessage = `${errorPrefix}${error.message}`;
-            // internal UI notification only
-            updateAssistantMessage(assistantMsgContainer, errorMessage, true);
-            setStatus(errorMessage, true);
-            // 将错误消息作为回复, 但不加入历史记录, 以便用户可以重试
-            // 从历史中移除最后一条用户消息，以便重试
-            conversationHistory.pop(); 
-            return;
+          console.error('Fetch error:', error);
+          const errorMessage = `${errorPrefix}${error.message}`;
+          updateAssistantMessage(assistantMsgContainer, errorMessage, true);
+          setStatus(errorMessage, true);
+          if (conversationHistory.length && conversationHistory[conversationHistory.length - 1].role === 'user') {
+            conversationHistory.pop();
+          }
+          return;
         } finally {
-            toggleInput(true);
-            updateAssistantMessage(assistantMsgContainer, '', true);
+          toggleInput(true);
+          updateAssistantMessage(assistantMsgContainer, '', true);
         }
       }
 

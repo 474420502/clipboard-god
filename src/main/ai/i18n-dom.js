@@ -68,6 +68,12 @@
                 const value = this.t(key);
                 if (value != null) el.setAttribute('title', value);
             });
+
+            document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+                const key = el.getAttribute('data-i18n-aria-label');
+                const value = this.t(key);
+                if (value != null) el.setAttribute('aria-label', value);
+            });
         },
 
         async init(defaultLocale = 'en') {
