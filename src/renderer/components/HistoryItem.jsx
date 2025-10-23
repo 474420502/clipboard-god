@@ -316,6 +316,9 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
               const p = item.image_path || '';
               if (window.electronAPI && typeof window.electronAPI.downloadImage === 'function') {
                 window.electronAPI.downloadImage(p).then((res) => {
+                  if (res && res.canceled) {
+                    return;
+                  }
                   if (!res || !res.success) {
                     console.error('Download failed', res && res.error);
                   } else {

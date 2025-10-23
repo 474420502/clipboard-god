@@ -10,6 +10,8 @@ const DEFAULT_CONFIG = {
   customTooltip: false,
   // 是否启用工具提示 (如果为 false, 渲染器的 tooltip 调用会被忽略)
   enableTooltips: true,
+  // 是否随系统启动
+  launchOnStartup: false,
   // 粘贴快捷键
   pasteShortcut: 'numbers',
   // 是否使用数字快捷键

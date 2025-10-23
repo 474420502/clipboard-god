@@ -1,5 +1,4 @@
-const { BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, screen, clipboard, Notification } = require('electron');
-const { app } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, screen, clipboard, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ClipboardManager = require('./clipboardManager');
@@ -528,6 +527,92 @@ class MainProcess {
     safeConsole.log('截图快捷键是否注册:', globalShortcut.isRegistered(shortcut));
   }
 
+  // Apply login/autostart preferences per platform
+  configureAutoLaunch(enable) {
+    try {
+      const shouldEnable = !!enable;
+      const platform = process.platform;
+      const execPath = process.env.APPIMAGE || app.getPath('exe');
+
+      if (!execPath) {
+        safeConsole.warn('自动启动：无法解析执行路径');
+        return;
+      }
+
+      if (platform === 'win32' || platform === 'darwin') {
+        try {
+          app.setLoginItemSettings({
+            openAtLogin: shouldEnable,
+            openAsHidden: platform === 'darwin',
+            path: execPath,
+            args: []
+          });
+          safeConsole.log('自动启动（login items）已设置:', shouldEnable);
+        } catch (err) {
+          safeConsole.warn('设置 login item 自动启动失败:', err);
+        }
+        return;
+      }
+
+      if (platform === 'linux') {
+        const homeDir = app.getPath('home');
+        if (!homeDir) {
+          safeConsole.warn('自动启动：无法获取 home 目录');
+          return;
+        }
+
+        const autostartDir = path.join(homeDir, '.config', 'autostart');
+        const desktopFile = path.join(autostartDir, 'clipboard-god.desktop');
+
+        if (!shouldEnable) {
+          try {
+            if (fs.existsSync(desktopFile)) {
+              fs.unlinkSync(desktopFile);
+              safeConsole.log('已移除自动启动 desktop 条目');
+            }
+          } catch (err) {
+            safeConsole.warn('移除自动启动条目失败:', err);
+          }
+          return;
+        }
+
+        try {
+          fs.mkdirSync(autostartDir, { recursive: true });
+        } catch (err) {
+          safeConsole.warn('创建 autostart 目录失败:', err);
+          return;
+        }
+
+        const name = app.getName() || 'Clipboard God';
+        const comment = 'Clipboard history manager';
+        const escapedExec = `"${execPath.replace(/"/g, '\\"')}"`;
+        const desktopEntry = [
+          '[Desktop Entry]',
+          'Type=Application',
+          `Name=${name}`,
+          `Comment=${comment}`,
+          `Exec=${escapedExec}`,
+          'Icon=clipboard-god',
+          'Terminal=false',
+          'X-GNOME-Autostart-enabled=true',
+          'StartupNotify=false'
+        ].join('\n');
+
+        try {
+          fs.writeFileSync(desktopFile, `${desktopEntry}\n`, { mode: 0o755 });
+          safeConsole.log('自动启动 desktop 文件已写入:', desktopFile);
+        } catch (err) {
+          safeConsole.warn('写入自动启动 desktop 文件失败:', err);
+        }
+        return;
+      }
+
+      safeConsole.log('未处理的平台自动启动请求:', platform);
+    } catch (err) {
+      safeConsole.warn('配置自动启动时出现异常:', err);
+    }
+  }
+
   // 启动剪贴板监控
   startClipboardMonitoring() {
     // 启动定时器，每秒检查一次剪贴板
@@ -716,6 +801,9 @@ class MainProcess {
           this.registerScreenshotShortcut();
           // 重新构建菜单以更新快捷键显示
           this.buildAppMenu();
+        }
+        if (changedKeys.includes('launchOnStartup')) {
+          this.configureAutoLaunch(newConfig.launchOnStartup);
         }
         if (changedKeys.includes('maxHistoryItems')) {
           // 更新剪贴板管理器的最大历史记录数
@@ -968,14 +1056,36 @@ class MainProcess {
     ipcMain.handle('download-image', async (_event, imagePath) => {
       try {
         if (!imagePath) return { success: false, error: 'no-path' };
-        const userHome = app.getPath('home');
-        const downloads = app.getPath('downloads') || path.join(userHome, 'Downloads');
         const src = String(imagePath).replace(/^file:\/\//, '');
-        const base = path.basename(src);
-        const dest = path.join(downloads, base);
-        // copy file
-        fs.copyFileSync(src, dest);
-        return { success: true, path: dest };
+        if (!fs.existsSync(src)) {
+          return { success: false, error: 'not-found' };
+        }
+
+        let defaultDir = '';
+        try { defaultDir = app.getPath('downloads'); } catch (err) { defaultDir = ''; }
+        if (!defaultDir) {
+          try { defaultDir = app.getPath('home'); } catch (err) { defaultDir = ''; }
+        }
+
+        const baseName = path.basename(src);
+        const defaultPath = defaultDir ? path.join(defaultDir, baseName) : baseName;
+
+        const { canceled, filePath } = await dialog.showSaveDialog({
+          title: 'Save Image',
+          defaultPath,
+          buttonLabel: 'Save',
+          filters: [
+            { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] },
+            { name: 'All Files', extensions: ['*'] }
+          ]
+        });
+
+        if (canceled || !filePath) {
+          return { success: false, canceled: true };
+        }
+
+        await fs.promises.copyFile(src, filePath);
+        return { success: true, path: filePath };
       } catch (err) {
         safeConsole.error('download-image error:', err);
         return { success: false, error: err.message };
@@ -1050,6 +1160,11 @@ class MainProcess {
     this.startClipboardMonitoring();
     // 构建应用顶部菜单（将截图/设置从主窗口移到菜单）
     this.buildAppMenu();
+    try {
+      this.configureAutoLaunch(Config.get('launchOnStartup'));
+    } catch (err) {
+      safeConsole.warn('初始化自动启动配置失败:', err);
+    }
   }
 
   // 构建应用菜单并挂载行为

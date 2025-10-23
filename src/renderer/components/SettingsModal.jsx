@@ -14,6 +14,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     screenshotShortcut: 'CommandOrControl+Shift+S',
     theme: 'light',
     enableTooltips: true,
+    launchOnStartup: false,
     locale: 'zh-CN' // 默认语言
   });
 
@@ -87,6 +88,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 globalShortcut: res.config.globalShortcut,
                 screenshotShortcut: res.config.screenshotShortcut,
                 theme: res.config.theme,
+                launchOnStartup: typeof res.config.launchOnStartup !== 'undefined' ? res.config.launchOnStartup : false,
                 llms: res.config.llms || settings.llms || {}
               };
             }
@@ -101,6 +103,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 globalShortcut: settings.globalShortcut,
                 screenshotShortcut: settings.screenshotShortcut,
                 theme: settings.theme,
+                launchOnStartup: settings.launchOnStartup,
                 llms: settings.llms || {}
               };
             }
@@ -171,6 +174,7 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
         screenshotShortcut: typeof src.screenshotShortcut !== 'undefined' ? src.screenshotShortcut : 'CommandOrControl+Shift+S',
         theme: typeof src.theme !== 'undefined' ? src.theme : 'light',
         enableTooltips: typeof src.enableTooltips !== 'undefined' ? src.enableTooltips : true,
+        launchOnStartup: typeof src.launchOnStartup !== 'undefined' ? src.launchOnStartup : false,
         locale: typeof src.locale !== 'undefined' ? src.locale : 'zh-CN',
         llms: src.llms || {},
         _selectedLlm: src._selectedLlm || ''
@@ -292,6 +296,19 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     {t('settings.general.enableTooltips.label')}
                   </label>
                   <div className="small">{t('settings.general.enableTooltips.help')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>
+                    <input
+                      id="launchOnStartupToggle"
+                      type="checkbox"
+                      checked={!!settings.launchOnStartup}
+                      onChange={(e) => handleChange('launchOnStartup', e.target.checked)}
+                    />
+                    {t('settings.general.launchOnStartup.label')}
+                  </label>
+                  <div className="small">{t('settings.general.launchOnStartup.help')}</div>
                 </div>
               </div>
             )}

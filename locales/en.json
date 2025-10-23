@@ -46,6 +46,10 @@
             "enableTooltips": {
                 "label": "Enable tooltips",
                 "help": "When disabled, the app won't show item preview tooltips (including main-process external tooltip windows)."
+            },
+            "launchOnStartup": {
+                "label": "Start at login",
+                "help": "Launch Clipboard God automatically when you sign in to your system."
             }
         },
         "appearance": {

@@ -46,6 +46,10 @@
             "enableTooltips": {
                 "label": "启用工具提示",
                 "help": "关闭后应用将不再显示条目预览的工具提示（包括主进程的外部 tooltip 窗口）。"
+            },
+            "launchOnStartup": {
+                "label": "开机自动启动",
+                "help": "登录系统时自动启动 Clipboard God。"
             }
         },
         "appearance": {

@@ -1,6 +1,6 @@
 {
   "name": "clipboard-god",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "A powerful clipboard manager built with Electron and React",
   "homepage": "https://github.com/clipboard-god/clipboard-god",
   "main": "main.js",

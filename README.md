@@ -5,6 +5,11 @@
 
 A powerful clipboard manager built with Electron, React and small helpful AI features.
 
+## What's New (v1.0.2)
+
+- Added a cross-platform "Start at login" toggle that configures auto-launch on Windows, macOS, and Linux.
+- Image downloads now use the native save dialog so you can pick the destination before saving.
+
 ## Highlights
 
 - Persistent clipboard history (text, images, screenshots)
