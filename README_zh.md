@@ -2,6 +2,11 @@
 
 Clipboard God 是一个基于 Electron 和 React 的跨平台剪贴板管理器。它提供可搜索的剪贴板历史、截图工具、托盘集成，并支持可选的 AI/LLM 功能用于文本摘要、翻译与智能粘贴。
 
+## 发行 v1.0.4
+
+- 修复：开机自启动现在会正确启动打包后的程序（在 Linux 上优先使用 /usr/bin/clipboard-god），而不会再调用开发时的 Electron 二进制。
+- 修复："开机自启" 设置现在会持久保存，并在设置界面正确显示。
+
 ## 视频演示
 
 [点击观看演示视频（YouTube）](https://www.youtube.com/watch?v=u0lFLiHmbdI)
