@@ -43,6 +43,7 @@ function App() {
     screenshotShortcut: 'CommandOrControl+Shift+S',
     theme: 'light',
     enableTooltips: true,
+    launchOnStartup: false,
     locale: 'zh-CN'
   });
 
@@ -63,6 +64,7 @@ function App() {
           if (typeof cfg.globalShortcut !== 'undefined') mapped.globalShortcut = cfg.globalShortcut;
           if (typeof cfg.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = cfg.screenshotShortcut;
           if (typeof cfg.theme !== 'undefined') mapped.theme = cfg.theme;
+          if (typeof cfg.launchOnStartup !== 'undefined') mapped.launchOnStartup = cfg.launchOnStartup;
           if (typeof cfg.locale !== 'undefined') mapped.locale = cfg.locale;
           // include llms map when present so renderer can show entries in settings
           if (typeof cfg.llms !== 'undefined') mapped.llms = cfg.llms;
@@ -619,6 +621,7 @@ function App() {
           globalShortcut: settings.globalShortcut,
           screenshotShortcut: settings.screenshotShortcut,
           theme: settings.theme,
+          launchOnStartup: settings.launchOnStartup,
           locale: settings.locale,
           llms: settings.llms || {}
         }), [
@@ -629,6 +632,7 @@ function App() {
           settings.globalShortcut,
           settings.screenshotShortcut,
           settings.theme,
+          settings.launchOnStartup,
           settings.locale,
           settings.llms
         ])}

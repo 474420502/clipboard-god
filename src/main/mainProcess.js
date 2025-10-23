@@ -532,9 +532,77 @@ class MainProcess {
     try {
       const shouldEnable = !!enable;
       const platform = process.platform;
-      const execPath = process.env.APPIMAGE || app.getPath('exe');
 
-      if (!execPath) {
+      const escapeDesktopArg = (value) => {
+        const str = String(value);
+        if (!/[\s"'\\$`]/.test(str)) {
+          return str;
+        }
+        let escaped = '';
+        for (const ch of str) {
+          if (ch === '"' || ch === '\\' || ch === '$' || ch === '`') {
+            escaped += `\\${ch}`;
+          } else {
+            escaped += ch;
+          }
+        }
+        return `"${escaped}"`;
+      };
+
+      const buildAutostartExec = () => {
+        const formatDesktopCommand = (commandPath, argsList) => {
+          const parts = [escapeDesktopArg(commandPath), ...argsList.map((arg) => escapeDesktopArg(arg))];
+          return parts.join(' ');
+        };
+
+        if (process.env.APPIMAGE) {
+          const appImagePath = process.env.APPIMAGE;
+          return {
+            command: formatDesktopCommand(appImagePath, []),
+            path: appImagePath,
+            args: []
+          };
+        }
+
+        const exePath = app.getPath('exe');
+        if (!exePath) {
+          return null;
+        }
+
+        if (platform === 'linux' && app.isPackaged) {
+          try {
+            const systemBinary = '/usr/bin/clipboard-god';
+            if (fs.existsSync(systemBinary)) {
+              return {
+                command: formatDesktopCommand('clipboard-god', []),
+                path: systemBinary,
+                args: []
+              };
+            }
+          } catch (err) {
+            safeConsole.warn('检测系统 clipboard-god 可执行文件失败:', err);
+          }
+        }
+
+        if (app.isPackaged) {
+          return {
+            command: formatDesktopCommand(exePath, []),
+            path: exePath,
+            args: []
+          };
+        }
+
+        const argv = process.argv.slice(1);
+        const rawArgs = argv.length > 0 ? argv : [app.getAppPath()];
+        return {
+          command: formatDesktopCommand(exePath, rawArgs),
+          path: exePath,
+          args: rawArgs
+        };
+      };
+
+      const execDetails = buildAutostartExec();
+      if (!execDetails) {
         safeConsole.warn('自动启动：无法解析执行路径');
         return;
       }
@@ -544,8 +612,8 @@ class MainProcess {
           app.setLoginItemSettings({
             openAtLogin: shouldEnable,
             openAsHidden: platform === 'darwin',
-            path: execPath,
-            args: []
+            path: execDetails.path,
+            args: execDetails.args || []
           });
           safeConsole.log('自动启动（login items）已设置:', shouldEnable);
         } catch (err) {
@@ -585,13 +653,12 @@ class MainProcess {
 
         const name = app.getName() || 'Clipboard God';
         const comment = 'Clipboard history manager';
-        const escapedExec = `"${execPath.replace(/"/g, '\\"')}"`;
         const desktopEntry = [
           '[Desktop Entry]',
           'Type=Application',
           `Name=${name}`,
           `Comment=${comment}`,
-          `Exec=${escapedExec}`,
+          `Exec=${execDetails.command}`,
           'Icon=clipboard-god',
           'Terminal=false',
           'X-GNOME-Autostart-enabled=true',
@@ -599,6 +666,17 @@ class MainProcess {
         ].join('\n');
 
         try {
+          try {
+            if (fs.existsSync(desktopFile)) {
+              const current = fs.readFileSync(desktopFile, 'utf8');
+              if (/node_modules\/electron/.test(current)) {
+                fs.unlinkSync(desktopFile);
+              }
+            }
+          } catch (cleanupErr) {
+            safeConsole.warn('清理旧自动启动条目失败:', cleanupErr);
+          }
+
           fs.writeFileSync(desktopFile, `${desktopEntry}\n`, { mode: 0o755 });
           safeConsole.log('自动启动 desktop 文件已写入:', desktopFile);
         } catch (err) {
