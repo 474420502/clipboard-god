@@ -3,89 +3,64 @@
 [![GitHub license](https://img.shields.io/github/license/474420502/clipboard-god)](https://github.com/474420502/clipboard-god/blob/master/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/474420502/clipboard-god)](https://github.com/474420502/clipboard-god/stargazers)
 
-A powerful clipboard manager built with Electron, React and small helpful AI features.
+Clipboard God is a cross-platform clipboard manager built with Electron and React. It keeps your clipboard history searchable, adds screenshot tooling, and bundles optional AI helpers for fast summarisation, translation, and smart paste workflows.
 
-## What's New (v1.0.2)
+## Video Demo
 
-- Added a cross-platform "Start at login" toggle that configures auto-launch on Windows, macOS, and Linux.
-- Image downloads now use the native save dialog so you can pick the destination before saving.
+[Watch on YouTube](https://www.youtube.com/watch?v=u0lFLiHmbdI)
 
-## Highlights
+## Feature Highlights
 
-- Persistent clipboard history (text, images, screenshots)
-- Fast search and keyboard-driven navigation
-- Multi-theme UI and internationalization (English/Chinese)
-- Screenshot capture and management
-- LLM-powered utilities (local or remote models for text summarization, translation, and smart paste)
-- Cross-platform: Windows, macOS, Linux
+- Persistent clipboard history for text, screenshots, and pasted images with quick preview.
+- Powerful search with keyboard-first navigation and pinning for favourites.
+- Multi-theme interface, tray integration, and localisation (English and Simplified Chinese).
+- Screenshot capture, download helpers, and quick paste support on Windows, macOS, and Linux (Wayland/X11).
+- Optional AI actions that send content to local or remote LLMs for summarising, rewriting, or translating.
 
-## LLM / AI Features
+## AI & Automation Tools
 
-Clipboard God includes optional LLM-powered features (configurable in Settings):
+All AI features are opt-in and configurable from Settings. Pick OpenAI-compatible endpoints or a local server such as Ollama.
 
-- Smart Summarize: summarize long copied text into short notes
-- Auto-complete / Snippets: expand prompts or saved snippets using model suggestions
-- Translation: translate copied text between languages
-- Contextual prompts: send clipboard content to an LLM for transformation (e.g., format code, rewrite text)
+- **One-click prompts** for summarise, translate, rewrite, and custom actions with per-entry shortcuts.
+- **Inline image support** so clipboard snapshots or staged uploads are sent together with prompts.
+- **Configurable parameters** (model, API key, temperature, max tokens, context window, penalties).
+- **Per-OS paste automation** with fallbacks (xdotool/ydotool/Wayland) and Linux Shift+Insert support for rich text workflows.
 
-Notes:
-- LLM features can use a local model or remote API (OpenAI/compatible). Configure model, base URL, and API key in Settings.
-- LLM usage may require additional CPU/GPU resources or API keys and could incur costs when calling remote services.
-
-### LLM Configuration Examples
-
-You can configure LLM/AI integrations from the Settings modal. Below are example configurations you might use.
-
-- OpenAI (remote API)
+Example: OpenAI compatible configuration
 
 ```json
 {
-   "provider": "openai",
-   "model": "gpt-4o-mini",
-   "baseUrl": "https://api.openai.com/v1",
-   "apiKey": "sk-...",
-   "temperature": 0.7,
-   "maxTokens": 512
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "baseUrl": "https://api.openai.com/v1",
+  "apiKey": "sk-...",
+  "temperature": 0.6,
+  "maxTokens": 512
 }
 ```
 
-- Self-hosted or compatible server (e.g., local LLM server, llama.cpp http wrapper)
+Example: Local server (e.g. Ollama)
 
 ```json
 {
-   "provider": "local",
-   "model": "local-ggml-vicuna-13b",
-   "baseUrl": "http://127.0.0.1:8080",
-   "apiKey": "",
-   "temperature": 0.3,
-   "maxTokens": 256
+  "provider": "local",
+  "model": "llama3",
+  "baseUrl": "http://127.0.0.1:11434",
+  "apiKey": "",
+  "temperature": 0.3,
+  "maxTokens": 256
 }
 ```
 
-### Recommended Models and When to Use Them
+## Getting Started
 
-- Small, local models (e.g., LLaMA/Alpaca variants, Vicuna): best for offline / privacy-sensitive use and cheap local inference on CPU. Use for light summarization and simple rewriting.
-- Medium models (13B): good balance of quality and local performance if you have a decent GPU. Use for higher-quality summarization and contextual rewriting.
-- Large remote models (OpenAI GPT-4 family or comparable hosted models): recommend for best quality, multi-turn context and complex transformations. These may incur cost per token and network latency.
+### Prerequisites
 
-### API Usage, Rate Limits and Cost Guidance
+- Node.js >= 16
+- npm >= 8
+- Linux users: install `xdotool` (X11) or `ydotool`/`wl-clipboard` for best paste automation results.
 
-- Remote APIs typically charge per token (input + output). For summarization and short transforms, set sensible `maxTokens` (e.g., 128-512) and lower `temperature` for deterministic results.
-- Be conservative with automatic calls: avoid calling LLM on every clipboard copy. Use explicit actions (e.g., "Summarize" or "Translate") or debounce frequent changes.
-- Rate limits: respect the provider's rate limits. The app exposes settings to throttle or batch requests — configure a minimum interval between calls.
-- Privacy: clipboard content can be sensitive. If privacy is a concern, prefer local models, or avoid sending sensitive content to remote APIs.
-
-### Example: Add a "Summarize" action (recommended settings)
-
-- Temperature: 0.2 (lower for more deterministic summaries)
-- Max tokens: 150
-- Prompt template: `"Summarize the following text in 3 concise bullet points:\n\n{content}"`
-
-These settings limit cost while producing high quality concise summaries.
-
-## Installation
-
-### From source
+### Install from Source
 
 ```bash
 git clone https://github.com/474420502/clipboard-god.git
@@ -94,97 +69,65 @@ npm install
 npm run dev
 ```
 
-### Production build
+### Production Build
 
 ```bash
 npm run build
 npm start
 ```
 
-### Pre-built releases
+### Pre-built Releases
 
-Download binaries from the Releases page: https://github.com/474420502/clipboard-god/releases
+Grab the latest installers and AppImage/DEB packages from the [Releases](https://github.com/474420502/clipboard-god/releases) page.
 
 ## Configuration
 
-User config path:
+Per-user configuration is stored at:
 
 - Linux: `~/.config/clipboard-god/config.json`
-- Windows: `%APPDATA%\\clipboard-god\\config.json`
+- Windows: `%APPDATA%\clipboard-god\config.json`
 - macOS: `~/Library/Application Support/clipboard-god/config.json`
 
-Settings include:
-- Max history items (default: 1000)
-- Theme selection
-- Global shortcut
-- Language (en / zh-CN)
-- LLM model / API configuration
+Key options include maximum history items, theme, language, global shortcut, and AI entries (prompt, trigger type, model credentials).
 
-## Shortcuts
+## Keyboard Shortcuts
 
-- Global: `Ctrl+Alt+V` (toggle history window)
-- Numeric keys: 1-9 select items in the history list
-- Arrow keys: navigate list
-- Enter: paste selected
-- Esc: hide window
+- `Ctrl+Alt+V` toggle history window (default global shortcut).
+- `1-9` paste the corresponding item from the history list.
+- Arrow keys navigate between items; `Enter` pastes the active entry.
+- `Shift+Insert` (Linux rich text) or `Ctrl+V` (default) for automated paste.
+- `Esc` hides the window instantly.
 
-## Development
+## Build & Packaging
 
-Project structure:
+- Uses Vite for renderer builds and electron-builder for packaging.
+- `npm run build` produces distributable binaries under `dist-electron/`.
+- Debian packages (`.deb`) can be generated via the provided scripts in `deb/`.
+- CI workflow (GitHub Actions) builds tagged releases for Windows, macOS, and Linux.
+
+## Troubleshooting & Support
+
+- App fails to start: verify Node.js >= 16, reinstall dependencies (`rm -rf node_modules && npm install`).
+- Screenshots on Linux: install `libxss1` and `libgconf-2-4`; on macOS ensure Screen Recording permission.
+- Database corruption: remove the config directory to recreate `config.json` and history database.
+- AI requests failing: double-check API keys, base URLs, and that local servers are reachable.
+
+## Project Structure
 
 ```
 clipboard-god/
 ├── src/
-│   ├── main/        # Electron main process
-│   ├── preload/     # Preload scripts (expose safe APIs)
-│   └── renderer/    # React UI
-├── dist/
-├── dist-electron/
-└── assets/
+│   ├── main/        Electron main process
+│   ├── preload/     Exposed, sandboxed bridges
+│   └── renderer/    React 18 UI
+├── dist/            Vite build output
+├── dist-electron/   Packaged application bundles
+└── assets/          Icons and marketing assets
 ```
-
-### Tech stack and core dependencies
-
-- Electron
-- React 18
-- Vite (dev + build)
-- better-sqlite3 (storage)
-- i18next / react-i18next (i18n)
-- electron-builder (packaging)
-
-Core package.json dependencies are listed in the project manifest.
-
-## Security
-
-Follows Electron security best practices:
-
-- Context isolation enabled
-- Node integration disabled in renderer
-- Use preload to expose minimal APIs
-
-## Troubleshooting
-
-1. App fails to start:
-   - Ensure Node.js >= 16
-   - Reinstall dependencies: `rm -rf node_modules && npm install`
-
-2. Screenshots not working:
-   - Linux: install `libxss1` and `libgconf-2-4`
-   - macOS: grant Screen Recording permission
-
-3. Database issues:
-   - Remove config folder: `rm -rf ~/.config/clipboard-god/`
-
-4. LLM integration issues:
-   - Verify API key and model settings in Settings
-   - If using a local model, ensure the model server is running and reachable
 
 ## Contributing
 
-1. Fork
-2. Create a feature branch
-3. Implement changes and tests
-4. Submit a pull request
+Contributions are welcome: fork the repo, create a feature branch, add tests where possible, and submit a pull request.
 
 ## License
 
@@ -193,30 +136,6 @@ MIT License
 ## Author
 
 Eson <474420502@qq.com>
-
----
-
-If you'd like, I can also:
-
-- Split `README.md` to be purely English and leave `README_zh.md` as the Chinese translation (I'll do that now),
-- Add example screenshots or a short GIF to the README,
-- Add badges for CI or release status.
-
-## Releases / CI
-
-This repository includes a GitHub Actions workflow that builds platform binaries and creates a Release when you push a tag that starts with `v` (for example: `v1.2.3`). The workflow builds on the matching OS runners and uploads the `dist-electron/` output as release assets.
-
-How to create a release tag locally and push:
-
-```bash
-git tag v1.2.3
-git push origin v1.2.3
-```
-
-Notes:
-- The action uses the repository's default `GITHUB_TOKEN` so no extra secrets are required for basic releases.
-- macOS code signing or notarization requires additional secrets/certificates and is not configured by default. If you need signed macOS builds, add the appropriate signing keys to the Actions secrets and update the workflow.
-- The workflow builds the platform-specific target on the corresponding runner (Linux on ubuntu-latest, macOS on macos-latest, Windows on windows-latest).
 
 
 `<parameter name="filePath">`/home/eson/workspace/clipboard-god/README.md

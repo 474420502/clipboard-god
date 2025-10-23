@@ -1,37 +1,29 @@
 # Clipboard God（中文说明）
 
-一个基于 Electron 与 React 的强力剪贴板管理器，内置部分 AI/LLM 实用功能（可选）。
+Clipboard God 是一个基于 Electron 和 React 的跨平台剪贴板管理器。它提供可搜索的剪贴板历史、截图工具、托盘集成，并支持可选的 AI/LLM 功能用于文本摘要、翻译与智能粘贴。
 
-## v1.0.2 更新摘要
+## 视频演示
 
-- 新增“开机自动启动”开关，分别针对 Windows、macOS、Linux 配置系统级自启动。
-- 图片下载按钮改为弹出系统保存对话框，可先选择保存路径再写入文件。
+[点击观看演示视频（YouTube）](https://www.youtube.com/watch?v=u0lFLiHmbdI)
 
-## 亮点
+## 功能亮点
 
-- 持久化的剪贴板历史（文本、图片、截图）
-- 快速搜索与键盘驱动的导航
-- 多主题 UI 和国际化（中/英）
-- 截图捕获与管理
-- LLM 驱动的实用工具（本地或远程模型，用于摘要、翻译、智能粘贴等）
-- 跨平台：Windows、macOS、Linux
+- 长期保留的剪贴板历史，支持文本、截图与图片预览。
+- 键盘优先的快速搜索、固定收藏和多主题界面，支持中英双语。
+- 截图捕获、下载管理、托盘菜单以及多平台粘贴兼容（含 Wayland）。
+- AI 动作可自定义：总结、翻译、重写、智能提示，支持为每个动作绑定快捷键。
+- Linux 自动粘贴支持 `Shift+Insert`、`Ctrl+V` 等组合，提供 xdotool/ydotool/Wayland 备用方案。
 
-## LLM / AI 功能
+## AI / LLM 功能
 
-Clipboard God 提供可选的 LLM 功能（在设置中配置）：
+AI 功能完全可选，在设置页面选择 OpenAI 兼容接口或本地服务（如 Ollama）：
 
-- 智能摘要：将较长文本概括为简短要点
-- 自动补全 / 片段：使用模型建议扩展提示或保存的片段
-- 翻译：在语言间翻译剪贴板文本
-- 上下文提示：将剪贴板内容发送给 LLM 进行转换（例如格式化代码、重写文本）
+- **一键动作**：内置摘要、翻译、重写，亦可添加自定义提示词。
+- **图片一同发送**：支持附件或剪贴板中的图片随消息一起提交到模型。
+- **可调参数**：模型、API Key、温度、最大 tokens、上下文窗口、惩罚因子等均可配置。
+- **快捷触发**：可为任意 LLM 条目分配快捷键，结合全局热键快速调用。
 
-注意：LLM 功能可使用本地模型或远程 API（如 OpenAI 兼容）。在设置中配置 model、baseUrl 和 apiKey。远程调用可能涉及费用并需要网络或 API Key。
-
-### LLM 配置示例
-
-以下示例展示在设置中可填写的配置 JSON（演示用）：
-
-- OpenAI（远程 API）示例：
+示例配置（OpenAI 兼容接口）：
 
 ```json
 {
@@ -39,54 +31,33 @@ Clipboard God 提供可选的 LLM 功能（在设置中配置）：
   "model": "gpt-4o-mini",
   "baseUrl": "https://api.openai.com/v1",
   "apiKey": "sk-...",
-  "temperature": 0.7,
+  "temperature": 0.6,
   "maxTokens": 512
 }
 ```
 
-- 本地或兼容服务器（例如本地 LLM 服务或 llama.cpp http 包装器）示例：
+示例配置（本地服务器 / Ollama）：
 
 ```json
 {
   "provider": "local",
-  "model": "local-ggml-vicuna-13b",
-  "baseUrl": "http://127.0.0.1:8080",
+  "model": "llama3",
+  "baseUrl": "http://127.0.0.1:11434",
   "apiKey": "",
   "temperature": 0.3,
   "maxTokens": 256
 }
 ```
 
-### 推荐模型及使用场景
+## 快速开始
 
-- 小型本地模型（如 LLaMA / Alpaca 变体、Vicuna）：适合离线或对隐私敏感的场景，能在 CPU 上做轻量推理，用于简要摘要与基础重写。
-- 中等模型（13B）：在有一定 GPU 的情况下提供较好的质量与性能平衡，适用于更高质量的摘要与上下文重写。
-- 大型远程模型（如 OpenAI GPT-4 系列）：推荐用于更高质量、多轮上下文和复杂转换，但会产生网络延迟与按 token 计费的成本。
+### 环境要求
 
-### API 使用与流量限制、成本建议
+- Node.js >= 16
+- npm >= 8
+- Linux: 建议安装 `xdotool`（X11）或 `ydotool` / `wl-clipboard` 以获得最佳粘贴体验。
 
-- 远程 API 通常按 token（输入+输出）计费。对摘要和短转换，建议设置合理的 `maxTokens`（例如 128-512）并将 `temperature` 设置较低以获得更确定性的结果。
-- 避免对每次复制都自动调用 LLM：建议采用显式操作（例如用户点击“摘要”或“翻译”），或对频繁变化的内容做去抖（debounce）。
-- 限流：请遵守服务商的速率限制。应用支持配置最小请求间隔以防止突发多次请求。
-- 隐私：剪贴板可能包含敏感信息。若隐私是优先考虑，请优先使用本地模型或避免将敏感内容发送到远程 API。
-
-### 示例：推荐的“摘要”动作设置
-
-- Temperature: 0.2（用于更确定性的摘要）
-- Max tokens: 150
-- Prompt 模板：
-
-```
-Summarize the following text in 3 concise bullet points:
-
-{content}
-```
-
-该配置能在控制成本的同时产出高质量的简洁摘要。
-
-## 安装
-
-### 从源码安装
+### 从源码运行
 
 ```bash
 git clone https://github.com/474420502/clipboard-god.git
@@ -104,86 +75,56 @@ npm start
 
 ### 发布版下载
 
-从 Releases 页面下载： https://github.com/474420502/clipboard-god/releases
+在 [Releases 页面](https://github.com/474420502/clipboard-god/releases) 可获取最新的安装包（AppImage、DEB、ZIP 等）。
 
-## 配置
+## 配置说明
 
-配置文件路径：
+用户配置文件位于：
 
 - Linux: `~/.config/clipboard-god/config.json`
-- Windows: `%APPDATA%\\clipboard-god\\config.json`
+- Windows: `%APPDATA%\clipboard-god\config.json`
 - macOS: `~/Library/Application Support/clipboard-god/config.json`
 
-可配置项：
-- 最大历史条目（默认: 1000）
-- 主题选择
-- 全局快捷键
-- 语言（en / zh-CN）
-- LLM 模型 / API 配置
+可自定义的内容包含历史上限、主题、语言、全局快捷键以及 LLM 条目的提示词与模型参数。
 
 ## 快捷键
 
-- 全局: `Ctrl+Alt+V`（切换历史窗口）
-- 数字键: 1-9 选择历史项
-- 方向键: 列表导航
-- Enter: 粘贴选中项
-- Esc: 隐藏窗口
+- `Ctrl+Alt+V`：默认全局快捷键，显示/隐藏历史窗口。
+- `1-9`：快速粘贴对应编号的历史条目。
+- 方向键：在列表中导航，`Enter` 粘贴当前选项。
+- Linux 自动粘贴默认使用 `Shift+Insert`，图片或富文本可降级为 `Ctrl+V`。
+- `Esc`：立即隐藏窗口。
 
-## 开发
+## 构建与打包
 
-项目结构：
+- 前端使用 Vite 构建，electron-builder 负责产出可分发安装包。
+- 执行 `npm run build` 后，发行文件位于 `dist-electron/`。
+- 项目自带 `deb/` 脚本，可生成 Debian 包并自动处理 desktop/icon 缓存。
+- GitHub Actions 工作流在推送类似 `v1.2.3` 的标签时自动构建三平台发行包。
+
+## 故障排除
+
+- 应用无法启动：确认 Node.js >= 16，必要时删除 `node_modules` 后重新安装。
+- 截图功能异常：Linux 安装 `libxss1`、`libgconf-2-4`；macOS 授予屏幕录制权限。
+- 数据库损坏：删除配置目录，会自动重建 `config.json` 与历史数据库。
+- AI 请求失败：检查 API Key、模型地址是否正确，本地服务需保持运行可访问。
+
+## 项目结构
 
 ```
 clipboard-god/
 ├── src/
-│   ├── main/        # Electron 主进程
-│   ├── preload/     # 预加载脚本（暴露安全 API）
-│   └── renderer/    # React UI
-├── dist/
-├── dist-electron/
-└── assets/
+│   ├── main/        Electron 主进程代码
+│   ├── preload/     预加载脚本（安全桥接）
+│   └── renderer/    React 18 UI
+├── dist/            Vite 输出
+├── dist-electron/   打包后的应用
+└── assets/          图标及资源
 ```
 
-### 技术栈与核心依赖
+## 贡献指南
 
-- Electron
-- React 18
-- Vite
-- better-sqlite3（存储）
-- i18next / react-i18next（国际化）
-- electron-builder（打包）
-
-## 安全
-
-遵循 Electron 的安全最佳实践：
-
-- 启用 Context Isolation
-- 在 renderer 中禁用 Node 集成
-- 使用 preload 暴露最小化 API
-
-## 故障排除
-
-1. 应用无法启动：
-	- 确认 Node.js >= 16
-	- 重新安装依赖：`rm -rf node_modules && npm install`
-
-2. 截图功能不可用：
-	- Linux：安装 `libxss1` 和 `libgconf-2-4`
-	- macOS：授予屏幕录制权限
-
-3. 数据库问题：
-	- 删除配置文件夹：`rm -rf ~/.config/clipboard-god/`
-
-4. LLM 集成问题：
-	- 检查设置中的 API Key 与模型配置
-	- 如果使用本地模型，确认模型服务已启动并可访问
-
-## 贡献
-
-1. Fork
-2. 创建功能分支
-3. 实现并测试
-4. 提交 PR
+欢迎 PR：Fork 仓库，创建开发分支，完成修改与测试后提交 Pull Request。
 
 ## 许可证
 
