@@ -74,7 +74,7 @@ class PasteHandler {
         });
       } else {
         // Linux - 根据内容类型使用不同的粘贴快捷键
-        const keyCombination = item.type === 'image' ? 'ctrl+v' : 'ctrl+shift+v';
+        const keyCombination = item.type === 'image' ? 'ctrl+v' : 'Shift+Insert';
         console.log('Linux 使用快捷键:', keyCombination);
 
         // 对于图片，使用更长的延迟确保剪贴板准备好
@@ -127,9 +127,14 @@ class PasteHandler {
 
       // 根据快捷键组合选择不同的按键序列
       let keySequence;
-      if (keyCombination === 'ctrl+shift+v') {
+      const comboLower = keyCombination.toLowerCase();
+
+      if (comboLower === 'ctrl+shift+v') {
         // Ctrl+Shift+V: Ctrl down, Shift down, V down, V up, Shift up, Ctrl up
         keySequence = 'xdotool keydown ctrl keydown shift key v keyup shift keyup ctrl';
+      } else if (comboLower === 'shift+insert') {
+        // Shift+Insert: Shift down, Insert down, Insert up, Shift up
+        keySequence = 'xdotool keydown shift key Insert keyup shift';
       } else {
         // Ctrl+V: Ctrl down, V down, V up, Ctrl up
         keySequence = 'xdotool keydown ctrl key v keyup ctrl';
@@ -147,9 +152,14 @@ class PasteHandler {
         exec('which ydotool', (error, stdout, stderr) => {
           if (!error && stdout.trim()) {
             // ydotool 按键码: 29=Ctrl, 42=Shift, 47=V
-            const ydoSequence = keyCombination === 'ctrl+shift+v'
-              ? 'ydotool key 29:1 42:1 47:1 47:0 42:0 29:0'  // Ctrl+Shift+V
-              : 'ydotool key 29:1 47:1 47:0 29:0';          // Ctrl+V
+            let ydoSequence;
+            if (comboLower === 'ctrl+shift+v') {
+              ydoSequence = 'ydotool key 29:1 42:1 47:1 47:0 42:0 29:0'; // Ctrl+Shift+V
+            } else if (comboLower === 'shift+insert') {
+              ydoSequence = 'ydotool key 42:1 110:1 110:0 42:0'; // Shift+Insert
+            } else {
+              ydoSequence = 'ydotool key 29:1 47:1 47:0 29:0'; // Ctrl+V
+            }
             exec(ydoSequence, (error, stdout, stderr) => {
               if (!error) {
                 console.log(`使用 ydotool ${keyCombination} 粘贴成功`);
