@@ -16,7 +16,16 @@ class ClipboardManager {
     // convert to expected in-memory format and keep db row id in _dbId
     this.history = rows.map(r => {
       if (r.type === 'text') return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'text', content: r.content, timestamp: new Date(r.timestamp), pinned: r.pinned ? 1 : 0 };
-      return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'image', content: r.image_path || null, timestamp: new Date(r.timestamp), image_path: r.image_path, pinned: r.pinned ? 1 : 0 };
+      return {
+        id: r.id || Date.now(),
+        _dbId: r._dbId || null,
+        type: 'image',
+        content: r.image_path || null,
+        timestamp: new Date(r.timestamp),
+        image_path: r.image_path,
+        image_thumb: r.image_thumb,
+        pinned: r.pinned ? 1 : 0
+      };
     });
   }
 
@@ -223,4 +232,3 @@ class ClipboardManager {
 }
 
 module.exports = ClipboardManager;
-

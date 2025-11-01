@@ -72,9 +72,11 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
                   window.electronAPI.showTooltip({ content: item.content, anchorRect });
                 } else {
                   // For images, send an HTML payload so the main process can render an image inside the tooltip
-                  const src = item.image_path ? `file://${item.image_path}` : item.content;
+                  // 优先使用主图像路径用于 tooltip 显示，确保图像能正常显示
+                  const tooltipImagePath = item.image_path || item.image_thumb;
+                  const src = tooltipImagePath ? `file://${tooltipImagePath}` : item.content;
                   const { t } = i18nRef.current || { t: (k) => k };
-                  const html = `<div style="max-width:440px;max-height:320px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;"><img src=\"${src}\" style=\"max-width:420px;max-height:280px;border-radius:6px;display:block;\" alt=\"image preview\"/><div style=\"font-size:12px;color:#ddd;\">${t('history.clickToPasteImage')}</div></div>`;
+                  const html = `<div style="max-width:440px;max-height:320px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;"><img src=\"${src}\" style="max-width:420px;max-height:280px;border-radius:6px;display:block;" alt="image preview"/><div style="font-size:12px;color:#ddd;">${t('history.clickToPasteImage')}</div></div>`;
                   window.electronAPI.showTooltip({ content: html, anchorRect, html: true });
                 }
               }
@@ -267,6 +269,45 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
   const imagePath = item.image_thumb || item.image_path;
   const displayText = isText ? truncateText(item.content, previewLength) : '';
 
+  // 图像显示状态管理
+  const [imageError, setImageError] = React.useState(false);
+  const [useMainImage, setUseMainImage] = React.useState(false);
+
+  // 重置图像状态当item变化时
+  React.useEffect(() => {
+    setImageError(false);
+    setUseMainImage(false);
+  }, [item.id, item.image_thumb, item.image_path]);
+
+  // 处理图像加载错误
+  const handleImageError = (e) => {
+    console.error('Failed to load image:', e.target.src);
+
+    // 如果当前尝试的是缩略图且失败了，尝试主图像
+    if (!useMainImage && item.image_thumb && item.image_path && item.image_path !== item.image_thumb) {
+      console.log('Thumbnail failed, trying main image:', item.image_path);
+      setUseMainImage(true);
+      return;
+    }
+
+    // 如果主图像也失败了，隐藏图像并显示图标
+    setImageError(true);
+    e.target.style.display = 'none';
+  };
+
+  // 确定要使用的图像路径
+  const getDisplayImagePath = () => {
+    if (imageError) return null;
+
+    if (useMainImage) {
+      return item.image_path;
+    }
+
+    return imagePath;
+  };
+
+  const displayImagePath = getDisplayImagePath();
+
   return (
     <li
       ref={itemRef}
@@ -286,11 +327,8 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
     >
       <div className="item-icon">
         {isText && <span className="text-icon">T</span>}
-        {isImage && imagePath && <img src={`file://${imagePath}`} alt="thumbnail" className="history-thumb" onError={(e) => {
-          console.error('Failed to load image:', e);
-          e.target.style.display = 'none';
-        }} />}
-        {isImage && !imagePath && <span className="image-icon">I</span>}
+        {isImage && displayImagePath && <img src={`file://${displayImagePath}`} alt="thumbnail" className="history-thumb" onError={handleImageError} />}
+        {isImage && !displayImagePath && <span className="image-icon">I</span>}
         {shortcut}
       </div>
       <div className="item-content">
