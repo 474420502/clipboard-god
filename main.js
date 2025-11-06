@@ -5,6 +5,12 @@ const MainProcess = require('./src/main/mainProcess.js');
 // 主进程实例
 const mainProcess = new MainProcess();
 
+// Disable Chromium sandbox in AppImage builds where the setuid helper cannot be used
+if (process.platform === 'linux' && process.env.APPIMAGE) {
+    console.warn('Detected AppImage runtime, launching Electron without sandbox');
+    app.commandLine.appendSwitch('no-sandbox');
+}
+
 function createWindow() {
     mainProcess.createWindow();
 

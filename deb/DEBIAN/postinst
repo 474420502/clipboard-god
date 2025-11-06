@@ -24,6 +24,16 @@ if command -v update-desktop-database >/dev/null 2>&1; then
   fi
 fi
 
+# Ensure the Electron chrome-sandbox helper has correct ownership/permissions
+SANDBOX_PATH="/opt/clipboard-god/linux-unpacked/chrome-sandbox"
+if [ -f "$SANDBOX_PATH" ]; then
+  echo "Configuring Electron sandbox helper..."
+  chown root:root "$SANDBOX_PATH" || true
+  chmod 4755 "$SANDBOX_PATH" || true
+else
+  echo "Warning: expected sandbox helper not found at $SANDBOX_PATH"
+fi
+
 # Detect common indicator packages. If none found, print guidance.
 has_indicator=0
 for pkg in libappindicator3-1 libayatana-appindicator3-1 indicator-application; do
@@ -60,19 +70,6 @@ if [ "$has_indicator" -eq 0 ]; then
   echo
   echo "Or use the AppImage release which bundles more runtime pieces and often
 works without distribution-specific indicator packages."
-fi
-
-exit 0
-#!/bin/bash
-set -e
-
-# Update icon cache and desktop database on install
-if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-  gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
-fi
-
-if command -v update-desktop-database >/dev/null 2>&1; then
-  update-desktop-database /usr/share/applications || true
 fi
 
 exit 0
