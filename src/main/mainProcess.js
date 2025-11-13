@@ -6,6 +6,7 @@ const TrayManager = require('./trayManager');
 const PasteHandler = require('./pasteHandler');
 const ScreenshotManager = require('./screenshotManager');
 const Config = require('./config');
+const resourceManager = require('./core/resourceManager');
 
 // 安全的console包装器，防止EPIPE错误
 // Use DEBUG flag to control verbose logging. Default false in production.
@@ -34,6 +35,16 @@ const safeConsole = {
     try {
       if (process.stderr.writable) {
         console.warn(...args);
+      }
+    } catch (error) {
+      // 静默忽略EPIPE错误
+    }
+  },
+  debug: (...args) => {
+    if (!DEBUG) return; // silence debug logs by default
+    try {
+      if (process.stdout.writable) {
+        console.log('[DEBUG]', ...args);
       }
     } catch (error) {
       // 静默忽略EPIPE错误
@@ -71,6 +82,23 @@ class MainProcess {
     this._configWatcher = null;
     this._configWatchTimer = null;
     this._lastConfigSnapshot = null;
+
+    // X11连接状态监控
+    this._x11ConnectionCount = 0;
+    this._x11ConnectionMonitoring = false;
+  }
+
+  // Validate shortcut string to ensure it contains at least one modifier key
+  validateShortcut(shortcut) {
+    if (!shortcut || typeof shortcut !== 'string') {
+      return false;
+    }
+
+    const modifiers = ['Ctrl', 'Alt', 'Shift', 'Meta', 'CommandOrControl', 'CmdOrCtrl'];
+    const upperShortcut = shortcut.toUpperCase();
+
+    // Check if the shortcut contains at least one modifier
+    return modifiers.some(modifier => upperShortcut.includes(modifier.toUpperCase()));
   }
 
   // Create the tooltip BrowserWindow (lazy)
@@ -95,6 +123,11 @@ class MainProcess {
           contextIsolation: true,
         }
       });
+
+      // 注册X11相关资源到资源管理器
+      if (resourceManager) {
+        resourceManager.registerX11Resource('tooltipWindow', this.tooltipWindow);
+      }
 
       // Ensure tooltip hides when main window hides and follows show/hide
       if (this.mainWindow) {
@@ -205,6 +238,11 @@ class MainProcess {
         preload: path.join(__dirname, '../preload/index.js')
       }
     });
+
+    // 注册X11相关资源到资源管理器
+    if (resourceManager) {
+      resourceManager.registerX11Resource('mainWindow', this.mainWindow);
+    }
 
     // 当用户点击关闭按钮时，隐藏窗口而不是退出应用
     this.mainWindow.on('close', (event) => {
@@ -320,6 +358,26 @@ class MainProcess {
       const shortcut = String(entry.llmShortcut).trim();
       if (!shortcut) continue;
 
+      // Validate shortcut to prevent bare key registration
+      if (!this.validateShortcut(shortcut)) {
+        safeConsole.warn(`跳过无效的 LLM 快捷键 "${shortcut}" (${name}): 必须包含修饰键 (Ctrl, Alt, Shift, Meta)`);
+
+        // Notify renderer about the invalid shortcut
+        try {
+          if (this.mainWindow && this.mainWindow.webContents) {
+            this.mainWindow.webContents.send('invalid-shortcut', {
+              llmName: name,
+              shortcut: shortcut,
+              message: '快捷键必须包含 Ctrl、Alt、Shift 或 Meta 修饰键'
+            });
+          }
+        } catch (err) {
+          safeConsole.warn('发送无效快捷键通知失败:', err);
+        }
+
+        continue;
+      }
+
       try {
         const ok = globalShortcut.register(shortcut, async () => {
           safeConsole.log(`[LLM Shortcut] ${name} triggered (${shortcut})`);
@@ -390,6 +448,7 @@ class MainProcess {
 
         if (ok) {
           this._registeredLlmShortcuts[shortcut] = name;
+          safeConsole.log(`成功注册 LLM 快捷键: ${shortcut} -> ${name}`);
         } else {
           safeConsole.warn('无法注册 LLM 快捷键:', shortcut);
         }
@@ -414,6 +473,11 @@ class MainProcess {
           preload: path.join(__dirname, '../preload/ai-preload.js')
         }
       });
+
+      // 注册X11相关资源到资源管理器
+      if (resourceManager) {
+        resourceManager.registerX11Resource(`chatWindow-${llmName}`, chatWin);
+      }
 
       // Remove default application menu for this window so users cannot toggle alwaysOnTop from a menu
       try { chatWin.setMenu(null); } catch (e) { /* ignore */ }
@@ -456,7 +520,7 @@ class MainProcess {
       const fileUrl = `file://${path.join(__dirname, 'ai', 'chatPage.html')}`;
       chatWin.loadURL(fileUrl);
 
-      // Store config keyed by webContents id so the renderer can request it via invoke
+      // Store config keyed by webContents id so that renderer can request it via invoke
       try {
         const wcId = chatWin.webContents.id;
         this._aiWindowConfigs.set(String(wcId), chatConfig);
@@ -704,6 +768,56 @@ class MainProcess {
     });
   }
 
+  // X11连接状态监控
+  startX11Monitoring() {
+    if (this._x11ConnectionMonitoring) return;
+
+    this._x11ConnectionMonitoring = true;
+    safeConsole.log('开始X11连接状态监控');
+
+    // 监控主窗口的X11连接状态
+    if (this.mainWindow) {
+      this.mainWindow.on('closed', () => {
+        this._x11ConnectionCount = Math.max(0, this._x11ConnectionCount - 1);
+        safeConsole.debug(`X11连接减少，当前数量: ${this._x11ConnectionCount}`);
+      });
+    }
+
+    // 定期检查X11连接状态
+    setInterval(() => {
+      if (!this._x11ConnectionMonitoring) return;
+
+      const activeWindows = BrowserWindow.getAllWindows().filter(win => !win.isDestroyed());
+      const currentCount = activeWindows.length;
+
+      if (currentCount !== this._x11ConnectionCount) {
+        safeConsole.debug(`X11连接状态变化: ${this._x11ConnectionCount} -> ${currentCount}`);
+        this._x11ConnectionCount = currentCount;
+      }
+
+      // 如果有未监控的窗口，注册它们
+      for (const win of activeWindows) {
+        if (win !== this.mainWindow && win !== this.tooltipWindow &&
+          !Array.from(this._aiWindowConfigs.keys()).includes(String(win.webContents.id))) {
+          // 这可能是一个新的聊天窗口
+          safeConsole.debug('发现新的X11连接窗口');
+        }
+      }
+    }, 5000); // 每5秒检查一次
+  }
+
+  // 获取X11连接状态
+  getX11Status() {
+    return {
+      totalConnections: this._x11ConnectionCount,
+      mainWindowAlive: this.mainWindow && !this.mainWindow.isDestroyed(),
+      tooltipWindowAlive: this.tooltipWindow && !this.tooltipWindow.isDestroyed(),
+      chatWindowsCount: this._aiWindowConfigs.size,
+      isMonitoring: this._x11ConnectionMonitoring,
+      resourceManagerStatus: resourceManager ? resourceManager.getResourceStatus() : null
+    };
+  }
+
   // 设置IPC通信处理
   setupIpcHandlers() {
 
@@ -820,6 +934,16 @@ class MainProcess {
       } catch (e) {
         safeConsole.warn('ai-get-config 处理失败:', e);
         return null;
+      }
+    });
+
+    // X11状态查询
+    ipcMain.handle('get-x11-status', async () => {
+      try {
+        return this.getX11Status();
+      } catch (e) {
+        safeConsole.warn('获取X11状态失败:', e);
+        return { error: e.message };
       }
     });
 
@@ -1068,10 +1192,10 @@ class MainProcess {
         } else {
           // sanitized text-only payload
           const safeContent = String(content)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
+            .replace(/&/g, '&')
+            .replace(/</g, '<')
+            .replace(/>/g, '>')
+            .replace(/"/g, '"')
             .replace(/'/g, '&#039;');
           const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
           const mainWidth = Math.max(100, Math.round(mainBounds.width));
@@ -1236,6 +1360,7 @@ class MainProcess {
     this.registerGlobalShortcuts();
     this.registerScreenshotShortcut();
     this.startClipboardMonitoring();
+    this.startX11Monitoring(); // 启动X11连接监控
     // 构建应用顶部菜单（将截图/设置从主窗口移到菜单）
     this.buildAppMenu();
     try {
@@ -1316,7 +1441,7 @@ class MainProcess {
               click: () => {
                 safeConsole.log('菜单: Toggle Developer Tools 被点击');
                 if (this.mainWindow) {
-                  this.mainWindow.webContents.toggleDevTools();
+                  this.mainWindow.toggleDevTools();
                 }
               }
             }
@@ -1332,37 +1457,101 @@ class MainProcess {
     }
   }
 
-  // 清理资源
-  cleanup() {
-    // 清理资源
-    if (this._registeredShortcut) {
-      globalShortcut.unregister(this._registeredShortcut);
-    }
-    if (this._registeredScreenshotShortcut) {
-      globalShortcut.unregister(this._registeredScreenshotShortcut);
-    }
-    globalShortcut.unregisterAll();
-    this.clipboardManager.stopMonitoring();
-    this.trayManager.destroyTray();
+  // 改进的清理资源方法 - 集成资源管理器
+  async cleanup() {
+    safeConsole.log('开始执行改进的资源清理...');
 
-    // 关闭配置文件监控
-    if (this._configWatcher) {
-      try { this._configWatcher.close(); } catch (_) { }
-      this._configWatcher = null;
-    }
-    if (this._configWatchTimer) {
-      try { clearTimeout(this._configWatchTimer); } catch (_) { }
-      this._configWatchTimer = null;
-    }
+    try {
+      // 第一步：注册资源到资源管理器（如果还没有注册）
+      if (resourceManager) {
+        // 确保所有窗口都已注册
+        if (this.mainWindow && !resourceManager.resources.has('mainWindow')) {
+          resourceManager.registerX11Resource('mainWindow', this.mainWindow);
+        }
+        if (this.tooltipWindow && !resourceManager.resources.has('tooltipWindow')) {
+          resourceManager.registerX11Resource('tooltipWindow', this.tooltipWindow);
+        }
 
-    // 在退出应用时关闭主窗口
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      // 移除close事件监听器，避免隐藏行为干扰退出
-      this.mainWindow.removeAllListeners('close');
-      this.mainWindow.close();
+        // 注册其他资源
+        resourceManager.registerResource('clipboardManager', this.clipboardManager,
+          () => this.clipboardManager.stopMonitoring(), 4);
+        resourceManager.registerResource('trayManager', this.trayManager,
+          () => this.trayManager.destroyTray(), 5);
+      }
+
+      // 第二步：优先清理X11相关资源
+      if (resourceManager && resourceManager.hasX11Resources()) {
+        safeConsole.log('优先清理X11资源...');
+        resourceManager.forceCleanupX11();
+      }
+
+      // 第三步：清理快捷键（同步操作，快速执行）
+      try {
+        if (this._registeredShortcut) {
+          globalShortcut.unregister(this._registeredShortcut);
+        }
+        if (this._registeredScreenshotShortcut) {
+          globalShortcut.unregister(this._registeredScreenshotShortcut);
+        }
+        globalShortcut.unregisterAll();
+        safeConsole.log('快捷键已清理');
+      } catch (error) {
+        safeConsole.warn('清理快捷键时出错:', error);
+      }
+
+      // 第四步：停止剪贴板监控
+      try {
+        this.clipboardManager.stopMonitoring();
+        safeConsole.log('剪贴板监控已停止');
+      } catch (error) {
+        safeConsole.warn('停止剪贴板监控时出错:', error);
+      }
+
+      // 第五步：关闭配置文件监控
+      if (this._configWatcher) {
+        try { this._configWatcher.close(); } catch (_) { }
+        this._configWatcher = null;
+      }
+      if (this._configWatchTimer) {
+        try { clearTimeout(this._configWatchTimer); } catch (_) { }
+        this._configWatchTimer = null;
+      }
+
+      // 第六步：使用资源管理器清理剩余资源
+      if (resourceManager) {
+        try {
+          await resourceManager.cleanupAllResources({
+            force: false,
+            timeout: 2000
+          });
+          safeConsole.log('资源管理器清理完成');
+        } catch (error) {
+          safeConsole.warn('资源管理器清理时出错:', error);
+        }
+      }
+
+      // 第七步：最后关闭主窗口（确保X11连接正确释放）
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        try {
+          // 移除close事件监听器，避免隐藏行为干扰退出
+          this.mainWindow.removeAllListeners('close');
+          this.mainWindow.close();
+          safeConsole.log('主窗口已关闭');
+        } catch (error) {
+          safeConsole.warn('关闭主窗口时出错:', error);
+        }
+      }
+
+      // 第八步：停止X11监控
+      this._x11ConnectionMonitoring = false;
+
+      safeConsole.log('资源清理完成');
+
+    } catch (error) {
+      safeConsole.error('清理资源时发生错误:', error);
+      throw error;
     }
   }
 }
 
 module.exports = MainProcess;
-

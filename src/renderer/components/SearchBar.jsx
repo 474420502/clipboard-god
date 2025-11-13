@@ -49,24 +49,26 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
       onAdvancedSearch({
         term: searchTerm,
         type: searchType,
-        sortBy: sortBy
-        , pinnedOnly: pinnedOnly
+        sortBy: sortBy,
+        pinnedOnly: pinnedOnly
       });
     }
   };
-  // If not visible, don't render anything
+
+  // 仅在搜索框可见性变化时处理焦点，避免与用户输入冲突
   useEffect(() => {
-    if (visible && inputRef.current) {
+    if (inputRef.current && visible) {
+      // 仅在搜索框首次显示或从隐藏状态变为显示时设置焦点
+      // 不干预用户已经聚焦的输入框
       try {
-        inputRef.current.focus();
-        // put caret at end
-        const val = inputRef.current.value || '';
-        inputRef.current.setSelectionRange(val.length, val.length);
+        if (document.activeElement !== inputRef.current) {
+          inputRef.current.focus();
+        }
       } catch (err) {
         // ignore focus errors
       }
     }
-  }, [visible]);
+  }, [visible]); // 仅响应可见性变化
 
   if (!visible) return null;
 

@@ -466,19 +466,25 @@ function App() {
 
       // Printable single-character keys
       if (event.key && event.key.length === 1) {
+        // 如果搜索框已经聚焦，跳过全局处理，让组件自己处理
+        if (isSearchInputFocused) {
+          return; // 让 SearchBar 的 onChange 处理字符输入
+        }
+
         // Number keys are handled by useNumberShortcuts hook
         // Just show the search and append the typed character
         setSearchVisible(true);
         setSearchTerm((prev) => (prev || '') + event.key);
 
-        // focus the input after DOM updates
+        // focus the input after DOM updates, but don't reset cursor position
         setTimeout(() => {
           const el = document.getElementById('searchInput');
           if (el) {
             try {
               el.focus();
-              const val = el.value || '';
-              el.setSelectionRange(val.length, val.length);
+              // 将光标移动到末尾，这是新字符应该插入的位置
+              const len = el.value ? el.value.length : 0;
+              el.setSelectionRange(len, len);
             } catch (err) { }
           }
         }, 0);
@@ -642,4 +648,3 @@ function App() {
 }
 
 export default App;
-

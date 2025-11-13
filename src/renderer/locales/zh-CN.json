@@ -1,0 +1,30 @@
+{
+    "menu": {
+        "features": "功能",
+        "screenshot": "截图",
+        "settings": "设置",
+        "toggleDevTools": "切换开发工具"
+    },
+    "shortcutCapture": {
+        "captureTitle": "录制快捷键",
+        "capturing": "正在录制",
+        "cancelWithKey": "按 {key} 取消",
+        "invalidShortcut": "快捷键必须包含 Ctrl、Alt、Shift 或 Meta 修饰键",
+        "confirmWithKey": "按 {key} 确认",
+        "recordingTitle": "输入快捷键组合",
+        "recordingHelp": "按下您想要的快捷键组合，然后按 Enter 确认，或按 Esc 取消。",
+        "editingTitle": "编辑快捷键",
+        "editingHelp": "输入新的快捷键组合，然后按 Enter 确认，或按 Esc 取消。",
+        "examplesTitle": "快捷键示例",
+        "examples": {
+            "basic": "基本组合 - 修饰键 + 字符键",
+            "modifiers": "修饰键组合 - 多个修饰键 + 字符键",
+            "functionKey": "功能键 (如 F1, F2 等)"
+        },
+        "instructionsTitle": "使用说明",
+        "step1": "1. 按下快捷键（Ctrl, Alt, Shift, Meta）与字符键组合",
+        "step2": "2. 按 Enter 键确认当前快捷键",
+        "step3": "3. 按 Esc 键取消并重新开始"
+    }
+}
+}
