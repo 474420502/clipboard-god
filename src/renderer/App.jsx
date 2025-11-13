@@ -397,12 +397,24 @@ function App() {
     }
 
     setFilteredHistory(result);
+
+    // 重要：每次搜索结果更新时，重置选择索引为第一个项目
+    // 这样用户可以直接按Enter键选择搜索结果的第一项
+    setSelectedIndex(0);
   }, [history, searchTerm, searchOptions]);
 
   // 当历史记录、搜索词或搜索选项改变时重新应用过滤器
   useEffect(() => {
     applyFilters();
   }, [applyFilters]);
+
+  // 当filteredHistory更新时，重置选择索引为第一个项目
+  // 这样确保每次搜索后，第一个项目被自动选中
+  useEffect(() => {
+    if (filteredHistory.length > 0) {
+      setSelectedIndex(0);
+    }
+  }, [filteredHistory]);
 
   // useNumberShortcuts hook handles number-key paste behavior
   useNumberShortcuts(filteredHistory, settings.useNumberShortcuts, (item) => {
