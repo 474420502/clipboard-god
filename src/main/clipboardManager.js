@@ -161,7 +161,20 @@ class ClipboardManager {
 
       // 裁剪历史记录
       if (this.history.length > this.maxHistory) {
-        this.history.length = this.maxHistory;
+        // Only prune non-pinned items to match storage behavior
+        let nonPinnedCount = 0;
+        for (const it of this.history) {
+          if (!it || !it.pinned) nonPinnedCount += 1;
+        }
+        if (nonPinnedCount > this.maxHistory) {
+          for (let i = this.history.length - 1; i >= 0 && nonPinnedCount > this.maxHistory; i--) {
+            const it = this.history[i];
+            if (!it || !it.pinned) {
+              this.history.splice(i, 1);
+              nonPinnedCount -= 1;
+            }
+          }
+        }
       }
 
       this.notifyListeners();

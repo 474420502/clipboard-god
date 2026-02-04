@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
   onTakeScreenshot: (callback) => ipcRenderer.on('take-screenshot', callback),
   onGlobalShortcut: (callback) => ipcRenderer.on('global-shortcut', callback),
+  onResetSelection: (callback) => ipcRenderer.on('reset-selection', (_event) => callback()),
   onSettingsUpdated: (callback) => ipcRenderer.on('settings-updated', (_event, value) => callback(value)),
   onHideContextMenu: (callback) => ipcRenderer.on('hide-context-menu', (_event) => callback()),
   // Tooltip controls
@@ -37,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('open-settings');
     ipcRenderer.removeAllListeners('take-screenshot');
     ipcRenderer.removeAllListeners('global-shortcut');
+    ipcRenderer.removeAllListeners('reset-selection');
     ipcRenderer.removeAllListeners('settings-updated');
     ipcRenderer.removeAllListeners('hide-context-menu');
   }

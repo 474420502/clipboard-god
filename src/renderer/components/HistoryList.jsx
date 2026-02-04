@@ -12,7 +12,7 @@ function HistoryList({ history, previewLength, showShortcuts = true, enableToolt
     <ul className="history-list">
       {history.map((item, index) => (
         <HistoryItem
-          key={item.id || index}
+          key={(item && (item._dbId || item.id)) || index}
           item={item}
           index={index}
           previewLength={previewLength}

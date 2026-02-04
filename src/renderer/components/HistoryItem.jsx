@@ -27,6 +27,15 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
     stableCount.current = 0;
 
     if (isSelected && itemRef.current) {
+      // If tooltips are disabled, ensure any existing tooltip is hidden
+      if (!enableTooltips) {
+        try {
+          if (window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
+            window.electronAPI.hideTooltip();
+          }
+        } catch (err) { }
+      }
+
       // Scroll into view. If keyboard navigation is active (we suppress mouse hover),
       // jump immediately to make navigation snappier; otherwise use smooth scroll.
       try {
@@ -109,7 +118,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
       lastRect.current = null;
       stableCount.current = 0;
     };
-  }, [isSelected, item.content]);
+  }, [isSelected, item.content, item.id, item._dbId, item.image_path, item.image_thumb, enableTooltips]);
 
   const handlePaste = () => {
     try {

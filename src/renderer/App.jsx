@@ -352,6 +352,26 @@ function App() {
     };
   }, []);
 
+  // 主进程在窗口失焦/隐藏时会发送 reset-selection
+  useEffect(() => {
+    if (!window.electronAPI || typeof window.electronAPI.onResetSelection !== 'function') return;
+
+    const handler = () => {
+      setSelectedIndex(0);
+      setKeyboardNavigationMode(false);
+      setSuppressMouseHover(false);
+    };
+
+    window.electronAPI.onResetSelection(handler);
+    return () => {
+      try {
+        window.electronAPI.cleanupListeners();
+      } catch (err) {
+        // ignore
+      }
+    };
+  }, []);
+
   // 高级搜索和过滤逻辑
   const applyFilters = useCallback(() => {
     let result = [...history];
@@ -397,10 +417,6 @@ function App() {
     }
 
     setFilteredHistory(result);
-
-    // 重要：每次搜索结果更新时，重置选择索引为第一个项目
-    // 这样用户可以直接按Enter键选择搜索结果的第一项
-    setSelectedIndex(0);
   }, [history, searchTerm, searchOptions]);
 
   // 当历史记录、搜索词或搜索选项改变时重新应用过滤器
@@ -408,13 +424,19 @@ function App() {
     applyFilters();
   }, [applyFilters]);
 
-  // 当filteredHistory更新时，重置选择索引为第一个项目
-  // 这样确保每次搜索后，第一个项目被自动选中
+  // 当搜索条件变化时，重置选择索引为第一个项目
   useEffect(() => {
-    if (filteredHistory.length > 0) {
-      setSelectedIndex(0);
-    }
-  }, [filteredHistory]);
+    setSelectedIndex(0);
+  }, [searchTerm, searchOptions.type, searchOptions.sortBy, searchOptions.pinnedOnly]);
+
+  // 当过滤结果长度变化时，夹紧选择索引，避免越界
+  useEffect(() => {
+    setSelectedIndex((prev) => {
+      if (!filteredHistory || filteredHistory.length === 0) return 0;
+      const maxIndex = filteredHistory.length - 1;
+      return Math.max(0, Math.min(prev, maxIndex));
+    });
+  }, [filteredHistory.length]);
 
   // useNumberShortcuts hook handles number-key paste behavior
   useNumberShortcuts(filteredHistory, settings.useNumberShortcuts, (item) => {
@@ -592,12 +614,21 @@ function App() {
     setKeyboardNavigationMode(true); // Enable keyboard navigation mode when navigating
     // temporarily suppress mouse hover-driven selection
     setSuppressMouseHover(true);
-    let newIndex = selectedIndex;
-    if (direction === 'up') {
-      newIndex = selectedIndex > 0 ? selectedIndex - 1 : 0;
-    } else if (direction === 'down') {
-      newIndex = selectedIndex < filteredHistory.length - 1 ? selectedIndex + 1 : filteredHistory.length - 1;
+    if (!filteredHistory || filteredHistory.length === 0) {
+      setSelectedIndex(0);
+      return;
     }
+
+    const maxIndex = filteredHistory.length - 1;
+    const current = Math.max(0, Math.min(selectedIndex, maxIndex));
+    let newIndex = current;
+
+    if (direction === 'up') {
+      newIndex = Math.max(0, current - 1);
+    } else if (direction === 'down') {
+      newIndex = Math.min(maxIndex, current + 1);
+    }
+
     setSelectedIndex(newIndex);
   };
 
