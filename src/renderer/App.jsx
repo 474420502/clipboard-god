@@ -270,14 +270,8 @@ function App() {
     window.addEventListener('open-edit-modal', onOpenEditModal);
 
     return () => {
-      try {
-        window.electronAPI.cleanupListeners();
-      } catch (err) {
-        console.warn('清理菜单 ipc 监听器失败:', err);
-      }
       window.removeEventListener('open-edit-modal', onOpenEditModal);
       window.removeEventListener('local-pin-toggled', onLocalPinToggled);
-      try { if (window.electronAPI && typeof window.electronAPI.cleanupListeners === 'function') window.electronAPI.cleanupListeners(); } catch (e) { }
     };
   }, []);
 
@@ -313,11 +307,7 @@ function App() {
       }
     }; window.electronAPI.onSettingsUpdated(settingsUpdatedHandler);
     return () => {
-      try {
-        window.electronAPI.cleanupListeners();
-      } catch (err) {
-        // ignored
-      }
+      // ipc listener cleanup handled globally
     };
   }, []);
 
@@ -344,11 +334,7 @@ function App() {
 
     window.electronAPI.onGlobalShortcut(handler);
     return () => {
-      try {
-        window.electronAPI.cleanupListeners();
-      } catch (err) {
-        // ignore
-      }
+      // ipc listener cleanup handled globally
     };
   }, []);
 
@@ -364,11 +350,7 @@ function App() {
 
     window.electronAPI.onResetSelection(handler);
     return () => {
-      try {
-        window.electronAPI.cleanupListeners();
-      } catch (err) {
-        // ignore
-      }
+      // ipc listener cleanup handled globally
     };
   }, []);
 
@@ -452,6 +434,9 @@ function App() {
   // Global typing / search show handler
   useEffect(() => {
     const handler = (event) => {
+      const isPageUp = event.key === 'PageUp' || event.code === 'PageUp' || event.key === 'Prior' || event.keyCode === 33;
+      const isPageDown = event.key === 'PageDown' || event.code === 'PageDown' || event.key === 'Next' || event.keyCode === 34;
+
       // Disable keyboard interaction when settings modal is open
       if (isSettingsOpen) {
         return;
@@ -492,6 +477,14 @@ function App() {
         handleNavigateItems('down');
         event.preventDefault();
         return;
+      } else if (isPageUp) {
+        handlePageNavigate('up');
+        event.preventDefault();
+        return;
+      } else if (isPageDown) {
+        handlePageNavigate('down');
+        event.preventDefault();
+        return;
       } else if (event.key === 'Enter') {
         handleKeyboardSelect(selectedIndex);
         event.preventDefault();
@@ -527,8 +520,8 @@ function App() {
       }
     };
 
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
   }, [filteredHistory, searchVisible, keyboardNavigationMode, selectedIndex, isSettingsOpen]);
 
   // Clear suppressMouseHover when the user moves the mouse
@@ -608,6 +601,28 @@ function App() {
       // Keep keyboard navigation enabled; after paste we can reset selection to first item
       setSelectedIndex(0);
     }
+  };
+
+  const handlePageNavigate = (direction) => {
+    setKeyboardNavigationMode(true);
+    setSuppressMouseHover(true);
+    if (!filteredHistory || filteredHistory.length === 0) {
+      setSelectedIndex(0);
+      return;
+    }
+
+    const pageSize = 10;
+    const maxIndex = filteredHistory.length - 1;
+    const current = Math.max(0, Math.min(selectedIndex, maxIndex));
+    let newIndex = current;
+
+    if (direction === 'up') {
+      newIndex = Math.max(0, current - pageSize);
+    } else if (direction === 'down') {
+      newIndex = Math.min(maxIndex, current + pageSize);
+    }
+
+    setSelectedIndex(newIndex);
   };
 
   const handleNavigateItems = (direction) => {
