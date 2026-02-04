@@ -196,9 +196,19 @@ class ClipboardManager {
   // Set pinned flag for an item (by db id)
   setPinned(dbId, pinned = true) {
     try {
+      const normalizedId = (dbId === null || typeof dbId === 'undefined') ? null : String(dbId);
       const res = this.storageBackend.setPinnedByDbId(dbId, pinned ? 1 : 0);
       if (!res || !res.success) return false;
-      const idx = this.history.findIndex(h => h._dbId === dbId);
+      const idx = this.history.findIndex(h => {
+        if (!h) return false;
+        if (h._dbId !== null && typeof h._dbId !== 'undefined') {
+          if (String(h._dbId) === normalizedId) return true;
+        }
+        if (h.id !== null && typeof h.id !== 'undefined') {
+          if (String(h.id) === normalizedId) return true;
+        }
+        return false;
+      });
       if (idx > -1) {
         this.history[idx].pinned = pinned ? 1 : 0;
         // pinned items participate in ordering by timestamp but should NOT be
