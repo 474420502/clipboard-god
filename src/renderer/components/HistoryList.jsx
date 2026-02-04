@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import HistoryItem from './HistoryItem';
 
-function HistoryList({ history, previewLength, showShortcuts = true, enableTooltips = true, selectedIndex = 0, keyboardNavigationMode = false, setSelectedIndex, setKeyboardNavigationMode }) {
+function HistoryList({ history, previewLength, showShortcuts = true, enableTooltips = true, selectedIndex = 0, setSelectedIndex }) {
   const { t } = useTranslation();
   if (!history || history.length === 0) {
     return <div className="empty-state">{t('history.empty')}</div>;
@@ -20,7 +20,6 @@ function HistoryList({ history, previewLength, showShortcuts = true, enableToolt
           enableTooltips={enableTooltips}
           isSelected={index === selectedIndex}
           setSelectedIndex={setSelectedIndex}
-          setKeyboardNavigationMode={setKeyboardNavigationMode}
         />
       ))}
     </ul>

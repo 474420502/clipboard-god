@@ -12,8 +12,7 @@
 // - use `electronAPI.getHistory()` on mount and subscribe to `onUpdateHistory`/`onError`.
 // - use the preload's ipcRenderer wrapper only for the legacy 'history-data' channel.
 // - avoid overwriting settings keys with undefined when mapping payloads.
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import HistoryList from './components/HistoryList';
 import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
@@ -22,7 +21,6 @@ import EditModal from './components/EditModal';
 
 function App() {
   const [history, setHistory] = useState([]);
-  const [filteredHistory, setFilteredHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOptions, setSearchOptions] = useState({
     type: 'all',
@@ -30,7 +28,6 @@ function App() {
     pinnedOnly: false
   });
   const [searchVisible, setSearchVisible] = useState(false); // hidden by default
-  const [keyboardNavigationMode, setKeyboardNavigationMode] = useState(true); // keyboard navigation mode - always enabled
   const [selectedIndex, setSelectedIndex] = useState(0); // selected item index for keyboard navigation - start with first item
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [suppressMouseHover, setSuppressMouseHover] = useState(false);
@@ -46,6 +43,13 @@ function App() {
     launchOnStartup: false,
     locale: 'zh-CN'
   });
+
+  // Refs for global key handler to avoid re-registering listeners
+  const isSettingsOpenRef = useRef(isSettingsOpen);
+  const searchVisibleRef = useRef(searchVisible);
+  const selectedIndexRef = useRef(selectedIndex);
+  const filteredHistoryRef = useRef([]);
+  const useNumberShortcutsRef = useRef(!!settings.useNumberShortcuts);
 
   // 在 App 挂载时，从主进程加载设置并作为单一来源
   useEffect(() => {
@@ -184,19 +188,14 @@ function App() {
     };
 
     // subscribe to updates / errors via preload wrappers
-    window.electronAPI.onUpdateHistory(handleUpdate);
-    window.electronAPI.onError(handleError);
-    window.electronAPI.onHistoryData(handleHistoryData);
+    const offUpdateHistory = window.electronAPI.onUpdateHistory(handleUpdate);
+    const offError = window.electronAPI.onError(handleError);
+    const offHistoryData = window.electronAPI.onHistoryData(handleHistoryData);
 
     return () => {
-      try {
-        // cleanup listeners registered via preload
-        if (window.electronAPI && typeof window.electronAPI.cleanupListeners === 'function') {
-          window.electronAPI.cleanupListeners();
-        }
-      } catch (error) {
-        console.error('Failed to cleanup listeners:', error);
-      }
+      try { if (typeof offUpdateHistory === 'function') offUpdateHistory(); } catch (e) { }
+      try { if (typeof offError === 'function') offError(); } catch (e) { }
+      try { if (typeof offHistoryData === 'function') offHistoryData(); } catch (e) { }
     };
   }, []);
 
@@ -213,8 +212,8 @@ function App() {
       }
     };
 
-    window.electronAPI.onOpenSettings(openSettingsHandler);
-    window.electronAPI.onTakeScreenshot(takeScreenshotHandler);
+    const offOpenSettings = window.electronAPI.onOpenSettings(openSettingsHandler);
+    const offTakeScreenshot = window.electronAPI.onTakeScreenshot(takeScreenshotHandler);
     // hide context menu when main process requests it (e.g., window hidden/closed)
     const hideContextMenuHandler = () => {
       try {
@@ -232,9 +231,9 @@ function App() {
         }
       } catch (err) { }
     };
-    if (window.electronAPI && typeof window.electronAPI.onHideContextMenu === 'function') {
-      window.electronAPI.onHideContextMenu(hideContextMenuHandler);
-    }
+    const offHideContextMenu = (window.electronAPI && typeof window.electronAPI.onHideContextMenu === 'function')
+      ? window.electronAPI.onHideContextMenu(hideContextMenuHandler)
+      : null;
 
     // Optimistic update for pin toggle (dispatched by HistoryItem)
     const onLocalPinToggled = (e) => {
@@ -272,6 +271,9 @@ function App() {
     return () => {
       window.removeEventListener('open-edit-modal', onOpenEditModal);
       window.removeEventListener('local-pin-toggled', onLocalPinToggled);
+      try { if (typeof offOpenSettings === 'function') offOpenSettings(); } catch (e) { }
+      try { if (typeof offTakeScreenshot === 'function') offTakeScreenshot(); } catch (e) { }
+      try { if (typeof offHideContextMenu === 'function') offHideContextMenu(); } catch (e) { }
     };
   }, []);
 
@@ -305,9 +307,10 @@ function App() {
       } catch (err) {
         console.error('Failed to apply settings-updated:', err);
       }
-    }; window.electronAPI.onSettingsUpdated(settingsUpdatedHandler);
+    };
+    const offSettingsUpdated = window.electronAPI.onSettingsUpdated(settingsUpdatedHandler);
     return () => {
-      // ipc listener cleanup handled globally
+      try { if (typeof offSettingsUpdated === 'function') offSettingsUpdated(); } catch (e) { }
     };
   }, []);
 
@@ -320,7 +323,6 @@ function App() {
       setSearchVisible(false);
       setSearchTerm('');
       setSelectedIndex(0); // Reset selection to first item when window is reopened
-      setKeyboardNavigationMode(false); // Disable keyboard navigation mode initially
       // also blur active element to ensure focus state is clean
       try {
         const active = document.activeElement;
@@ -332,9 +334,9 @@ function App() {
       }
     };
 
-    window.electronAPI.onGlobalShortcut(handler);
+    const offGlobalShortcut = window.electronAPI.onGlobalShortcut(handler);
     return () => {
-      // ipc listener cleanup handled globally
+      try { if (typeof offGlobalShortcut === 'function') offGlobalShortcut(); } catch (e) { }
     };
   }, []);
 
@@ -344,18 +346,17 @@ function App() {
 
     const handler = () => {
       setSelectedIndex(0);
-      setKeyboardNavigationMode(false);
       setSuppressMouseHover(false);
     };
 
-    window.electronAPI.onResetSelection(handler);
+    const offResetSelection = window.electronAPI.onResetSelection(handler);
     return () => {
-      // ipc listener cleanup handled globally
+      try { if (typeof offResetSelection === 'function') offResetSelection(); } catch (e) { }
     };
   }, []);
 
-  // 高级搜索和过滤逻辑
-  const applyFilters = useCallback(() => {
+  // 高级搜索和过滤逻辑（派生状态，避免重复 setState）
+  const filteredHistory = useMemo(() => {
     let result = [...history];
 
     // 按类型过滤
@@ -370,9 +371,10 @@ function App() {
 
     // 按搜索词过滤
     if (searchTerm) {
+      const termLower = searchTerm.toLowerCase();
       result = result.filter(item => {
         if (item.type === 'text') {
-          return item.content.toLowerCase().includes(searchTerm.toLowerCase());
+          return item.content.toLowerCase().includes(termLower);
         }
         return false; // 图像暂时不支持内容搜索
       });
@@ -398,13 +400,8 @@ function App() {
       });
     }
 
-    setFilteredHistory(result);
+    return result;
   }, [history, searchTerm, searchOptions]);
-
-  // 当历史记录、搜索词或搜索选项改变时重新应用过滤器
-  useEffect(() => {
-    applyFilters();
-  }, [applyFilters]);
 
   // 当搜索条件变化时，重置选择索引为第一个项目
   useEffect(() => {
@@ -420,6 +417,12 @@ function App() {
     });
   }, [filteredHistory.length]);
 
+  useEffect(() => { isSettingsOpenRef.current = isSettingsOpen; }, [isSettingsOpen]);
+  useEffect(() => { searchVisibleRef.current = searchVisible; }, [searchVisible]);
+  useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
+  useEffect(() => { filteredHistoryRef.current = filteredHistory; }, [filteredHistory]);
+  useEffect(() => { useNumberShortcutsRef.current = !!settings.useNumberShortcuts; }, [settings.useNumberShortcuts]);
+
   // useNumberShortcuts hook handles number-key paste behavior
   useNumberShortcuts(filteredHistory, settings.useNumberShortcuts, (item) => {
     try {
@@ -434,11 +437,13 @@ function App() {
   // Global typing / search show handler
   useEffect(() => {
     const handler = (event) => {
+      const settingsOpen = isSettingsOpenRef.current;
+      const searchVisibleNow = searchVisibleRef.current;
       const isPageUp = event.key === 'PageUp' || event.code === 'PageUp' || event.key === 'Prior' || event.keyCode === 33;
       const isPageDown = event.key === 'PageDown' || event.code === 'PageDown' || event.key === 'Next' || event.keyCode === 34;
 
       // Disable keyboard interaction when settings modal is open
-      if (isSettingsOpen) {
+      if (settingsOpen) {
         return;
       }
 
@@ -456,7 +461,7 @@ function App() {
 
       // ESC: hide search first, otherwise hide window
       if (event.key === 'Escape') {
-        if (searchVisible) {
+        if (searchVisibleNow) {
           setSearchVisible(false);
           setSearchTerm('');
           event.preventDefault();
@@ -486,13 +491,18 @@ function App() {
         event.preventDefault();
         return;
       } else if (event.key === 'Enter') {
-        handleKeyboardSelect(selectedIndex);
+        handleKeyboardSelect(selectedIndexRef.current);
         event.preventDefault();
         return;
       }
 
       // Printable single-character keys
       if (event.key && event.key.length === 1) {
+        if (event.defaultPrevented) return;
+        // Number keys are handled by useNumberShortcuts hook
+        if (useNumberShortcutsRef.current && /^[1-9]$/.test(event.key)) {
+          return;
+        }
         // 如果搜索框已经聚焦，跳过全局处理，让组件自己处理
         if (isSearchInputFocused) {
           return; // 让 SearchBar 的 onChange 处理字符输入
@@ -522,7 +532,7 @@ function App() {
 
     document.addEventListener('keydown', handler, true);
     return () => document.removeEventListener('keydown', handler, true);
-  }, [filteredHistory, searchVisible, keyboardNavigationMode, selectedIndex, isSettingsOpen]);
+  }, []);
 
   // Clear suppressMouseHover when the user moves the mouse
   useEffect(() => {
@@ -589,8 +599,9 @@ function App() {
   };
 
   const handleKeyboardSelect = (index) => {
-    if (index >= 0 && index < filteredHistory.length) {
-      const selectedItem = filteredHistory[index];
+    const list = filteredHistoryRef.current || [];
+    if (index >= 0 && index < list.length) {
+      const selectedItem = list[index];
       try {
         if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
           window.electronAPI.pasteItem(selectedItem);
@@ -604,16 +615,16 @@ function App() {
   };
 
   const handlePageNavigate = (direction) => {
-    setKeyboardNavigationMode(true);
     setSuppressMouseHover(true);
-    if (!filteredHistory || filteredHistory.length === 0) {
+    const list = filteredHistoryRef.current || [];
+    if (list.length === 0) {
       setSelectedIndex(0);
       return;
     }
 
     const pageSize = 10;
-    const maxIndex = filteredHistory.length - 1;
-    const current = Math.max(0, Math.min(selectedIndex, maxIndex));
+    const maxIndex = list.length - 1;
+    const current = Math.max(0, Math.min(selectedIndexRef.current, maxIndex));
     let newIndex = current;
 
     if (direction === 'up') {
@@ -626,16 +637,16 @@ function App() {
   };
 
   const handleNavigateItems = (direction) => {
-    setKeyboardNavigationMode(true); // Enable keyboard navigation mode when navigating
     // temporarily suppress mouse hover-driven selection
     setSuppressMouseHover(true);
-    if (!filteredHistory || filteredHistory.length === 0) {
+    const list = filteredHistoryRef.current || [];
+    if (list.length === 0) {
       setSelectedIndex(0);
       return;
     }
 
-    const maxIndex = filteredHistory.length - 1;
-    const current = Math.max(0, Math.min(selectedIndex, maxIndex));
+    const maxIndex = list.length - 1;
+    const current = Math.max(0, Math.min(selectedIndexRef.current, maxIndex));
     let newIndex = current;
 
     if (direction === 'up') {
@@ -661,9 +672,7 @@ function App() {
         showShortcuts={!!settings.useNumberShortcuts}
         enableTooltips={!!settings.enableTooltips}
         selectedIndex={selectedIndex}
-        keyboardNavigationMode={keyboardNavigationMode}
         setSelectedIndex={setSelectedIndex}
-        setKeyboardNavigationMode={setKeyboardNavigationMode}
         suppressMouseHover={suppressMouseHover}
         setSuppressMouseHover={setSuppressMouseHover}
       />

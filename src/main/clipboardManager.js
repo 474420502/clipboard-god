@@ -5,6 +5,10 @@ class ClipboardManager {
   constructor(options = {}) {
     this.history = [];
     this.listeners = [];
+    this._pendingItems = [];
+    this._flushTimer = null;
+    this._flushInProgress = false;
+    this._flushDelayMs = typeof options.flushDelayMs === 'number' ? options.flushDelayMs : 120;
 
     // 最大历史条目数，默认 100000
     this.maxHistory = typeof options.maxHistory === 'number' ? options.maxHistory : 100000;
@@ -60,6 +64,13 @@ class ClipboardManager {
 
   // 停止监控剪贴板
   stopMonitoring() {
+    if (clipboard.unwatch) {
+      try {
+        clipboard.unwatch();
+      } catch (e) {
+        // ignore unwatch errors
+      }
+    }
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = null;
@@ -132,32 +143,72 @@ class ClipboardManager {
   addItem(item) {
     try {
       // 简单防重复：如果与第一个相同则不插入
+      const lastPending = this._pendingItems.length ? this._pendingItems[this._pendingItems.length - 1] : null;
+      if (lastPending && lastPending.type === item.type && lastPending.content === item.content) {
+        return false;
+      }
       if (this.history.length && this.history[0].type === item.type && this.history[0].content === item.content) {
         return false;
       }
 
-      const result = this.storageBackend.addItem(item);
-      if (!result) return false;
+      this._pendingItems.push(item);
+      if (!this._flushTimer) {
+        this._flushTimer = setTimeout(() => this._flushPendingItems(), this._flushDelayMs);
+      }
+      return true;
+    } catch (err) {
+      console.error('添加历史项失败:', err);
+      return false;
+    }
+  }
 
-      const newItem = {
-        id: result.id,
-        _dbId: result.id,
-        type: item.type,
-        content: item.type === 'text' ? item.content : (result.image_path || item.content),
-        timestamp: new Date(item.timestamp || Date.now()),
-        image_path: result.image_path,
-        image_thumb: result.image_thumb,
-        pinned: result.pinned ? 1 : 0
-      };
+  _flushPendingItems() {
+    if (this._flushInProgress) return;
+    if (this._flushTimer) {
+      clearTimeout(this._flushTimer);
+      this._flushTimer = null;
+    }
+    if (!this._pendingItems.length) return;
 
-      // 如果是更新时间戳，则找到旧项，移到最前面
-      const existingIndex = this.history.findIndex(h => h._dbId === result.id || h.id === result.id);
-      if (existingIndex > -1) {
-        this.history.splice(existingIndex, 1);
+    this._flushInProgress = true;
+    const batch = this._pendingItems.splice(0, this._pendingItems.length);
+
+    try {
+      let results = [];
+      try {
+        results = this.storageBackend.addItemsBatch(batch) || [];
+      } catch (e) {
+        // fallback to single inserts on batch failure
+        results = batch.map((it) => {
+          try { return this.storageBackend.addItem(it); } catch (err) { return null; }
+        });
       }
 
-      // 插入到最前面
-      this.history.unshift(newItem);
+      for (let i = 0; i < batch.length; i++) {
+        const item = batch[i];
+        const result = results[i];
+        if (!result) continue;
+
+        const newItem = {
+          id: result.id,
+          _dbId: result.id,
+          type: item.type,
+          content: item.type === 'text' ? item.content : (result.image_path || item.content),
+          timestamp: new Date(item.timestamp || Date.now()),
+          image_path: result.image_path,
+          image_thumb: result.image_thumb,
+          pinned: result.pinned ? 1 : 0
+        };
+
+        // 如果是更新时间戳，则找到旧项，移到最前面
+        const existingIndex = this.history.findIndex(h => h._dbId === result.id || h.id === result.id);
+        if (existingIndex > -1) {
+          this.history.splice(existingIndex, 1);
+        }
+
+        // 插入到最前面
+        this.history.unshift(newItem);
+      }
 
       // 裁剪历史记录
       if (this.history.length > this.maxHistory) {
@@ -178,10 +229,10 @@ class ClipboardManager {
       }
 
       this.notifyListeners();
-      return true;
     } catch (err) {
-      console.error('添加历史项失败:', err);
-      return false;
+      console.error('批量写入历史项失败:', err);
+    } finally {
+      this._flushInProgress = false;
     }
   }
 

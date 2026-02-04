@@ -108,7 +108,8 @@ class SqliteStorage {
         return { path: filePath, thumbPath, hash };
     }
 
-    addItem(item) {
+    _addItemInternal(item, options = {}) {
+        const skipPrune = !!options.skipPrune;
         const now = Date.now();
         const timestamp = item.timestamp ? (typeof item.timestamp === 'number' ? item.timestamp : new Date(item.timestamp).getTime()) : now;
 
@@ -131,7 +132,7 @@ class SqliteStorage {
             } catch (e) {
                 // ignore fts errors
             }
-            this._pruneIfNeeded();
+            if (!skipPrune) this._pruneIfNeeded();
             return { id: info.lastInsertRowid, existed: false, hash };
         }
 
@@ -148,10 +149,28 @@ class SqliteStorage {
             }
             const stmt = this.db.prepare('INSERT INTO history (item_id, type, image_path, image_thumb, hash, timestamp, meta) VALUES (?, ?, ?, ?, ?, ?, ?)');
             const info = stmt.run(item.id || null, 'image', image_path, image_thumb, hash, timestamp, null);
-            this._pruneIfNeeded();
+            if (!skipPrune) this._pruneIfNeeded();
             return { id: info.lastInsertRowid, existed: false, hash, image_path, image_thumb };
         }
         return null;
+    }
+
+    addItem(item) {
+        return this._addItemInternal(item, { skipPrune: false });
+    }
+
+    addItemsBatch(items = []) {
+        if (!Array.isArray(items) || items.length === 0) return [];
+        const results = [];
+        const tx = this.db.transaction((batch) => {
+            for (const item of batch) {
+                const res = this._addItemInternal(item, { skipPrune: true });
+                results.push(res);
+            }
+        });
+        tx(items);
+        this._pruneIfNeeded();
+        return results;
     }
 
     getHistory(limit = 100, offset = 0) {

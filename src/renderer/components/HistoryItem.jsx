@@ -2,7 +2,9 @@ import React, { useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { truncateText } from '../utils/text';
 
-function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, enableTooltips = true, isSelected = false, setSelectedIndex, setKeyboardNavigationMode }) {
+const DEBUG = !!(import.meta && import.meta.env && import.meta.env.DEV);
+
+function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, enableTooltips = true, isSelected = false, setSelectedIndex }) {
   const itemRef = useRef(null);
   const menuRef = useRef(null);
   const { t } = useTranslation();
@@ -195,7 +197,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
         try {
           const dbId = item._dbId || item.id;
           const newPinned = !item.pinned;
-          console.debug('[HistoryItem] pin clicked', { dbId, newPinned, item });
+          if (DEBUG) console.debug('[HistoryItem] pin clicked', { dbId, newPinned, item });
           // Optimistic UI: dispatch a local event so renderer can update immediately
           try {
             const ev = new CustomEvent('local-pin-toggled', { detail: { dbId, pinned: newPinned } });
@@ -204,7 +206,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
 
           if (window.electronAPI && typeof window.electronAPI.pinItem === 'function') {
             const res = await window.electronAPI.pinItem(dbId, newPinned);
-            console.debug('[HistoryItem] pinItem result', res);
+            if (DEBUG) console.debug('[HistoryItem] pinItem result', res);
             if (!res || !res.success) {
               console.error('[HistoryItem] Pin failed', res && res.error);
               // If failed, dispatch reverse event to revert optimistic change

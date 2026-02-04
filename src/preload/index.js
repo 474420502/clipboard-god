@@ -13,15 +13,51 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hideWindow: () => ipcRenderer.send('hide-window'),
 
   // --- 主进程 -> 渲染器 (监听) ---
-  onUpdateHistory: (callback) => ipcRenderer.on('update-history', (_event, value) => callback(value)),
-  onError: (callback) => ipcRenderer.on('error', (_event, value) => callback(value)),
-  onHistoryData: (callback) => ipcRenderer.on('history-data', (_event, value) => callback(value)),
-  onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
-  onTakeScreenshot: (callback) => ipcRenderer.on('take-screenshot', callback),
-  onGlobalShortcut: (callback) => ipcRenderer.on('global-shortcut', callback),
-  onResetSelection: (callback) => ipcRenderer.on('reset-selection', (_event) => callback()),
-  onSettingsUpdated: (callback) => ipcRenderer.on('settings-updated', (_event, value) => callback(value)),
-  onHideContextMenu: (callback) => ipcRenderer.on('hide-context-menu', (_event) => callback()),
+  onUpdateHistory: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('update-history', listener);
+    return () => ipcRenderer.removeListener('update-history', listener);
+  },
+  onError: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('error', listener);
+    return () => ipcRenderer.removeListener('error', listener);
+  },
+  onHistoryData: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('history-data', listener);
+    return () => ipcRenderer.removeListener('history-data', listener);
+  },
+  onOpenSettings: (callback) => {
+    const listener = (...args) => callback(...args);
+    ipcRenderer.on('open-settings', listener);
+    return () => ipcRenderer.removeListener('open-settings', listener);
+  },
+  onTakeScreenshot: (callback) => {
+    const listener = (...args) => callback(...args);
+    ipcRenderer.on('take-screenshot', listener);
+    return () => ipcRenderer.removeListener('take-screenshot', listener);
+  },
+  onGlobalShortcut: (callback) => {
+    const listener = (...args) => callback(...args);
+    ipcRenderer.on('global-shortcut', listener);
+    return () => ipcRenderer.removeListener('global-shortcut', listener);
+  },
+  onResetSelection: (callback) => {
+    const listener = (_event) => callback();
+    ipcRenderer.on('reset-selection', listener);
+    return () => ipcRenderer.removeListener('reset-selection', listener);
+  },
+  onSettingsUpdated: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('settings-updated', listener);
+    return () => ipcRenderer.removeListener('settings-updated', listener);
+  },
+  onHideContextMenu: (callback) => {
+    const listener = (_event) => callback();
+    ipcRenderer.on('hide-context-menu', listener);
+    return () => ipcRenderer.removeListener('hide-context-menu', listener);
+  },
   // Tooltip controls
   showTooltip: (payload) => ipcRenderer.send('show-tooltip', payload),
   hideTooltip: () => ipcRenderer.send('hide-tooltip'),

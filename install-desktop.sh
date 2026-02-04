@@ -10,11 +10,22 @@ echo "================================="
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_FILE="$PROJECT_DIR/clipboard-god.desktop"
 ICONS_DIR="$PROJECT_DIR/assets"
-USER_APPS_DIR="$HOME/.local/share/applications"
-USER_ICONS_DIR="$HOME/.local/share/icons/hicolor"
+
+# Resolve target user/home when running with sudo
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    TARGET_USER="$SUDO_USER"
+    TARGET_HOME="$(eval echo "~$SUDO_USER")"
+else
+    TARGET_USER="$USER"
+    TARGET_HOME="$HOME"
+fi
+
+USER_APPS_DIR="$TARGET_HOME/.local/share/applications"
+USER_ICONS_DIR="$TARGET_HOME/.local/share/icons/hicolor"
 
 echo "Project directory: $PROJECT_DIR"
 echo "Desktop file: $DESKTOP_FILE"
+echo "Target user: $TARGET_USER"
 echo "User applications directory: $USER_APPS_DIR"
 echo "Icons directory: $ICONS_DIR"
 
@@ -37,6 +48,11 @@ else
     exit 1
 fi
 
+# Ensure ownership is correct when running under sudo
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    chown "$SUDO_USER":"$SUDO_USER" "$USER_APPS_DIR/clipboard-god.desktop" || true
+fi
+
 # Install icons into the user's hicolor icon theme so the desktop environment can find them by name
 if [ -d "$ICONS_DIR" ]; then
     echo "Installing icons from $ICONS_DIR to $USER_ICONS_DIR/..."
@@ -53,12 +69,18 @@ if [ -d "$ICONS_DIR" ]; then
             else
                 echo "✗ Failed to install icon $s"
             fi
+            if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+                chown "$SUDO_USER":"$SUDO_USER" "$dest" || true
+            fi
         fi
     done
     # also copy fallback icon.png if present
     if [ -f "$ICONS_DIR/icon.png" ]; then
         mkdir -p "$USER_ICONS_DIR/64x64/apps"
         cp "$ICONS_DIR/icon.png" "$USER_ICONS_DIR/64x64/apps/clipboard-god.png" || true
+        if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+            chown "$SUDO_USER":"$SUDO_USER" "$USER_ICONS_DIR/64x64/apps/clipboard-god.png" || true
+        fi
     fi
 
     # Update icon cache if possible
