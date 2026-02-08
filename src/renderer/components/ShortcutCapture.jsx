@@ -8,6 +8,7 @@ function ShortcutCapture({ value, onChange, placeholder }) {
     const [editValue, setEditValue] = useState('');
     const [currentKeys, setCurrentKeys] = useState([]);
     const [pressedKeys, setPressedKeys] = useState(new Set());
+    const confirmTimeoutRef = React.useRef(null);
 
     const keyNames = {
         'Control': 'Ctrl',
@@ -77,6 +78,12 @@ function ShortcutCapture({ value, onChange, placeholder }) {
             return;
         }
 
+        // clear pending confirm timeout on new keydown
+        if (confirmTimeoutRef.current) {
+            clearTimeout(confirmTimeoutRef.current);
+            confirmTimeoutRef.current = null;
+        }
+
         // 添加按键到按下集合（避免重复）
         setPressedKeys(prev => new Set([...prev, key]));
 
@@ -103,12 +110,16 @@ function ShortcutCapture({ value, onChange, placeholder }) {
             if (newPressed.size === 0 && currentKeys.length > 0) {
                 const shortcut = formatShortcut(currentKeys);
                 // 延迟1秒再确认，给用户更多时间调整快捷键组合
-                setTimeout(() => {
+                if (confirmTimeoutRef.current) {
+                    clearTimeout(confirmTimeoutRef.current);
+                }
+                confirmTimeoutRef.current = setTimeout(() => {
                     if (!isCapturing) return; // 防止重复触发
                     onChange(shortcut);
                     setIsCapturing(false);
                     setCurrentKeys([]);
                     setPressedKeys(new Set());
+                    confirmTimeoutRef.current = null;
                 }, 1000);
             }
 
@@ -120,6 +131,10 @@ function ShortcutCapture({ value, onChange, placeholder }) {
         setIsCapturing(true);
         setCurrentKeys([]);
         setPressedKeys(new Set());
+        if (confirmTimeoutRef.current) {
+            clearTimeout(confirmTimeoutRef.current);
+            confirmTimeoutRef.current = null;
+        }
     };
 
     const confirmShortcut = () => {
@@ -130,12 +145,20 @@ function ShortcutCapture({ value, onChange, placeholder }) {
         setIsCapturing(false);
         setCurrentKeys([]);
         setPressedKeys(new Set());
+        if (confirmTimeoutRef.current) {
+            clearTimeout(confirmTimeoutRef.current);
+            confirmTimeoutRef.current = null;
+        }
     };
 
     const cancelCapture = () => {
         setIsCapturing(false);
         setCurrentKeys([]);
         setPressedKeys(new Set());
+        if (confirmTimeoutRef.current) {
+            clearTimeout(confirmTimeoutRef.current);
+            confirmTimeoutRef.current = null;
+        }
     };
 
     const startEditing = () => {
@@ -175,6 +198,10 @@ function ShortcutCapture({ value, onChange, placeholder }) {
             setIsCapturing(false);
             setCurrentKeys([]);
             setPressedKeys(new Set());
+            if (confirmTimeoutRef.current) {
+                clearTimeout(confirmTimeoutRef.current);
+                confirmTimeoutRef.current = null;
+            }
         };
     }, []);
 

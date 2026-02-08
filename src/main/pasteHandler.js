@@ -1,4 +1,4 @@
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 const { clipboard, nativeImage } = require('electron');
 
 class PasteHandler {
@@ -74,7 +74,7 @@ class PasteHandler {
         });
       } else {
         // Linux - 根据内容类型使用不同的粘贴快捷键
-        const keyCombination = item.type === 'image' ? 'ctrl+v' : 'Shift+Insert';
+        const keyCombination = item.type === 'image' ? 'ctrl+v' : 'shift+insert';
         console.log('Linux 使用快捷键:', keyCombination);
 
         // 对于图片，使用更长的延迟确保剪贴板准备好

@@ -1,4 +1,4 @@
-const { clipboard, app } = require('electron');
+const { clipboard } = require('electron');
 const SqliteStorage = require('./storage/sqliteStorage');
 
 class ClipboardManager {
@@ -35,6 +35,8 @@ class ClipboardManager {
 
   // 开始监控剪贴板
   startMonitoring() {
+    if (this._monitoring) return;
+    this._monitoring = true;
     // 优先使用 watch API
     if (clipboard.watch) {
       this.previousText = clipboard.readText();
@@ -64,6 +66,7 @@ class ClipboardManager {
 
   // 停止监控剪贴板
   stopMonitoring() {
+    this._monitoring = false;
     if (clipboard.unwatch) {
       try {
         clipboard.unwatch();
@@ -74,6 +77,12 @@ class ClipboardManager {
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = null;
+    }
+    try {
+      // flush pending items before shutdown
+      this._flushPendingItems();
+    } catch (e) {
+      // ignore flush errors during shutdown
     }
   }
 
@@ -136,6 +145,23 @@ class ClipboardManager {
       this.maxHistory = n;
       this.storageBackend.maxHistory = n; // 更新存储后端的 maxHistory
       // SqliteStorage 会自动处理修剪
+      // Also prune in-memory history to match storage behavior
+      if (this.history.length > this.maxHistory) {
+        let nonPinnedCount = 0;
+        for (const it of this.history) {
+          if (!it || !it.pinned) nonPinnedCount += 1;
+        }
+        if (nonPinnedCount > this.maxHistory) {
+          for (let i = this.history.length - 1; i >= 0 && nonPinnedCount > this.maxHistory; i--) {
+            const it = this.history[i];
+            if (!it || !it.pinned) {
+              this.history.splice(i, 1);
+              nonPinnedCount -= 1;
+            }
+          }
+        }
+        this.notifyListeners();
+      }
     }
   }
 
@@ -163,7 +189,12 @@ class ClipboardManager {
   }
 
   _flushPendingItems() {
-    if (this._flushInProgress) return;
+    if (this._flushInProgress) {
+      if (!this._flushTimer) {
+        this._flushTimer = setTimeout(() => this._flushPendingItems(), this._flushDelayMs);
+      }
+      return;
+    }
     if (this._flushTimer) {
       clearTimeout(this._flushTimer);
       this._flushTimer = null;
@@ -233,6 +264,9 @@ class ClipboardManager {
       console.error('批量写入历史项失败:', err);
     } finally {
       this._flushInProgress = false;
+      if (this._pendingItems.length && !this._flushTimer) {
+        this._flushTimer = setTimeout(() => this._flushPendingItems(), this._flushDelayMs);
+      }
     }
   }
 
@@ -241,7 +275,17 @@ class ClipboardManager {
     try {
       const res = this.storageBackend.updateTextItemByDbId(dbId, newContent);
       if (!res || !res.success) return false;
-      const idx = this.history.findIndex(h => h._dbId === dbId);
+      const normalizedId = (dbId === null || typeof dbId === 'undefined') ? null : String(dbId);
+      const idx = this.history.findIndex(h => {
+        if (!h) return false;
+        if (h._dbId !== null && typeof h._dbId !== 'undefined') {
+          if (String(h._dbId) === normalizedId) return true;
+        }
+        if (h.id !== null && typeof h.id !== 'undefined') {
+          if (String(h.id) === normalizedId) return true;
+        }
+        return false;
+      });
       if (idx > -1) {
         this.history[idx].content = newContent;
         this.history[idx].timestamp = new Date(res.timestamp || Date.now());

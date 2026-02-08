@@ -35,10 +35,12 @@ function EditModal({ open, initialContent = '', onSave, onClose, maxHeight = 400
                 // Ctrl/Cmd+S
                 if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
                     e.preventDefault();
+                    e.stopPropagation();
                     safeSave();
                 }
                 if (e.key === 'Escape') {
                     e.preventDefault();
+                    e.stopPropagation();
                     safeClose();
                 }
             };

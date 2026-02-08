@@ -99,7 +99,7 @@ const DEFAULT_CONFIG = {
     enableTooltips: true,
     locale: 'en',
     llms: {},
-    theme: 'default',
+    theme: 'light',
     previewLength: 120
 };
 

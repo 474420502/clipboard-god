@@ -158,6 +158,8 @@ class ScreenshotManager {
           console.log('ScreenshotManager.captureImage: disabling default ok handler');
           this._allowDefaultOk = false;
         } catch (_) { }
+        let to = null;
+
         const onOk = (_event, buffer) => {
           try {
             if (settled) return;
@@ -166,11 +168,13 @@ class ScreenshotManager {
             const base64Full = image.toDataURL();
             const base64Raw = base64Full.split(',')[1];
             cleanup();
+            if (to) { clearTimeout(to); to = null; }
             // Restore default handler allowance after we processed the buffer
             try { console.log('ScreenshotManager.captureImage: restoring default ok handler'); this._allowDefaultOk = true; } catch (_) { }
             resolve({ base64Full, base64Raw });
           } catch (err) {
             cleanup();
+            if (to) { clearTimeout(to); to = null; }
             reject(err);
           }
         };
@@ -179,6 +183,7 @@ class ScreenshotManager {
           if (settled) return;
           settled = true;
           cleanup();
+          if (to) { clearTimeout(to); to = null; }
           try { this._allowDefaultOk = true; } catch (_) { }
           reject(new Error('截图已取消'));
         };
@@ -195,10 +200,12 @@ class ScreenshotManager {
         this.screenshots.startCapture();
 
         // timeout guard
-        const to = setTimeout(() => {
+        to = setTimeout(() => {
           if (settled) return;
           settled = true;
           cleanup();
+          if (to) { clearTimeout(to); to = null; }
+          try { this._allowDefaultOk = true; } catch (_) { }
           reject(new Error('截图超时'));
         }, timeoutMs);
 

@@ -73,16 +73,19 @@ const localeLoader = {
     // Subscribe to locale changes broadcast from main process so React updates immediately
     try {
         if (typeof window !== 'undefined' && window.localeAPI && typeof window.localeAPI.onLocaleChanged === 'function') {
-            window.localeAPI.onLocaleChanged(async (newLocale) => {
-                try {
-                    if (!newLocale) return;
-                    // changeLanguage will trigger the backend loader to fetch translations
-                    await i18next.changeLanguage(newLocale);
-                    console.log('i18n: changed language to', newLocale);
-                } catch (e) {
-                    console.warn('i18n: failed to change language', e);
-                }
-            });
+            if (!window.__i18nLocaleListenerAdded) {
+                window.__i18nLocaleListenerAdded = true;
+                window.localeAPI.onLocaleChanged(async (newLocale) => {
+                    try {
+                        if (!newLocale) return;
+                        // changeLanguage will trigger the backend loader to fetch translations
+                        await i18next.changeLanguage(newLocale);
+                        console.log('i18n: changed language to', newLocale);
+                    } catch (e) {
+                        console.warn('i18n: failed to change language', e);
+                    }
+                });
+            }
         }
     } catch (e) {
         // ignore

@@ -13,6 +13,7 @@ class IPCManager {
         this.handlers = new Map();
         this.messageHistory = [];
         this.maxHistorySize = 1000;
+        this._clipboardListener = null;
     }
 
     /**
@@ -110,11 +111,15 @@ class IPCManager {
 
         // 监听剪贴板变化
         if (mainWindow && clipboardManager) {
-            clipboardManager.addListener((history) => {
+            if (this._clipboardListener) {
+                try { clipboardManager.removeListener(this._clipboardListener); } catch (_) { }
+            }
+            this._clipboardListener = (history) => {
                 if (mainWindow && mainWindow.webContents) {
                     mainWindow.webContents.send(IPC_CHANNELS.UPDATE_HISTORY, history);
                 }
-            });
+            };
+            clipboardManager.addListener(this._clipboardListener);
         }
     }
 
@@ -513,8 +518,12 @@ class IPCManager {
     /**
      * 清理资源
      */
-    cleanup() {
+    cleanup(clipboardManager) {
         try {
+            if (this._clipboardListener && clipboardManager && typeof clipboardManager.removeListener === 'function') {
+                try { clipboardManager.removeListener(this._clipboardListener); } catch (_) { }
+            }
+            this._clipboardListener = null;
             this.handlers.clear();
             this.messageHistory = [];
             errorHandler.safeConsole.log('IPC管理器清理完成');

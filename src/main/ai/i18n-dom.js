@@ -103,18 +103,21 @@
                 }
 
                 if (global.localeAPI && typeof global.localeAPI.onLocaleChanged === 'function') {
-                    global.localeAPI.onLocaleChanged(async (newLocale) => {
-                        let nextBundle = null;
-                        try { nextBundle = await this.loadTranslations(newLocale); } catch (e) { nextBundle = null; }
-                        if (!nextBundle && this._fallbackTranslations) {
-                            nextBundle = this._fallbackTranslations;
-                            newLocale = defaultLocale;
-                        }
-                        if (nextBundle) {
-                            this._currentLocale = newLocale;
-                            this.applyTranslations(nextBundle);
-                        }
-                    });
+                    if (!global.__i18nDomLocaleListenerAdded) {
+                        global.__i18nDomLocaleListenerAdded = true;
+                        global.localeAPI.onLocaleChanged(async (newLocale) => {
+                            let nextBundle = null;
+                            try { nextBundle = await this.loadTranslations(newLocale); } catch (e) { nextBundle = null; }
+                            if (!nextBundle && this._fallbackTranslations) {
+                                nextBundle = this._fallbackTranslations;
+                                newLocale = defaultLocale;
+                            }
+                            if (nextBundle) {
+                                this._currentLocale = newLocale;
+                                this.applyTranslations(nextBundle);
+                            }
+                        });
+                    }
                 } else if (!bundle && this._fallbackTranslations) {
                     this._currentLocale = defaultLocale;
                     this.applyTranslations(this._fallbackTranslations);

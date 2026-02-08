@@ -19,6 +19,7 @@ export default function useNumberShortcuts(filteredHistory, enabled, pasteFn) {
 
     useEffect(() => {
         const handler = (event) => {
+            if (event.defaultPrevented) return;
             // ignore when focus is on editable elements
             const active = document.activeElement;
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {

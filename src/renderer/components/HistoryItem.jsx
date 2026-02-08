@@ -241,6 +241,9 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
           clearHideTimer();
         } catch (e) { }
         window.removeEventListener('click', onWindowClick);
+        if (window.__historyContextMenuOnClick === onWindowClick) {
+          try { window.__historyContextMenuOnClick = null; } catch (e) { }
+        }
       };
 
       const onWindowClick = (ev) => {
@@ -259,12 +262,23 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
       };
 
       // attach events (ensure no duplicate listeners)
-      menu.removeEventListener('mouseenter', onMouseEnter);
-      menu.removeEventListener('mouseleave', onMouseLeave);
+      if (menu.__onMouseEnter) {
+        try { menu.removeEventListener('mouseenter', menu.__onMouseEnter); } catch (e) { }
+      }
+      if (menu.__onMouseLeave) {
+        try { menu.removeEventListener('mouseleave', menu.__onMouseLeave); } catch (e) { }
+      }
+      menu.__onMouseEnter = onMouseEnter;
+      menu.__onMouseLeave = onMouseLeave;
       menu.addEventListener('mouseenter', onMouseEnter);
       menu.addEventListener('mouseleave', onMouseLeave);
 
       // click outside to close
+      // remove any previous global handler to prevent duplicates
+      if (window.__historyContextMenuOnClick) {
+        try { window.removeEventListener('click', window.__historyContextMenuOnClick); } catch (e) { }
+      }
+      window.__historyContextMenuOnClick = onWindowClick;
       window.addEventListener('click', onWindowClick);
 
       // store hide function on elem for other closures
@@ -296,7 +310,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
 
     // 如果当前尝试的是缩略图且失败了，尝试主图像
     if (!useMainImage && item.image_thumb && item.image_path && item.image_path !== item.image_thumb) {
-      console.log('Thumbnail failed, trying main image:', item.image_path);
+      if (DEBUG) console.log('Thumbnail failed, trying main image:', item.image_path);
       setUseMainImage(true);
       return;
     }

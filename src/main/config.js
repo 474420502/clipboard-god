@@ -4,6 +4,8 @@ const os = require('os');
 
 // 默认配置
 const DEFAULT_CONFIG = {
+  // 最大历史条目数
+  maxHistoryItems: 500,
   // 预览文本长度
   previewLength: 120,
   // 是否使用自定义工具提示
@@ -17,12 +19,14 @@ const DEFAULT_CONFIG = {
   // 是否使用数字快捷键
   useNumberShortcuts: true,
   // 全局快捷键
-  globalShortcut: 'CommandOrControl+;',
+  globalShortcut: 'CommandOrControl+Alt+V',
   // 截图快捷键
-  screenshotShortcut: 'CommandOrControl+Alt+A',
+  screenshotShortcut: 'CommandOrControl+Shift+S',
   // 主题
   theme: 'light'
   ,
+  // 语言
+  locale: 'en',
   // llms
   // llm: {
   //   apitype: 'ollama', // 'ollama' or 'openapi'

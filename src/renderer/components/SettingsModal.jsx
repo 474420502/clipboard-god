@@ -89,7 +89,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 screenshotShortcut: res.config.screenshotShortcut,
                 theme: res.config.theme,
                 launchOnStartup: typeof res.config.launchOnStartup !== 'undefined' ? res.config.launchOnStartup : false,
-                llms: res.config.llms || settings.llms || {}
+                llms: res.config.llms || settings.llms || {},
+                locale: res.config.locale || settings.locale
               };
             }
 
@@ -104,7 +105,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 screenshotShortcut: settings.screenshotShortcut,
                 theme: settings.theme,
                 launchOnStartup: settings.launchOnStartup,
-                llms: settings.llms || {}
+                llms: settings.llms || {},
+                locale: settings.locale
               };
             }
 
@@ -142,12 +144,9 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     }
   };
 
-  const handleCancel = () => {
-    onClose();
-  };
-
   // ESC键关闭模态框
   useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && isOpen) {
         onClose();

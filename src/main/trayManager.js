@@ -66,29 +66,31 @@ class TrayManager {
     const uniqCandidates = candidates.filter(p => p && !seen.has(p) && (seen.add(p) || true));
 
     try {
-      console.log('托盘图标候选路径:', uniqCandidates);
-      console.log('process.resourcesPath:', process.resourcesPath, 'app.isPackaged:', app && app.isPackaged);
+      if (process.env.DEBUG) {
+        console.log('托盘图标候选路径:', uniqCandidates);
+        console.log('process.resourcesPath:', process.resourcesPath, 'app.isPackaged:', app && app.isPackaged);
+      }
       for (const c of uniqCandidates) {
         try {
           if (fs.existsSync(c)) {
-            console.log('尝试加载托盘图标:', c);
+            if (process.env.DEBUG) console.log('尝试加载托盘图标:', c);
             const ni = nativeImage.createFromPath(c);
             if (!ni.isEmpty()) {
               trayIcon = ni;
-              console.log('找到有效托盘图标:', c);
+              if (process.env.DEBUG) console.log('找到有效托盘图标:', c);
               break;
             } else {
-              console.warn('图标文件存在但 nativeImage 为空:', c);
+              if (process.env.DEBUG) console.warn('图标文件存在但 nativeImage 为空:', c);
             }
           } else {
             // not exists — continue
           }
         } catch (err) {
-          console.warn('检查候选图标路径出错:', c, err && err.message);
+          if (process.env.DEBUG) console.warn('检查候选图标路径出错:', c, err && err.message);
         }
       }
     } catch (error) {
-      console.error('加载托盘图标候选列表失败:', error && error.message);
+      if (process.env.DEBUG) console.error('加载托盘图标候选列表失败:', error && error.message);
     }
 
     // 如果找到了 trayIcon，调整大小
@@ -99,23 +101,23 @@ class TrayManager {
         else if (process.platform === 'win32') targetSize = 16;
         else targetSize = 22;
         trayIcon = trayIcon.resize({ width: targetSize, height: targetSize });
-        console.log(`托盘图标加载成功，大小: ${targetSize}x${targetSize}`);
+        if (process.env.DEBUG) console.log(`托盘图标加载成功，大小: ${targetSize}x${targetSize}`);
       } catch (err) {
-        console.warn('调整托盘图标大小失败:', err && err.message);
+        if (process.env.DEBUG) console.warn('调整托盘图标大小失败:', err && err.message);
       }
     }
 
     // 如果自定义图标加载失败，创建默认图标
     if (!trayIcon || trayIcon.isEmpty()) {
-      console.log('使用默认托盘图标');
+      if (process.env.DEBUG) console.log('使用默认托盘图标');
       trayIcon = this.createDefaultTrayIcon();
     }
 
     try {
       this.tray = new Tray(trayIcon);
-      console.log('托盘创建成功');
+      if (process.env.DEBUG) console.log('托盘创建成功');
     } catch (error) {
-      console.error('创建托盘失败:', error);
+      if (process.env.DEBUG) console.error('创建托盘失败:', error);
       // 最后的备选方案
       this.tray = new Tray(nativeImage.createEmpty());
     }
@@ -146,13 +148,19 @@ class TrayManager {
 
     // 点击托盘图标显示/隐藏窗口
     this.tray.on('click', () => {
-      // If the mainWindow has requested suppression (e.g., during paste), ignore click toggles
-      if (mainWindow && mainWindow.__suppressShow) {
+      // If the main process is pasting, ignore click toggles
+      if (mainProcess && mainProcess._isPasting) {
         safeConsole.log('抑制托盘点击切换（正在执行粘贴）');
         return;
       }
 
-      if (mainWindow) mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+        }
+      }
     });
   }
 

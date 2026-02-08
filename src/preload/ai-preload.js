@@ -5,12 +5,16 @@ contextBridge.exposeInMainWorld('aiAPI', {
     // Stream events coming from main process (ai-window specific)
     onStream: (cb) => {
         try {
-            ipcRenderer.on('ai-stream', (_event, chunk) => cb(chunk));
+            const listener = (_event, chunk) => cb(chunk);
+            ipcRenderer.on('ai-stream', listener);
+            return () => ipcRenderer.removeListener('ai-stream', listener);
         } catch (e) { /* ignore */ }
     },
     onComplete: (cb) => {
         try {
-            ipcRenderer.on('ai-stream-complete', (_event, info) => cb(info));
+            const listener = (_event, info) => cb(info);
+            ipcRenderer.on('ai-stream-complete', listener);
+            return () => ipcRenderer.removeListener('ai-stream-complete', listener);
         } catch (e) { /* ignore */ }
     },
     // Request initial injected config from main process via invoke
@@ -22,7 +26,9 @@ contextBridge.exposeInMainWorld('aiAPI', {
     // Listen for proactive injected config pushed from main (avoid race conditions)
     onInjectedConfig: (cb) => {
         try {
-            ipcRenderer.on('injected-config', (_event, cfg) => cb(cfg));
+            const listener = (_event, cfg) => cb(cfg);
+            ipcRenderer.on('injected-config', listener);
+            return () => ipcRenderer.removeListener('injected-config', listener);
         } catch (e) { /* ignore */ }
     },
     // Send an LLM request (renderer -> main). Returns a promise.
@@ -46,7 +52,11 @@ try {
             try { return await ipcRenderer.invoke('get-translations', locale); } catch (e) { return null; }
         },
         onLocaleChanged: (cb) => {
-            try { ipcRenderer.on('locale-changed', (_event, locale) => cb(locale)); } catch (e) { /* ignore */ }
+            try {
+                const listener = (_event, locale) => cb(locale);
+                ipcRenderer.on('locale-changed', listener);
+                return () => ipcRenderer.removeListener('locale-changed', listener);
+            } catch (e) { /* ignore */ }
         }
     });
 } catch (e) {

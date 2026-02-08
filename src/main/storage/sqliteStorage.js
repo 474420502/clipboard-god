@@ -116,11 +116,11 @@ class SqliteStorage {
         if (item.type === 'text') {
             const hash = crypto.createHash('sha256').update(String(item.content || '')).digest('hex');
             // check existing
-            const existing = this.db.prepare('SELECT id FROM history WHERE hash = ? AND type = ?').get(hash, 'text');
+            const existing = this.db.prepare('SELECT id, pinned FROM history WHERE hash = ? AND type = ?').get(hash, 'text');
             if (existing) {
                 // update timestamp
                 this.db.prepare('UPDATE history SET timestamp = ? WHERE id = ?').run(timestamp, existing.id);
-                return { id: existing.id, existed: true, hash };
+                return { id: existing.id, existed: true, hash, pinned: existing.pinned ? 1 : 0 };
             }
             const stmt = this.db.prepare('INSERT INTO history (item_id, type, content, hash, timestamp, meta) VALUES (?, ?, ?, ?, ?, ?)');
             const info = stmt.run(item.id || null, 'text', item.content || '', hash, timestamp, null);
@@ -142,10 +142,10 @@ class SqliteStorage {
             const image_path = saved ? saved.path : null;
             const image_thumb = saved && saved.thumbPath ? saved.thumbPath : null;
             // check existing by hash
-            const existing = hash ? this.db.prepare('SELECT id FROM history WHERE hash = ? AND type = ?').get(hash, 'image') : null;
+            const existing = hash ? this.db.prepare('SELECT id, pinned FROM history WHERE hash = ? AND type = ?').get(hash, 'image') : null;
             if (existing) {
                 this.db.prepare('UPDATE history SET timestamp = ?, image_path = ?, image_thumb = ? WHERE id = ?').run(timestamp, image_path, image_thumb, existing.id);
-                return { id: existing.id, existed: true, hash, image_path, image_thumb };
+                return { id: existing.id, existed: true, hash, image_path, image_thumb, pinned: existing.pinned ? 1 : 0 };
             }
             const stmt = this.db.prepare('INSERT INTO history (item_id, type, image_path, image_thumb, hash, timestamp, meta) VALUES (?, ?, ?, ?, ?, ?, ?)');
             const info = stmt.run(item.id || null, 'image', image_path, image_thumb, hash, timestamp, null);
@@ -218,8 +218,9 @@ class SqliteStorage {
                 try {
                     const files = fs.readdirSync(this.imagesDir);
                     for (const file of files) {
-                        const basename = path.parse(file).name; // filename without ext -> hash
-                        if (!used.has(basename)) {
+                        const basename = path.parse(file).name; // filename without ext -> hash or hash.thumb
+                        const rawHash = basename.endsWith('.thumb') ? basename.replace(/\.thumb$/i, '') : basename;
+                        if (!used.has(rawHash)) {
                             // remove file
                             try { fs.unlinkSync(path.join(this.imagesDir, file)); } catch (e) { }
                         }

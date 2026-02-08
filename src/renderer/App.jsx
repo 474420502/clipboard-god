@@ -50,6 +50,7 @@ function App() {
   const selectedIndexRef = useRef(selectedIndex);
   const filteredHistoryRef = useRef([]);
   const useNumberShortcutsRef = useRef(!!settings.useNumberShortcuts);
+  const editModalOpenRef = useRef(!!editModalState.open);
 
   // 在 App 挂载时，从主进程加载设置并作为单一来源
   useEffect(() => {
@@ -422,9 +423,10 @@ function App() {
   useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
   useEffect(() => { filteredHistoryRef.current = filteredHistory; }, [filteredHistory]);
   useEffect(() => { useNumberShortcutsRef.current = !!settings.useNumberShortcuts; }, [settings.useNumberShortcuts]);
+  useEffect(() => { editModalOpenRef.current = !!editModalState.open; }, [editModalState.open]);
 
   // useNumberShortcuts hook handles number-key paste behavior
-  useNumberShortcuts(filteredHistory, settings.useNumberShortcuts, (item) => {
+  useNumberShortcuts(filteredHistory, settings.useNumberShortcuts && !isSettingsOpen, (item) => {
     try {
       if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
         window.electronAPI.pasteItem(item);
@@ -438,12 +440,13 @@ function App() {
   useEffect(() => {
     const handler = (event) => {
       const settingsOpen = isSettingsOpenRef.current;
+      const editOpen = editModalOpenRef.current;
       const searchVisibleNow = searchVisibleRef.current;
       const isPageUp = event.key === 'PageUp' || event.code === 'PageUp' || event.key === 'Prior' || event.keyCode === 33;
       const isPageDown = event.key === 'PageDown' || event.code === 'PageDown' || event.key === 'Next' || event.keyCode === 34;
 
       // Disable keyboard interaction when settings modal is open
-      if (settingsOpen) {
+      if (settingsOpen || editOpen) {
         return;
       }
 
@@ -557,18 +560,6 @@ function App() {
     };
   }, [suppressMouseHover]);
 
-  const handleScreenshot = () => {
-    try {
-      window.electronAPI.startScreenshot();
-    } catch (error) {
-      console.error('Failed to start screenshot:', error);
-    }
-  };
-
-  const handleOpenSettings = () => {
-    setIsSettingsOpen(true);
-  };
-
   const handleCloseSettings = () => {
     setIsSettingsOpen(false);
   };
@@ -673,8 +664,6 @@ function App() {
         enableTooltips={!!settings.enableTooltips}
         selectedIndex={selectedIndex}
         setSelectedIndex={setSelectedIndex}
-        suppressMouseHover={suppressMouseHover}
-        setSuppressMouseHover={setSuppressMouseHover}
       />
       <EditModal
         open={editModalState.open}

@@ -66,18 +66,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openImage: (imagePath) => ipcRenderer.invoke('open-image', imagePath),
   showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
 
-  // 清理所有监听器
-  cleanupListeners: () => {
-    ipcRenderer.removeAllListeners('update-history');
-    ipcRenderer.removeAllListeners('error');
-    ipcRenderer.removeAllListeners('history-data');
-    ipcRenderer.removeAllListeners('open-settings');
-    ipcRenderer.removeAllListeners('take-screenshot');
-    ipcRenderer.removeAllListeners('global-shortcut');
-    ipcRenderer.removeAllListeners('reset-selection');
-    ipcRenderer.removeAllListeners('settings-updated');
-    ipcRenderer.removeAllListeners('hide-context-menu');
-  }
+  // cleanupListeners removed; use per-listener unsubscribe functions instead
 });
 
 // 简单的 locale API，供纯静态页面（如 chatPage.html）或渲染器使用

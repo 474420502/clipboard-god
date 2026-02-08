@@ -58,7 +58,6 @@ class MainProcess {
     this.tooltipWindow = null;
     this.tooltipPayload = null;
     this.tooltipSize = null;
-    this.tooltipWindow = null;
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
     // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 500
     const maxHistoryConfig = Config.get('maxHistoryItems');
@@ -130,8 +129,10 @@ class MainProcess {
       }
 
       // Ensure tooltip hides when main window hides and follows show/hide
-      if (this.mainWindow) {
+      if (this.mainWindow && !this._tooltipMainWindowBound) {
+        this._tooltipMainWindowBound = true;
         this.mainWindow.on('hide', () => {
+          try { this.tooltipPayload = null; this._tooltipSeq = (this._tooltipSeq || 0) + 1; } catch (_) { }
           try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide(); } catch (_) { }
           try {
             // Notify renderer to hide any global context menu when main window hides
@@ -152,6 +153,7 @@ class MainProcess {
         });
         // Hide tooltip when the main window loses focus (user switched to another app)
         this.mainWindow.on('blur', () => {
+          try { this.tooltipPayload = null; this._tooltipSeq = (this._tooltipSeq || 0) + 1; } catch (_) { }
           try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide(); } catch (_) { }
         });
         // When main window regains focus, restore tooltip if there is a payload
@@ -168,6 +170,9 @@ class MainProcess {
       // Clean up when tooltip closed
       this.tooltipWindow.on('closed', () => {
         this.tooltipWindow = null;
+        if (resourceManager) {
+          try { resourceManager.unregisterResource('tooltipWindow'); } catch (_) { }
+        }
       });
     } catch (err) {
       safeConsole.error('创建 tooltip 窗口失败:', err);
@@ -259,6 +264,12 @@ class MainProcess {
     // 当窗口关闭时，取消引用窗口对象（仅在真正退出应用时发生）
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
+      this._tooltipMainWindowBound = false;
+      if (resourceManager) {
+        try { resourceManager.unregisterResource('mainWindow'); } catch (_) { }
+      }
+      try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.destroy(); } catch (_) { }
+      this.tooltipWindow = null;
     });
 
     // 当主窗口失去焦点时（例如用户点击了其他应用），隐藏主窗口以及 tooltip
@@ -553,7 +564,7 @@ class MainProcess {
           try { this._aiWindowConfigs.delete(storedWcId); } catch (e) { /* ignore */ }
         });
       } catch (e) {
-        chatWin.on('closed', () => { /* no-op */ });
+        // ignore when webContents is unavailable
       }
 
       return chatWin;
@@ -761,11 +772,15 @@ class MainProcess {
     this.clipboardManager.startMonitoring();
 
     // 添加监听器以通知渲染进程
-    this.clipboardManager.addListener((history) => {
+    if (this._clipboardListener) {
+      try { this.clipboardManager.removeListener(this._clipboardListener); } catch (_) { }
+    }
+    this._clipboardListener = (history) => {
       if (this.mainWindow && this.mainWindow.webContents) {
         this.mainWindow.webContents.send('update-history', history);
       }
-    });
+    };
+    this.clipboardManager.addListener(this._clipboardListener);
   }
 
   // X11连接状态监控
@@ -774,6 +789,13 @@ class MainProcess {
 
     this._x11ConnectionMonitoring = true;
     safeConsole.log('开始X11连接状态监控');
+
+    try {
+      const activeWindows = BrowserWindow.getAllWindows().filter(win => !win.isDestroyed());
+      this._x11ConnectionCount = activeWindows.length;
+    } catch (e) {
+      this._x11ConnectionCount = this._x11ConnectionCount || 0;
+    }
 
     // 监控主窗口的X11连接状态
     if (this.mainWindow) {
@@ -784,7 +806,10 @@ class MainProcess {
     }
 
     // 定期检查X11连接状态
-    setInterval(() => {
+    if (this._x11MonitorTimer) {
+      try { clearInterval(this._x11MonitorTimer); } catch (_) { }
+    }
+    this._x11MonitorTimer = setInterval(() => {
       if (!this._x11ConnectionMonitoring) return;
 
       const activeWindows = BrowserWindow.getAllWindows().filter(win => !win.isDestroyed());
@@ -919,7 +944,7 @@ class MainProcess {
     // settings: get and set
     ipcMain.handle('get-settings', async () => {
       const config = Config.getAll();
-      safeConsole.log('获取设置:', config);
+      safeConsole.debug('获取设置:', config);
       return config;
     });
 
@@ -950,8 +975,8 @@ class MainProcess {
     // NOTE: system notifications removed; chat window will use internal UI notifications only
 
     ipcMain.handle('set-settings', async (event, values) => {
-      safeConsole.log('保存设置 (原始):', values);
-      try { safeConsole.log('配置文件路径 (Config.configPath):', Config.configPath); } catch (e) { }
+      safeConsole.debug('保存设置 (原始):', values);
+      try { safeConsole.debug('配置文件路径 (Config.configPath):', Config.configPath); } catch (e) { }
 
       // 规范化传入的配置：确保每个 llms 条目包含 triggerType（默认 'text'），
       // 避免渲染器未包含该字段导致主进程/磁盘上缺失。
@@ -1142,6 +1167,10 @@ class MainProcess {
         this.createTooltipWindow();
         if (!this.tooltipWindow) return;
 
+        // invalidate any pending tooltip load
+        this._tooltipSeq = (this._tooltipSeq || 0) + 1;
+        const seq = this._tooltipSeq;
+
         const { content = '', anchorRect = {}, html: isHtml = false } = payload || {};
         this.tooltipPayload = { content, anchorRect };
 
@@ -1191,12 +1220,13 @@ class MainProcess {
           }
         } else {
           // sanitized text-only payload
-          const safeContent = String(content)
-            .replace(/&/g, '&')
-            .replace(/</g, '<')
-            .replace(/>/g, '>')
-            .replace(/"/g, '"')
+          const escapeHtml = (value) => String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+          const safeContent = escapeHtml(content);
           const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
           const mainWidth = Math.max(100, Math.round(mainBounds.width));
           const mainHeight = Math.max(100, Math.round(mainBounds.height));
@@ -1210,9 +1240,13 @@ class MainProcess {
         // ultimately size the tooltip to match the main window dimensions.
         this.tooltipWindow.webContents.once('did-finish-load', () => {
           try {
+            // Abort showing if a newer tooltip was requested or window not visible
+            if (seq !== this._tooltipSeq) return;
+            if (!this.mainWindow || this.mainWindow.isDestroyed() || !this.mainWindow.isVisible() || this._isPasting) return;
             // Ask for size by executing JavaScript to compute content size (kept for compatibility)
             this.tooltipWindow.webContents.executeJavaScript(`(function(){const el=document.getElementById('box'); if(!el) return {w:300,h:50}; const r=el.getBoundingClientRect(); ({w:Math.ceil(r.width), h:Math.ceil(r.height)});})()`)
               .then((size) => {
+                if (seq !== this._tooltipSeq) return;
                 // store measured content size but override tooltip size with main window size
                 this.tooltipSize = { w: size.w + 8, h: size.h + 8 };
                 // Reposition will use mainWindow size to set the tooltip bounds
@@ -1220,6 +1254,7 @@ class MainProcess {
                 try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
               })
               .catch((err) => {
+                if (seq !== this._tooltipSeq) return;
                 // fallback: still set tooltipSize but reposition uses main window
                 this.tooltipSize = { w: 420, h: 120 };
                 this.repositionTooltip();
@@ -1236,6 +1271,7 @@ class MainProcess {
 
     ipcMain.on('hide-tooltip', () => {
       try {
+        try { this.tooltipPayload = null; this._tooltipSeq = (this._tooltipSeq || 0) + 1; } catch (_) { }
         if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide();
       } catch (err) { }
     });
@@ -1501,6 +1537,10 @@ class MainProcess {
 
       // 第四步：停止剪贴板监控
       try {
+        if (this._clipboardListener) {
+          try { this.clipboardManager.removeListener(this._clipboardListener); } catch (_) { }
+          this._clipboardListener = null;
+        }
         this.clipboardManager.stopMonitoring();
         safeConsole.log('剪贴板监控已停止');
       } catch (error) {
@@ -1517,6 +1557,12 @@ class MainProcess {
         this._configWatchTimer = null;
       }
 
+      // 停止X11连接监控定时器
+      if (this._x11MonitorTimer) {
+        try { clearInterval(this._x11MonitorTimer); } catch (_) { }
+        this._x11MonitorTimer = null;
+      }
+
       // 第六步：使用资源管理器清理剩余资源
       if (resourceManager) {
         try {
@@ -1528,6 +1574,11 @@ class MainProcess {
         } catch (error) {
           safeConsole.warn('资源管理器清理时出错:', error);
         }
+      }
+
+      // 清理 IPC 管理器（如果使用）
+      if (this.ipcManager && typeof this.ipcManager.cleanup === 'function') {
+        try { this.ipcManager.cleanup(this.clipboardManager); } catch (_) { }
       }
 
       // 第七步：最后关闭主窗口（确保X11连接正确释放）
