@@ -162,6 +162,10 @@
             "onlyPinned": "仅固定"
         }
     },
+    "toast": {
+        "pinnedOnlyOn": "仅显示已固定：开",
+        "pinnedOnlyOff": "仅显示已固定：关"
+    },
     "shortcutCapture": {
         "captureTitle": "开始录制",
         "capturing": "正在录制...",

@@ -13,6 +13,7 @@
 // - use the preload's ipcRenderer wrapper only for the legacy 'history-data' channel.
 // - avoid overwriting settings keys with undefined when mapping payloads.
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import HistoryList from './components/HistoryList';
 import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
@@ -20,6 +21,7 @@ import useNumberShortcuts from './hooks/useNumberShortcuts';
 import EditModal from './components/EditModal';
 
 function App() {
+  const { t } = useTranslation();
   const [history, setHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOptions, setSearchOptions] = useState({
@@ -27,6 +29,8 @@ function App() {
     sortBy: 'time',
     pinnedOnly: false
   });
+  const [statusToast, setStatusToast] = useState({ visible: false, text: '' });
+  const toastTimerRef = useRef(null);
   const [searchVisible, setSearchVisible] = useState(false); // hidden by default
   const [selectedIndex, setSelectedIndex] = useState(0); // selected item index for keyboard navigation - start with first item
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -424,6 +428,37 @@ function App() {
   useEffect(() => { filteredHistoryRef.current = filteredHistory; }, [filteredHistory]);
   useEffect(() => { useNumberShortcutsRef.current = !!settings.useNumberShortcuts; }, [settings.useNumberShortcuts]);
   useEffect(() => { editModalOpenRef.current = !!editModalState.open; }, [editModalState.open]);
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const showStatusToast = (text) => {
+    setStatusToast({ visible: true, text });
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    toastTimerRef.current = setTimeout(() => {
+      setStatusToast((prev) => ({ ...prev, visible: false }));
+    }, 1200);
+  };
+
+  const handlePinnedOnlyChange = (value) => {
+    const next = !!value;
+    setSearchOptions((prev) => ({
+      ...prev,
+      pinnedOnly: next
+    }));
+    showStatusToast(next
+      ? (t('toast.pinnedOnlyOn') || 'Only pinned: on')
+      : (t('toast.pinnedOnlyOff') || 'Only pinned: off')
+    );
+  };
 
   // useNumberShortcuts hook handles number-key paste behavior
   useNumberShortcuts(filteredHistory, settings.useNumberShortcuts && !isSettingsOpen, (item) => {
@@ -483,6 +518,15 @@ function App() {
         return;
       } else if (event.key === 'ArrowDown') {
         handleNavigateItems('down');
+        event.preventDefault();
+        return;
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        // Allow cursor movement when search input is focused
+        if (isSearchInputFocused) {
+          return;
+        }
+        const enablePinnedOnly = event.key === 'ArrowRight';
+        handlePinnedOnlyChange(enablePinnedOnly);
         event.preventDefault();
         return;
       } else if (isPageUp) {
@@ -657,7 +701,14 @@ function App() {
         visible={searchVisible}
         onAdvancedSearch={handleAdvancedSearch}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        pinnedOnly={searchOptions.pinnedOnly}
+        onPinnedOnlyChange={handlePinnedOnlyChange}
       />
+      {statusToast.visible && (
+        <div className="status-toast" role="status" aria-live="polite">
+          {statusToast.text}
+        </div>
+      )}
       <HistoryList
         history={filteredHistory}
         previewLength={settings.previewLength}

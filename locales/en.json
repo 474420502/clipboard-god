@@ -162,6 +162,10 @@
             "onlyPinned": "Only pinned"
         }
     },
+    "toast": {
+        "pinnedOnlyOn": "Only pinned: on",
+        "pinnedOnlyOff": "Only pinned: off"
+    },
     "shortcutCapture": {
         "captureTitle": "Start capture",
         "capturing": "Capturing...",

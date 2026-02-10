@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings, visible = true }) {
+function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings, visible = true, pinnedOnly = false, onPinnedOnlyChange }) {
   const [isAdvancedSearch, setIsAdvancedSearch] = useState(false);
   const [searchType, setSearchType] = useState('all'); // 'all', 'text', 'image'
   const [sortBy, setSortBy] = useState('time'); // 'time', 'length'
-  const [pinnedOnly, setPinnedOnly] = useState(false);
   const inputRef = useRef(null);
   const { t } = useTranslation();
 
@@ -56,7 +55,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings
         term: searchTerm,
         type: searchType,
         sortBy: sortBy,
-        pinnedOnly: pinnedOnly
+        pinnedOnly: !!pinnedOnly
       });
     }
   };
@@ -146,7 +145,16 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input id="pinnedOnly" type="checkbox" checked={pinnedOnly} onChange={(e) => setPinnedOnly(e.target.checked)} />
+              <input
+                id="pinnedOnly"
+                type="checkbox"
+                checked={!!pinnedOnly}
+                onChange={(e) => {
+                  if (typeof onPinnedOnlyChange === 'function') {
+                    onPinnedOnlyChange(e.target.checked);
+                  }
+                }}
+              />
               <label htmlFor="pinnedOnly">{t('search.advanced.onlyPinned') || 'Only pinned'}</label>
             </div>
 

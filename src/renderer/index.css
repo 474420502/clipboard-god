@@ -664,6 +664,22 @@ html {
 .modal-overlay {
     position: fixed;
     left: 0; right: 0; top: 0; bottom: 0;
+.status-toast {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    background: rgba(20, 20, 20, 0.88);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.2;
+    z-index: 10000;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(6px);
+}
     background: rgba(0,0,0,0.45);
     display: flex;
     align-items: center;
