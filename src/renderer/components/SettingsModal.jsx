@@ -144,6 +144,12 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     }
   };
 
+  const handleCancel = () => {
+    try {
+      if (typeof onClose === 'function') onClose();
+    } catch (err) { }
+  };
+
   // ESC键关闭模态框
   useEffect(() => {
     if (!isOpen) return;

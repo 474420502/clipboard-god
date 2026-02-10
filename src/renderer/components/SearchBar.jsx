@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true }) {
+function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings, visible = true }) {
   const [isAdvancedSearch, setIsAdvancedSearch] = useState(false);
   const [searchType, setSearchType] = useState('all'); // 'all', 'text', 'image'
   const [sortBy, setSortBy] = useState('time'); // 'time', 'length'
@@ -42,6 +42,12 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
 
   const toggleAdvancedSearch = () => {
     setIsAdvancedSearch(!isAdvancedSearch);
+  };
+
+  const handleOpenSettings = () => {
+    if (typeof onOpenSettings === 'function') {
+      onOpenSettings();
+    }
   };
 
   const handleAdvancedSearch = () => {
@@ -94,6 +100,20 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, visible = true
             padding: '10px',
             cursor: 'pointer'
           }}
+          title={t('search.advanced.toggle')}
+        >
+          🔎
+        </button>
+        <button
+          onClick={handleOpenSettings}
+          style={{
+            background: 'transparent',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            padding: '10px',
+            cursor: 'pointer'
+          }}
+          title={t('settings.title')}
         >
           ⚙️
         </button>

@@ -656,6 +656,7 @@ function App() {
         setSearchTerm={setSearchTerm}
         visible={searchVisible}
         onAdvancedSearch={handleAdvancedSearch}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
       <HistoryList
         history={filteredHistory}
