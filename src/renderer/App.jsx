@@ -19,6 +19,7 @@ import SearchBar from './components/SearchBar';
 import SettingsModal from './components/SettingsModal';
 import useNumberShortcuts from './hooks/useNumberShortcuts';
 import EditModal from './components/EditModal';
+import QRCodeSelectorDialog from './components/QRCodeSelectorDialog';
 
 function App() {
   const { t } = useTranslation();
@@ -36,6 +37,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [suppressMouseHover, setSuppressMouseHover] = useState(false);
   const [editModalState, setEditModalState] = useState({ open: false, item: null });
+  const [qrDialogState, setQrDialogState] = useState({ open: false, qrcodes: [], selectedId: null, loading: false });
   const [settings, setSettings] = useState({
     previewLength: 120,
     maxHistoryItems: 500,
@@ -448,6 +450,81 @@ function App() {
     }, 1200);
   };
 
+  const closeQrDialog = () => {
+    setQrDialogState((prev) => ({ ...prev, open: false, loading: false }));
+  };
+
+  const handleCopySelectedQr = async () => {
+    try {
+      if (!window.electronAPI || typeof window.electronAPI.copyQRCodeContent !== 'function') return;
+      const selected = (qrDialogState.qrcodes || []).find(q => String(q.id) === String(qrDialogState.selectedId)) || (qrDialogState.qrcodes || [])[0];
+      if (!selected) return;
+      await window.electronAPI.copyQRCodeContent(String(selected.content || ''));
+      showStatusToast(t('history.qrCopied') || 'QR code copied');
+    } catch (err) {
+      showStatusToast(t('history.qrFailed') || 'QR code recognition failed');
+    }
+  };
+
+  const handleCopyAllQr = async () => {
+    try {
+      if (!window.electronAPI || typeof window.electronAPI.copyQRCodeContent !== 'function') return;
+      const all = (qrDialogState.qrcodes || []).map(q => q && q.content).filter(Boolean);
+      if (!all.length) return;
+      await window.electronAPI.copyQRCodeContent(all.join('\n'));
+      showStatusToast(t('history.qrCopiedAll') || 'All QR codes copied');
+    } catch (err) {
+      showStatusToast(t('history.qrFailed') || 'QR code recognition failed');
+    }
+  };
+
+  useEffect(() => {
+    const onOpenQrDialog = async (e) => {
+      try {
+        const imagePath = e && e.detail && e.detail.imagePath;
+        if (!imagePath) {
+          showStatusToast(t('history.qrInvalidImage') || 'Image not available');
+          return;
+        }
+
+        setQrDialogState({ open: true, qrcodes: [], selectedId: null, loading: true });
+
+        if (!window.electronAPI || typeof window.electronAPI.extractQRCodes !== 'function') {
+          showStatusToast(t('history.qrFailed') || 'QR code recognition failed');
+          setQrDialogState({ open: true, qrcodes: [], selectedId: null, loading: false });
+          return;
+        }
+
+        const res = await window.electronAPI.extractQRCodes(imagePath);
+        if (!res || !res.success) {
+          showStatusToast(t('history.qrFailed') || 'QR code recognition failed');
+          setQrDialogState({ open: true, qrcodes: [], selectedId: null, loading: false });
+          return;
+        }
+
+        const qrcodes = Array.isArray(res.qrcodes) ? res.qrcodes : [];
+        if (!qrcodes.length) {
+          showStatusToast(t('history.qrNotFound') || 'No QR code found');
+          setQrDialogState({ open: true, qrcodes: [], selectedId: null, loading: false });
+          return;
+        }
+
+        setQrDialogState({
+          open: true,
+          qrcodes,
+          selectedId: qrcodes[0] && qrcodes[0].id,
+          loading: false
+        });
+      } catch (err) {
+        showStatusToast(t('history.qrFailed') || 'QR code recognition failed');
+        setQrDialogState({ open: true, qrcodes: [], selectedId: null, loading: false });
+      }
+    };
+
+    window.addEventListener('open-qr-dialog', onOpenQrDialog);
+    return () => window.removeEventListener('open-qr-dialog', onOpenQrDialog);
+  }, [t]);
+
   const handlePinnedOnlyChange = (value) => {
     const next = !!value;
     setSearchOptions((prev) => ({
@@ -722,6 +799,16 @@ function App() {
         initialContent={editModalState.item?.content || ''}
         onClose={() => setEditModalState({ open: false, item: null })}
         onSave={handleEditSave}
+      />
+      <QRCodeSelectorDialog
+        open={qrDialogState.open}
+        qrcodes={qrDialogState.qrcodes}
+        selectedId={qrDialogState.selectedId}
+        onSelect={(id) => setQrDialogState((prev) => ({ ...prev, selectedId: id }))}
+        onClose={closeQrDialog}
+        onCopySelected={handleCopySelectedQr}
+        onCopyAll={handleCopyAllQr}
+        loading={qrDialogState.loading}
       />
       <SettingsModal
         isOpen={isSettingsOpen}

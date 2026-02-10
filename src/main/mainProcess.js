@@ -7,6 +7,7 @@ const PasteHandler = require('./pasteHandler');
 const ScreenshotManager = require('./screenshotManager');
 const Config = require('./config');
 const resourceManager = require('./core/resourceManager');
+const { extractQRCodes } = require('./qrcodeService');
 
 // 安全的console包装器，防止EPIPE错误
 // Use DEBUG flag to control verbose logging. Default false in production.
@@ -1377,6 +1378,29 @@ class MainProcess {
         }
       } catch (err) {
         safeConsole.error('show-notification error:', err);
+        return { success: false, error: err.message };
+      }
+    });
+
+    // Extract QR codes from an image path (on-demand)
+    ipcMain.handle('extract-qr-codes', async (_event, imagePath) => {
+      try {
+        if (!imagePath) return { success: false, qrcodes: [], error: 'no-path' };
+        const qrcodes = await extractQRCodes(imagePath);
+        return { success: true, qrcodes: Array.isArray(qrcodes) ? qrcodes : [] };
+      } catch (err) {
+        safeConsole.error('extract-qr-codes error:', err);
+        return { success: false, qrcodes: [], error: err.message };
+      }
+    });
+
+    // Copy QR content to clipboard
+    ipcMain.handle('copy-qr-content', async (_event, content) => {
+      try {
+        clipboard.writeText(String(content || ''));
+        return { success: true };
+      } catch (err) {
+        safeConsole.error('copy-qr-content error:', err);
         return { success: false, error: err.message };
       }
     });

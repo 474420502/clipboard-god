@@ -134,6 +134,17 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
     }
   };
 
+  const handleExtractQRCode = (e) => {
+    try {
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      const imagePath = item.image_path || item.image_thumb || '';
+      const ev = new CustomEvent('open-qr-dialog', { detail: { imagePath, item } });
+      window.dispatchEvent(ev);
+    } catch (err) {
+      console.error('Failed to request QR extraction:', err);
+    }
+  };
+
   // Global single-instance context menu. Creates or reuses an element with id 'global-history-context-menu'.
   const handleContextMenu = (e) => {
     try {
@@ -188,6 +199,14 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
             const ev = new CustomEvent('open-edit-modal', { detail: { item } });
             window.dispatchEvent(ev);
           } catch (err) { console.error('Edit dispatch error', err); }
+        }));
+      }
+
+      if (isImage) {
+        menu.appendChild(makeItem(i18nRef.current.t('history.qrcode') || 'QR Code', async () => {
+          try {
+            handleExtractQRCode();
+          } catch (err) { console.error('QR dispatch error', err); }
         }));
       }
 
@@ -372,6 +391,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
               }
             } catch (err) { console.error(err); }
           }}>{t('history.view')}</button>
+          <button type="button" className="btn btn-qr" onClick={handleExtractQRCode}>{t('history.qrcode')}</button>
           <button type="button" className="btn btn-download" onClick={(e) => {
             e.stopPropagation();
             try {

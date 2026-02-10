@@ -65,6 +65,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadImage: (imagePath) => ipcRenderer.invoke('download-image', imagePath),
   openImage: (imagePath) => ipcRenderer.invoke('open-image', imagePath),
   showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
+  // QR code utilities
+  extractQRCodes: (imagePath) => ipcRenderer.invoke('extract-qr-codes', imagePath),
+  copyQRCodeContent: (content) => ipcRenderer.invoke('copy-qr-content', content),
 
   // cleanupListeners removed; use per-listener unsubscribe functions instead
 });

@@ -745,6 +745,88 @@ html {
     flex-shrink: 0;
 }
 
+/* QR code selector dialog */
+.qr-modal {
+    width: 90%;
+    max-width: 640px;
+    background: var(--settings-bg, #fff);
+    color: var(--settings-text, #111);
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+
+.qr-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.qr-modal-body {
+    flex-grow: 1;
+    overflow: auto;
+    margin-bottom: 10px;
+}
+
+.qr-loading,
+.qr-empty {
+    padding: 16px;
+    color: var(--settings-text, #111);
+    opacity: 0.8;
+    text-align: center;
+}
+
+.qr-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.qr-item {
+    border: 1px solid var(--settings-input-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--settings-input-bg);
+    cursor: pointer;
+}
+
+.qr-item.selected {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.qr-item-label {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.qr-index {
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.qr-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.qr-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
 .btn-close {
     background: transparent; 
     border: none; 
@@ -868,7 +950,20 @@ html {
     color: var(--text-secondary);
 }
 
+.item-actions .btn-qr {
+    background-color: transparent;
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
 .item-actions .btn-view:hover {
+    background-color: var(--button-hover-bg);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.item-actions .btn-qr:hover {
     background-color: var(--button-hover-bg);
     border-color: var(--accent-color);
     color: var(--accent-color);
@@ -894,7 +989,18 @@ html {
     color: var(--item-selected-text);
 }
 
+.history-item.selected .item-actions .btn-qr {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.6);
+    color: var(--item-selected-text);
+}
+
 .history-item.selected .item-actions .btn-view:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.history-item.selected .item-actions .btn-qr:hover {
     background-color: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.8);
 }
