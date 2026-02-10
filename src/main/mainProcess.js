@@ -8,6 +8,7 @@ const ScreenshotManager = require('./screenshotManager');
 const Config = require('./config');
 const resourceManager = require('./core/resourceManager');
 const { extractQRCodes } = require('./qrcodeService');
+const { recognizeText } = require('./ocrService');
 
 // 安全的console包装器，防止EPIPE错误
 // Use DEBUG flag to control verbose logging. Default false in production.
@@ -1401,6 +1402,39 @@ class MainProcess {
         return { success: true };
       } catch (err) {
         safeConsole.error('copy-qr-content error:', err);
+        return { success: false, error: err.message };
+      }
+    });
+
+    // Extract OCR text from an image (on-demand)
+    ipcMain.handle('extract-ocr-text', async (_event, payload) => {
+      try {
+        let imagePath = payload;
+        let languages = undefined;
+        let preprocess = null;
+
+        if (payload && typeof payload === 'object') {
+          imagePath = payload.imagePath;
+          languages = payload.languages;
+          preprocess = payload.preprocess || null;
+        }
+
+        if (!imagePath) return { success: false, text: '', error: 'no-path' };
+        const res = await recognizeText(imagePath, languages, preprocess);
+        return res;
+      } catch (err) {
+        safeConsole.error('extract-ocr-text error:', err);
+        return { success: false, text: '', error: err.message };
+      }
+    });
+
+    // Copy OCR content to clipboard
+    ipcMain.handle('copy-ocr-content', async (_event, content) => {
+      try {
+        clipboard.writeText(String(content || ''));
+        return { success: true };
+      } catch (err) {
+        safeConsole.error('copy-ocr-content error:', err);
         return { success: false, error: err.message };
       }
     });

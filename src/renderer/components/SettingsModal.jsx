@@ -15,7 +15,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     theme: 'light',
     enableTooltips: true,
     launchOnStartup: false,
-    locale: 'zh-CN' // 默认语言
+    locale: 'zh-CN', // 默认语言
+    ocrLanguages: ['chi_sim', 'eng']
   });
 
   const tabs = [
@@ -90,7 +91,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 theme: res.config.theme,
                 launchOnStartup: typeof res.config.launchOnStartup !== 'undefined' ? res.config.launchOnStartup : false,
                 llms: res.config.llms || settings.llms || {},
-                locale: res.config.locale || settings.locale
+                locale: res.config.locale || settings.locale,
+                ocrLanguages: res.config.ocrLanguages || settings.ocrLanguages || ['chi_sim', 'eng']
               };
             }
 
@@ -106,7 +108,8 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 theme: settings.theme,
                 launchOnStartup: settings.launchOnStartup,
                 llms: settings.llms || {},
-                locale: settings.locale
+                locale: settings.locale,
+                ocrLanguages: settings.ocrLanguages || ['chi_sim', 'eng']
               };
             }
 
@@ -213,30 +216,31 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
       >
         <header className="settings-header">
           <h3 id="settingsTitle">{t('settings.title')}</h3>
-          <button
-            id="closeSettingsBtn"
-            className="settings-close"
-            aria-label={t('settings.close')}
-            onClick={onClose}
-          >
-            ✕
-          </button>
+          <div className="settings-header-right">
+            <select
+              className="settings-tab-select"
+              aria-label={t('settings.title')}
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value)}
+            >
+              {tabs.map(tab => (
+                <option key={tab.id} value={tab.id}>
+                  {tab.icon} {tab.label}
+                </option>
+              ))}
+            </select>
+            <button
+              id="closeSettingsBtn"
+              className="settings-close"
+              aria-label={t('settings.close')}
+              onClick={onClose}
+            >
+              ✕
+            </button>
+          </div>
         </header>
 
         <div className="settings-body">
-          <nav className="settings-nav">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <span className="nav-icon">{tab.icon}</span>
-                <span className="nav-label">{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-
           <div className="settings-content">
             {activeTab === 'general' && (
               <div className="settings-section">

@@ -20,6 +20,7 @@ import SettingsModal from './components/SettingsModal';
 import useNumberShortcuts from './hooks/useNumberShortcuts';
 import EditModal from './components/EditModal';
 import QRCodeSelectorDialog from './components/QRCodeSelectorDialog';
+import OCRResultDialog from './components/OCRResultDialog';
 
 function App() {
   const { t } = useTranslation();
@@ -38,6 +39,15 @@ function App() {
   const [suppressMouseHover, setSuppressMouseHover] = useState(false);
   const [editModalState, setEditModalState] = useState({ open: false, item: null });
   const [qrDialogState, setQrDialogState] = useState({ open: false, qrcodes: [], selectedId: null, loading: false });
+  const [ocrDialogState, setOcrDialogState] = useState({ open: false, text: '', loading: false, error: '', imagePath: '', confidence: null });
+  const [ocrLanguages, setOcrLanguages] = useState(['chi_sim', 'eng']);
+  const [ocrPreprocess, setOcrPreprocess] = useState({
+    binarize: false,
+    contrast: false,
+    denoise: false,
+    dpi300: false,
+    preserveSpaces: false
+  });
   const [settings, setSettings] = useState({
     previewLength: 120,
     maxHistoryItems: 500,
@@ -47,7 +57,17 @@ function App() {
     theme: 'light',
     enableTooltips: true,
     launchOnStartup: false,
-    locale: 'zh-CN'
+    locale: 'zh-CN',
+    ocrLanguages: ['chi_sim', 'eng'],
+    ocrLangSelectorExpanded: false,
+    ocrSettingsExpanded: false,
+    ocrPreprocess: {
+      binarize: false,
+      contrast: false,
+      denoise: false,
+      dpi300: false,
+      preserveSpaces: false
+    }
   });
 
   // Refs for global key handler to avoid re-registering listeners
@@ -57,6 +77,7 @@ function App() {
   const filteredHistoryRef = useRef([]);
   const useNumberShortcutsRef = useRef(!!settings.useNumberShortcuts);
   const editModalOpenRef = useRef(!!editModalState.open);
+  const searchOptionsRef = useRef(searchOptions);
 
   // 在 App 挂载时，从主进程加载设置并作为单一来源
   useEffect(() => {
@@ -77,10 +98,27 @@ function App() {
           if (typeof cfg.theme !== 'undefined') mapped.theme = cfg.theme;
           if (typeof cfg.launchOnStartup !== 'undefined') mapped.launchOnStartup = cfg.launchOnStartup;
           if (typeof cfg.locale !== 'undefined') mapped.locale = cfg.locale;
+          if (typeof cfg.ocrLanguages !== 'undefined') mapped.ocrLanguages = cfg.ocrLanguages;
+          if (typeof cfg.ocrLangSelectorExpanded !== 'undefined') mapped.ocrLangSelectorExpanded = cfg.ocrLangSelectorExpanded;
+          if (typeof cfg.ocrSettingsExpanded !== 'undefined') mapped.ocrSettingsExpanded = cfg.ocrSettingsExpanded;
+          if (typeof cfg.ocrPreprocess !== 'undefined') mapped.ocrPreprocess = cfg.ocrPreprocess;
           // include llms map when present so renderer can show entries in settings
           if (typeof cfg.llms !== 'undefined') mapped.llms = cfg.llms;
 
           setSettings(prev => ({ ...prev, ...mapped }));
+          if (typeof mapped.ocrLanguages !== 'undefined') {
+            setOcrLanguages(Array.isArray(mapped.ocrLanguages) ? mapped.ocrLanguages : ['chi_sim', 'eng']);
+          }
+          if (typeof mapped.ocrPreprocess !== 'undefined') {
+            const next = mapped.ocrPreprocess || {};
+            setOcrPreprocess({
+              binarize: !!next.binarize,
+              contrast: !!next.contrast,
+              denoise: !!next.denoise,
+              dpi300: !!next.dpi300,
+              preserveSpaces: !!next.preserveSpaces
+            });
+          }
         }
       })
       .catch((err) => {
@@ -307,10 +345,27 @@ function App() {
         if (typeof updated.screenshotShortcut !== 'undefined') mapped.screenshotShortcut = updated.screenshotShortcut;
         if (typeof updated.theme !== 'undefined') mapped.theme = updated.theme;
         if (typeof updated.locale !== 'undefined') mapped.locale = updated.locale;
+        if (typeof updated.ocrLanguages !== 'undefined') mapped.ocrLanguages = updated.ocrLanguages;
+        if (typeof updated.ocrLangSelectorExpanded !== 'undefined') mapped.ocrLangSelectorExpanded = updated.ocrLangSelectorExpanded;
+        if (typeof updated.ocrSettingsExpanded !== 'undefined') mapped.ocrSettingsExpanded = updated.ocrSettingsExpanded;
+        if (typeof updated.ocrPreprocess !== 'undefined') mapped.ocrPreprocess = updated.ocrPreprocess;
         // pass through llms when main process provides it
         if (typeof updated.llms !== 'undefined') mapped.llms = updated.llms;
 
         setSettings(prev => ({ ...prev, ...mapped }));
+        if (typeof mapped.ocrLanguages !== 'undefined') {
+          setOcrLanguages(Array.isArray(mapped.ocrLanguages) ? mapped.ocrLanguages : ['chi_sim', 'eng']);
+        }
+        if (typeof mapped.ocrPreprocess !== 'undefined') {
+          const next = mapped.ocrPreprocess || {};
+          setOcrPreprocess({
+            binarize: !!next.binarize,
+            contrast: !!next.contrast,
+            denoise: !!next.denoise,
+            dpi300: !!next.dpi300,
+            preserveSpaces: !!next.preserveSpaces
+          });
+        }
       } catch (err) {
         console.error('Failed to apply settings-updated:', err);
       }
@@ -430,6 +485,7 @@ function App() {
   useEffect(() => { filteredHistoryRef.current = filteredHistory; }, [filteredHistory]);
   useEffect(() => { useNumberShortcutsRef.current = !!settings.useNumberShortcuts; }, [settings.useNumberShortcuts]);
   useEffect(() => { editModalOpenRef.current = !!editModalState.open; }, [editModalState.open]);
+  useEffect(() => { searchOptionsRef.current = searchOptions; }, [searchOptions]);
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) {
@@ -454,6 +510,10 @@ function App() {
     setQrDialogState((prev) => ({ ...prev, open: false, loading: false }));
   };
 
+  const closeOcrDialog = () => {
+    setOcrDialogState((prev) => ({ ...prev, open: false, loading: false }));
+  };
+
   const handleCopySelectedQr = async () => {
     try {
       if (!window.electronAPI || typeof window.electronAPI.copyQRCodeContent !== 'function') return;
@@ -475,6 +535,178 @@ function App() {
       showStatusToast(t('history.qrCopiedAll') || 'All QR codes copied');
     } catch (err) {
       showStatusToast(t('history.qrFailed') || 'QR code recognition failed');
+    }
+  };
+
+  const runOcr = async (imagePath) => {
+    try {
+      if (!imagePath) {
+        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrInvalidImage') || 'Image not available', imagePath: '' });
+        return;
+      }
+
+      setOcrDialogState({ open: true, text: '', loading: true, error: '', imagePath });
+
+      if (!window.electronAPI || typeof window.electronAPI.extractOCRText !== 'function') {
+        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath });
+        return;
+      }
+
+      const res = await window.electronAPI.extractOCRText(imagePath, ocrLanguages);
+      if (!res || !res.success) {
+        if (res && res.error === 'ocr-lang-download-failed') {
+          const details = res.details || {};
+          const langs = Array.isArray(details.langs) ? details.langs.join(', ') : '';
+          const msg = t('history.ocrLangDownloadFailed', {
+            langs: langs || details.langs || '',
+            path: details.path || ''
+          }) || 'OCR language data download failed';
+          setOcrDialogState({ open: true, text: '', loading: false, error: msg, imagePath });
+          return;
+        }
+        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath });
+        return;
+      }
+
+      const text = res.text || '';
+      setOcrDialogState({ open: true, text, loading: false, error: '', imagePath });
+      if (!text.trim()) {
+        showStatusToast(t('history.ocrNotFound') || 'No text found');
+      }
+    } catch (err) {
+      setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath });
+    }
+  };
+
+  const handleCopyOcr = async () => {
+    try {
+      if (!window.electronAPI || typeof window.electronAPI.copyOCRContent !== 'function') return;
+      if (!ocrDialogState.text || !ocrDialogState.text.trim()) return;
+      await window.electronAPI.copyOCRContent(ocrDialogState.text);
+      showStatusToast(t('history.ocrCopied') || 'OCR text copied');
+    } catch (err) {
+      showStatusToast(t('history.ocrFailed') || 'OCR failed');
+    }
+  };
+
+  const handleRetryOcr = () => {
+    runOcr(ocrDialogState.imagePath || '');
+  };
+
+  const ocrLanguageOptions = useMemo(() => ([
+    { code: 'chi_sim', label: t('history.ocrLangChiSim') },
+    { code: 'chi_tra', label: t('history.ocrLangChiTra') },
+    { code: 'eng', label: t('history.ocrLangEng') },
+    { code: 'jpn', label: t('history.ocrLangJpn') },
+    { code: 'kor', label: t('history.ocrLangKor') },
+    { code: 'deu', label: t('history.ocrLangDeu') },
+    { code: 'fra', label: t('history.ocrLangFra') },
+    { code: 'spa', label: t('history.ocrLangSpa') },
+    { code: 'por', label: t('history.ocrLangPor') },
+    { code: 'ita', label: t('history.ocrLangIta') },
+    { code: 'rus', label: t('history.ocrLangRus') },
+    { code: 'ara', label: t('history.ocrLangAra') },
+    { code: 'vie', label: t('history.ocrLangVie') },
+    { code: 'tha', label: t('history.ocrLangTha') },
+    { code: 'nld', label: t('history.ocrLangNld') },
+    { code: 'pol', label: t('history.ocrLangPol') }
+  ]), [t]);
+
+  const handleChangeOcrLanguages = (langs) => {
+    const list = Array.isArray(langs) ? langs : [];
+    const cleaned = list.map((lang) => String(lang || '').trim()).filter(Boolean);
+    const next = cleaned.length ? cleaned : ['chi_sim', 'eng'];
+    setOcrLanguages(next);
+    setSettings((prevSettings) => ({ ...prevSettings, ocrLanguages: next }));
+    try {
+      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
+        window.electronAPI.setSettings({ ocrLanguages: next });
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const handleToggleOcrLangExpanded = (expanded) => {
+    const next = !!expanded;
+    setSettings((prevSettings) => ({ ...prevSettings, ocrLangSelectorExpanded: next }));
+    try {
+      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
+        window.electronAPI.setSettings({ ocrLangSelectorExpanded: next });
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const handleToggleOcrSettingsExpanded = (expanded) => {
+    const next = !!expanded;
+    setSettings((prevSettings) => ({ ...prevSettings, ocrSettingsExpanded: next }));
+    try {
+      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
+        window.electronAPI.setSettings({ ocrSettingsExpanded: next });
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const handleChangeOcrPreprocess = (key, value) => {
+    const next = { ...ocrPreprocess, [key]: value };
+    setOcrPreprocess(next);
+    setSettings((prevSettings) => ({ ...prevSettings, ocrPreprocess: next }));
+    try {
+      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
+        window.electronAPI.setSettings({ ocrPreprocess: next });
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const handleRetryOcrWithPreprocess = () => {
+    runOcrWithPreprocess(ocrDialogState.imagePath || '');
+  };
+
+  // OCR with preprocessing support
+  const runOcrWithPreprocess = async (imagePath) => {
+    try {
+      if (!imagePath) {
+        setOcrDialogState((prev) => ({ ...prev, open: true, text: '', loading: false, error: t('history.ocrInvalidImage') || 'Image not available', imagePath: '', confidence: null }));
+        return;
+      }
+
+      setOcrDialogState((prev) => ({ ...prev, open: true, text: '', loading: true, error: '', imagePath, confidence: null }));
+
+      if (!window.electronAPI || typeof window.electronAPI.extractOCRText !== 'function') {
+        setOcrDialogState((prev) => ({ ...prev, loading: false, error: t('history.ocrFailed') || 'OCR failed', confidence: null }));
+        return;
+      }
+
+      const res = await window.electronAPI.extractOCRText(imagePath, ocrLanguages, ocrPreprocess);
+      if (!res || !res.success) {
+        if (res && res.error === 'ocr-lang-download-failed') {
+          const details = res.details || {};
+          const langs = Array.isArray(details.langs) ? details.langs.join(', ') : '';
+          const msg = t('history.ocrLangDownloadFailed', {
+            langs: langs || details.langs || '',
+            path: details.path || ''
+          }) || 'OCR language data download failed';
+          setOcrDialogState((prev) => ({ ...prev, loading: false, error: msg, confidence: null }));
+          return;
+        }
+        setOcrDialogState((prev) => ({ ...prev, loading: false, error: t('history.ocrFailed') || 'OCR failed', confidence: null }));
+        return;
+      }
+
+      const text = res.text || '';
+      const confidence = res.confidence || null;
+      setOcrDialogState((prev) => ({ ...prev, text, loading: false, error: '', confidence }));
+      if (!text.trim()) {
+        showStatusToast(t('history.ocrNotFound') || 'No text found');
+      }
+    } catch (err) {
+      setOcrDialogState((prev) => ({ ...prev, loading: false, error: t('history.ocrFailed') || 'OCR failed', confidence: null }));
     }
   };
 
@@ -525,15 +757,60 @@ function App() {
     return () => window.removeEventListener('open-qr-dialog', onOpenQrDialog);
   }, [t]);
 
+  useEffect(() => {
+    const onOpenOcrDialog = (e) => {
+      try {
+        const imagePath = e && e.detail && e.detail.imagePath;
+        runOcr(imagePath);
+      } catch (err) {
+        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath: '' });
+      }
+    };
+
+    window.addEventListener('open-ocr-dialog', onOpenOcrDialog);
+    return () => window.removeEventListener('open-ocr-dialog', onOpenOcrDialog);
+  }, [t]);
+
   const handlePinnedOnlyChange = (value) => {
-    const next = !!value;
-    setSearchOptions((prev) => ({
-      ...prev,
-      pinnedOnly: next
-    }));
-    showStatusToast(next
+    let willEnablePinned = false;
+    let imageOnlyWasOn = false;
+    setSearchOptions((prev) => {
+      imageOnlyWasOn = prev.type === 'image';
+      willEnablePinned = !!value;
+      return {
+        ...prev,
+        pinnedOnly: willEnablePinned,
+        type: willEnablePinned ? 'all' : prev.type
+      };
+    });
+
+    if (willEnablePinned && imageOnlyWasOn) {
+      showStatusToast(t('toast.imageOnlyOff') || 'Only images: off');
+      return;
+    }
+
+    showStatusToast(willEnablePinned
       ? (t('toast.pinnedOnlyOn') || 'Only pinned: on')
       : (t('toast.pinnedOnlyOff') || 'Only pinned: off')
+    );
+  };
+
+  const handleImageOnlyToggle = () => {
+    let willEnable = false;
+    setSearchOptions((prev) => {
+      const nextType = prev.type === 'image' ? 'all' : 'image';
+      willEnable = nextType === 'image';
+      const nextPinnedOnly = nextType === 'image' ? false : prev.pinnedOnly;
+      return {
+        ...prev,
+        type: nextType,
+        pinnedOnly: nextPinnedOnly
+      };
+    });
+
+    showStatusToast(willEnable
+      ? (t('toast.imageOnlyOn') || 'Only images: on')
+      : (t('toast.imageOnlyOff') || 'Only images: off')
     );
   };
 
@@ -602,8 +879,12 @@ function App() {
         if (isSearchInputFocused) {
           return;
         }
-        const enablePinnedOnly = event.key === 'ArrowRight';
-        handlePinnedOnlyChange(enablePinnedOnly);
+        if (event.key === 'ArrowRight') {
+          const current = searchOptionsRef.current || { pinnedOnly: false };
+          handlePinnedOnlyChange(!current.pinnedOnly);
+        } else {
+          handleImageOnlyToggle();
+        }
         event.preventDefault();
         return;
       } else if (isPageUp) {
@@ -809,6 +1090,25 @@ function App() {
         onCopySelected={handleCopySelectedQr}
         onCopyAll={handleCopyAllQr}
         loading={qrDialogState.loading}
+      />
+      <OCRResultDialog
+        open={ocrDialogState.open}
+        text={ocrDialogState.text}
+        loading={ocrDialogState.loading}
+        error={ocrDialogState.error}
+        confidence={ocrDialogState.confidence}
+        onClose={closeOcrDialog}
+        onCopy={handleCopyOcr}
+        onRetry={handleRetryOcr}
+        languages={ocrLanguageOptions}
+        selectedLanguages={ocrLanguages}
+        onChangeLanguages={handleChangeOcrLanguages}
+        langSelectorExpanded={!!settings.ocrLangSelectorExpanded}
+        onToggleLangSelectorExpanded={handleToggleOcrLangExpanded}
+        preprocess={ocrPreprocess}
+        onChangePreprocess={handleChangeOcrPreprocess}
+        settingsExpanded={!!settings.ocrSettingsExpanded}
+        onToggleSettingsExpanded={handleToggleOcrSettingsExpanded}
       />
       <SettingsModal
         isOpen={isSettingsOpen}

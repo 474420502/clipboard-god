@@ -31,12 +31,17 @@
     "electron-screenshots": "^0.5.27",
     "i18next": "^23.0.0",
     "jsqr": "^1.4.0",
+    "node-fetch": "^2.7.0",
+    "regenerator-runtime": "^0.14.1",
     "prop-types": "^15.8.1",
+    "is-url": "^1.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-i18next": "^13.0.0",
     "react-tooltip": "^5.30.0",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "tesseract.js": "^5.0.5",
+    "tesseract.js-core": "^5.0.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.2.5",
@@ -62,10 +67,25 @@
       "locales/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/node-fetch/**",
+      "node_modules/is-url/**",
+      "node_modules/whatwg-url/**",
+      "node_modules/tr46/**",
+      "node_modules/webidl-conversions/**",
+      "node_modules/regenerator-runtime/**"
+    ],
     "extraResources": [
       {
         "from": "locales/",
         "to": "locales/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "tessdata/",
+        "to": "tessdata/",
         "filter": [
           "**/*"
         ]

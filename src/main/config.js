@@ -23,7 +23,21 @@ const DEFAULT_CONFIG = {
   // 截图快捷键
   screenshotShortcut: 'CommandOrControl+Shift+S',
   // 主题
-  theme: 'light'
+  theme: 'light',
+  // OCR 语言
+  ocrLanguages: ['chi_sim', 'eng'],
+  // OCR 语言面板展开状态
+  ocrLangSelectorExpanded: false,
+  // OCR 设置面板展开状态
+  ocrSettingsExpanded: false,
+  // OCR 预处理/识别参数
+  ocrPreprocess: {
+    binarize: false,
+    contrast: false,
+    denoise: false,
+    dpi300: false,
+    preserveSpaces: false
+  }
   ,
   // 语言
   locale: 'en',

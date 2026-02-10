@@ -145,6 +145,17 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
     }
   };
 
+  const handleExtractOCR = (e) => {
+    try {
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      const imagePath = item.image_path || item.image_thumb || '';
+      const ev = new CustomEvent('open-ocr-dialog', { detail: { imagePath, item } });
+      window.dispatchEvent(ev);
+    } catch (err) {
+      console.error('Failed to request OCR extraction:', err);
+    }
+  };
+
   // Global single-instance context menu. Creates or reuses an element with id 'global-history-context-menu'.
   const handleContextMenu = (e) => {
     try {
@@ -207,6 +218,12 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
           try {
             handleExtractQRCode();
           } catch (err) { console.error('QR dispatch error', err); }
+        }));
+
+        menu.appendChild(makeItem(i18nRef.current.t('history.ocr') || 'OCR', async () => {
+          try {
+            handleExtractOCR();
+          } catch (err) { console.error('OCR dispatch error', err); }
         }));
       }
 
@@ -392,6 +409,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
             } catch (err) { console.error(err); }
           }}>{t('history.view')}</button>
           <button type="button" className="btn btn-qr" onClick={handleExtractQRCode}>{t('history.qrcode')}</button>
+          <button type="button" className="btn btn-ocr" onClick={handleExtractOCR}>{t('history.ocr')}</button>
           <button type="button" className="btn btn-download" onClick={(e) => {
             e.stopPropagation();
             try {
