@@ -358,7 +358,6 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
       </div>
       <div className="item-content">
         {isText && <span className="text-preview">{displayText}</span>}
-        {isImage}
       </div>
       {isImage && (
         <div className="item-actions">

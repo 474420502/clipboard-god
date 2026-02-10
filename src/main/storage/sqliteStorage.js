@@ -200,12 +200,12 @@ class SqliteStorage {
             if (ids.length) {
                 const placeholders = ids.map(() => '?').join(',');
                 const deleteStmt = this.db.prepare(`DELETE FROM history WHERE id IN (${placeholders})`);
-                const deleteFtsStmt = this.db.prepare(`DELETE FROM history_fts WHERE rowid IN (${placeholders})`);
                 const tx = this.db.transaction((ids) => {
                     deleteStmt.run(...ids);
                     try {
                         // if FTS exists, delete related rows
                         if (this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) {
+                            const deleteFtsStmt = this.db.prepare(`DELETE FROM history_fts WHERE rowid IN (${placeholders})`);
                             deleteFtsStmt.run(...ids);
                         }
                     } catch (e) { }

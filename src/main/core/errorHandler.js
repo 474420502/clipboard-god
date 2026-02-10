@@ -106,12 +106,13 @@ class ErrorHandler {
      * 处理错误并记录日志
      */
     handleError(error, context = '') {
+        const errorType = error.type || error.name || 'UnknownError';
         const errorInfo = {
             message: error.message,
             stack: error.stack,
             context,
             timestamp: new Date().toISOString(),
-            type: error.name || 'UnknownError'
+            type: errorType
         };
 
         // 记录到文件
@@ -121,7 +122,7 @@ class ErrorHandler {
         }
 
         // 根据错误类型执行不同的处理
-        switch (error.type) {
+        switch (errorType) {
             case 'clipboard':
                 this.safeConsole.warn('剪贴板访问错误:', error.message);
                 break;

@@ -1095,9 +1095,14 @@ class MainProcess {
         // 抑制短时间内任何会显示主窗口的自动行为（比如全局快捷键或托盘单击触发的切换），
         // 避免隐藏后立刻被重新弹出。将抑制状态也写到窗口对象上，供托盘逻辑检查。
         this._isPasting = true;
-        setTimeout(() => {
-          this._isPasting = false;
-        }, 200);
+        const pasteFailsafeMs = 2000;
+        const pasteFailsafeTimer = setTimeout(() => {
+          if (this._isPasting) {
+            safeConsole.warn('粘贴兜底超时，强制恢复状态');
+            this._isPasting = false;
+            this._pasteLock = false;
+          }
+        }, pasteFailsafeMs);
 
         // 等待一小段时间以确保焦点切换回前一个应用
         setTimeout(() => {
@@ -1107,11 +1112,13 @@ class MainProcess {
               safeConsole.log('粘贴操作完成');
               this._pasteLock = false;
               this._isPasting = false;
+              clearTimeout(pasteFailsafeTimer);
             })
             .catch((error) => {
               safeConsole.error('粘贴操作失败:', error);
               this._pasteLock = false;
               this._isPasting = false;
+              clearTimeout(pasteFailsafeTimer);
               // 发送错误信息到渲染进程
               if (this.mainWindow && this.mainWindow.webContents) {
                 this.mainWindow.webContents.send('error', error.message);
@@ -1121,6 +1128,7 @@ class MainProcess {
       } catch (error) {
         safeConsole.error('粘贴项目时出错:', error);
         this._pasteLock = false;
+        this._isPasting = false;
         // 发送错误信息到渲染进程
         if (this.mainWindow && this.mainWindow.webContents) {
           this.mainWindow.webContents.send('error', error.message);

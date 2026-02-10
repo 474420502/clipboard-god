@@ -33,6 +33,16 @@ class ClipboardManager {
     });
   }
 
+  _normalizeTimestamp(value) {
+    if (value instanceof Date) return value;
+    if (typeof value === 'number') return new Date(value);
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) return new Date(parsed);
+    }
+    return new Date();
+  }
+
   // 开始监控剪贴板
   startMonitoring() {
     if (this._monitoring) return;
@@ -225,7 +235,7 @@ class ClipboardManager {
           _dbId: result.id,
           type: item.type,
           content: item.type === 'text' ? item.content : (result.image_path || item.content),
-          timestamp: new Date(item.timestamp || Date.now()),
+          timestamp: this._normalizeTimestamp(item.timestamp),
           image_path: result.image_path,
           image_thumb: result.image_thumb,
           pinned: result.pinned ? 1 : 0
@@ -288,7 +298,7 @@ class ClipboardManager {
       });
       if (idx > -1) {
         this.history[idx].content = newContent;
-        this.history[idx].timestamp = new Date(res.timestamp || Date.now());
+        this.history[idx].timestamp = this._normalizeTimestamp(res.timestamp);
         // move to front
         const item = this.history.splice(idx, 1)[0];
         this.history.unshift(item);
