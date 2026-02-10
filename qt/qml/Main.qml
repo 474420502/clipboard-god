@@ -1244,51 +1244,27 @@ ApplicationWindow {
                                     onTextChanged: if (app) app.setHistoryFilter(text)
                                 }
 
-                                Button {
-                                    text: tr("screenshot", "Screenshot")
-                                    onClicked: if (app) app.requestScreenshot()
-                                }
+                                RowLayout {
+                                    spacing: 6
 
-                                Button {
-                                    text: tr("paste", "Paste")
-                                    onClicked: if (app) app.pasteClipboard()
-                                }
+                                    ToolButton {
+                                        text: "📷"
+                                        onClicked: if (app) app.requestScreenshot()
+                                    }
 
-                                Button {
-                                    text: tr("settings", "Settings")
-                                    onClicked: settingsOpen = true
+                                    ToolButton {
+                                        text: "📋"
+                                        onClicked: if (app) pasteSelectedItem()
+                                    }
+
+                                    ToolButton {
+                                        text: "⚙️"
+                                        onClicked: settingsOpen = true
+                                    }
                                 }
                             }
 
-                            ListView {
-                                id: historyList
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                model: app ? app.filteredHistoryModel : null
-                                delegate: Rectangle {
-                                    width: historyList.width
-                                    height: implicitHeight
-                                    color: index % 2 === 0 ? (currentTheme === "dark" ? "#1f1f1f" : "#f5f5f5")
-                                                           : (currentTheme === "dark" ? "#232323" : "#ffffff")
-                                    radius: 8
-                                    border.color: currentTheme === "dark" ? "#333" : "#e0e0e0"
-                                    border.width: 1
-                                    implicitHeight: contentColumn.implicitHeight + 12
-                                    anchors.margins: 4
-
-                                    Column {
-                                        id: contentColumn
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.margins: 8
-                                        spacing: 6
-
-                                        Text {
-                                            text: highlightText(type + " · " + timestamp)
-                                            color: currentTheme === "dark" ? "#9aa0a6" : "#616161"
-                                            font.pixelSize: 12
-                                            textFormat: Text.RichText
-                                            font.bold: false
+                            Item { Layout.fillWidth: true }
                                         }
 
                                         Loader {

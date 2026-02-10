@@ -1,4 +1,6 @@
-# Clipboard God Qt/QML 迁移工程
+# Clipboard God Qt/QML 迁移工程（暂时废弃）
+
+> 说明：Qt 版本目前暂停维护，功能与 Electron 版本存在差距，暂时不作为主线发布。
 
 这个目录用于把现有 Electron/React 版本逐步迁移到 Qt/QML，并保持跨平台能力。
 

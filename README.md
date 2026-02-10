@@ -5,6 +5,8 @@
 
 Clipboard God is a cross-platform clipboard manager built with Electron and React. It keeps your clipboard history searchable, adds screenshot tooling, and bundles optional AI helpers for fast summarisation, translation, and smart paste workflows.
 
+> Note: The Qt/QML port under qt/ is temporarily deprecated and not maintained as a release target.
+
 ## Release v1.0.4
 
 - Fix: Autostart on system boot now correctly launches the packaged application (prefer /usr/bin/clipboard-god on Linux) instead of invoking the development Electron binary.
