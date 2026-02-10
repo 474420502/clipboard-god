@@ -21,6 +21,7 @@ import useNumberShortcuts from './hooks/useNumberShortcuts';
 import EditModal from './components/EditModal';
 import QRCodeSelectorDialog from './components/QRCodeSelectorDialog';
 import OCRResultDialog from './components/OCRResultDialog';
+import { recognizeWithPaddle } from './ocrPaddle';
 
 function App() {
   const { t } = useTranslation();
@@ -547,28 +548,12 @@ function App() {
 
       setOcrDialogState({ open: true, text: '', loading: true, error: '', imagePath });
 
-      if (!window.electronAPI || typeof window.electronAPI.extractOCRText !== 'function') {
-        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath });
+      const res = await recognizeWithPaddle(imagePath);
+      if (res && res.error) {
+        setOcrDialogState({ open: true, text: '', loading: false, error: res.error || (t('history.ocrFailed') || 'OCR failed'), imagePath });
         return;
       }
-
-      const res = await window.electronAPI.extractOCRText(imagePath, ocrLanguages);
-      if (!res || !res.success) {
-        if (res && res.error === 'ocr-lang-download-failed') {
-          const details = res.details || {};
-          const langs = Array.isArray(details.langs) ? details.langs.join(', ') : '';
-          const msg = t('history.ocrLangDownloadFailed', {
-            langs: langs || details.langs || '',
-            path: details.path || ''
-          }) || 'OCR language data download failed';
-          setOcrDialogState({ open: true, text: '', loading: false, error: msg, imagePath });
-          return;
-        }
-        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath });
-        return;
-      }
-
-      const text = res.text || '';
+      const text = res && res.text ? res.text : '';
       setOcrDialogState({ open: true, text, loading: false, error: '', imagePath });
       if (!text.trim()) {
         showStatusToast(t('history.ocrNotFound') || 'No text found');
@@ -595,21 +580,7 @@ function App() {
 
   const ocrLanguageOptions = useMemo(() => ([
     { code: 'chi_sim', label: t('history.ocrLangChiSim') },
-    { code: 'chi_tra', label: t('history.ocrLangChiTra') },
-    { code: 'eng', label: t('history.ocrLangEng') },
-    { code: 'jpn', label: t('history.ocrLangJpn') },
-    { code: 'kor', label: t('history.ocrLangKor') },
-    { code: 'deu', label: t('history.ocrLangDeu') },
-    { code: 'fra', label: t('history.ocrLangFra') },
-    { code: 'spa', label: t('history.ocrLangSpa') },
-    { code: 'por', label: t('history.ocrLangPor') },
-    { code: 'ita', label: t('history.ocrLangIta') },
-    { code: 'rus', label: t('history.ocrLangRus') },
-    { code: 'ara', label: t('history.ocrLangAra') },
-    { code: 'vie', label: t('history.ocrLangVie') },
-    { code: 'tha', label: t('history.ocrLangTha') },
-    { code: 'nld', label: t('history.ocrLangNld') },
-    { code: 'pol', label: t('history.ocrLangPol') }
+    { code: 'eng', label: t('history.ocrLangEng') }
   ]), [t]);
 
   const handleChangeOcrLanguages = (langs) => {
@@ -678,30 +649,13 @@ function App() {
 
       setOcrDialogState((prev) => ({ ...prev, open: true, text: '', loading: true, error: '', imagePath, confidence: null }));
 
-      if (!window.electronAPI || typeof window.electronAPI.extractOCRText !== 'function') {
-        setOcrDialogState((prev) => ({ ...prev, loading: false, error: t('history.ocrFailed') || 'OCR failed', confidence: null }));
+      const res = await recognizeWithPaddle(imagePath);
+      if (res && res.error) {
+        setOcrDialogState((prev) => ({ ...prev, loading: false, error: res.error || (t('history.ocrFailed') || 'OCR failed'), confidence: null }));
         return;
       }
-
-      const res = await window.electronAPI.extractOCRText(imagePath, ocrLanguages, ocrPreprocess);
-      if (!res || !res.success) {
-        if (res && res.error === 'ocr-lang-download-failed') {
-          const details = res.details || {};
-          const langs = Array.isArray(details.langs) ? details.langs.join(', ') : '';
-          const msg = t('history.ocrLangDownloadFailed', {
-            langs: langs || details.langs || '',
-            path: details.path || ''
-          }) || 'OCR language data download failed';
-          setOcrDialogState((prev) => ({ ...prev, loading: false, error: msg, confidence: null }));
-          return;
-        }
-        setOcrDialogState((prev) => ({ ...prev, loading: false, error: t('history.ocrFailed') || 'OCR failed', confidence: null }));
-        return;
-      }
-
-      const text = res.text || '';
-      const confidence = res.confidence || null;
-      setOcrDialogState((prev) => ({ ...prev, text, loading: false, error: '', confidence }));
+      const text = res && res.text ? res.text : '';
+      setOcrDialogState((prev) => ({ ...prev, text, loading: false, error: '', confidence: null }));
       if (!text.trim()) {
         showStatusToast(t('history.ocrNotFound') || 'No text found');
       }

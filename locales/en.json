@@ -162,7 +162,7 @@
         "ocrInvalidImage": "Image not available",
         "ocrRetry": "Retry",
         "ocrLangTitle": "OCR languages",
-        "ocrLangHint": "Selecting fewer languages improves accuracy and speed. Multi-select supported (Ctrl/Cmd+click).",
+        "ocrLangHint": "Selecting fewer languages improves accuracy and speed. Multi-select supported.",
         "ocrLangChiSim": "Chinese (Simplified)",
         "ocrLangChiTra": "Chinese (Traditional)",
         "ocrLangEng": "English",

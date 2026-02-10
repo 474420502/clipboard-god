@@ -101,3 +101,5 @@ qt/*~
 qt/i18n/*.qm
 
 tmp
+
+Paddle.js/

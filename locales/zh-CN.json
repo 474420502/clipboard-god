@@ -162,7 +162,7 @@
         "ocrInvalidImage": "图片不可用",
         "ocrRetry": "重新识别",
         "ocrLangTitle": "OCR 语言",
-        "ocrLangHint": "选择更少语言可提升识别率与速度。支持多选（按住 Ctrl/Cmd 点击）。",
+        "ocrLangHint": "选择更少语言可提升识别率与速度。支持多选。",
         "ocrLangChiSim": "中文（简体）",
         "ocrLangChiTra": "中文（繁体）",
         "ocrLangEng": "英语",

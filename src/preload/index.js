@@ -69,7 +69,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   extractQRCodes: (imagePath) => ipcRenderer.invoke('extract-qr-codes', imagePath),
   copyQRCodeContent: (content) => ipcRenderer.invoke('copy-qr-content', content),
   // OCR utilities
-  extractOCRText: (imagePath, languages, preprocess) => ipcRenderer.invoke('extract-ocr-text', { imagePath, languages, preprocess }),
   copyOCRContent: (content) => ipcRenderer.invoke('copy-ocr-content', content),
 
   // cleanupListeners removed; use per-listener unsubscribe functions instead
