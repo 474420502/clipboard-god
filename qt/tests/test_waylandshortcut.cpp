@@ -1,0 +1,1 @@
+// Deprecated: shortcut portal tests removed.

@@ -1,0 +1,37 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/x86_64-linux-gnu/qt6",
+                "/usr/include/x86_64-linux-gnu/qt6/QtCore",
+                "/usr/include/x86_64-linux-gnu/qt6/QtGui",
+                "/usr/include/x86_64-linux-gnu/qt6/QtWidgets",
+                "/usr/include/x86_64-linux-gnu/qt6/QtQml",
+                "/usr/include/x86_64-linux-gnu/qt6/QtQuick",
+                "/usr/include/x86_64-linux-gnu/qt6/QtQuickControls2",
+                "/usr/include/x86_64-linux-gnu/qt6/QtSql",
+                "/usr/include/x86_64-linux-gnu/qt6/QtNetwork",
+                "/usr/include/x86_64-linux-gnu/qt6/QtDBus",
+                "/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++"
+            ],
+            "defines": [
+                "QT_CORE_LIB",
+                "QT_GUI_LIB", 
+                "QT_WIDGETS_LIB",
+                "QT_QML_LIB",
+                "QT_QUICK_LIB",
+                "QT_QUICKCONTROLS2_LIB",
+                "QT_SQL_LIB",
+                "QT_NETWORK_LIB",
+                "QT_DBUS_LIB"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

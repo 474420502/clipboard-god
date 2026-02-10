@@ -19,7 +19,7 @@ Clipboard God is a cross-platform clipboard manager built with Electron and Reac
 - Persistent clipboard history for text, screenshots, and pasted images with quick preview.
 - Powerful search with keyboard-first navigation and pinning for favourites.
 - Multi-theme interface, tray integration, and localisation (English and Simplified Chinese).
-- Screenshot capture, download helpers, and quick paste support on Windows, macOS, and Linux (Wayland/X11).
+- Screenshot capture, download helpers, and quick paste support on Windows, macOS, and Linux.
 - Optional AI actions that send content to local or remote LLMs for summarising, rewriting, or translating.
 
 ## AI & Automation Tools
@@ -29,7 +29,7 @@ All AI features are opt-in and configurable from Settings. Pick OpenAI-compatibl
 - **One-click prompts** for summarise, translate, rewrite, and custom actions with per-entry shortcuts.
 - **Inline image support** so clipboard snapshots or staged uploads are sent together with prompts.
 - **Configurable parameters** (model, API key, temperature, max tokens, context window, penalties).
-- **Per-OS paste automation** with fallbacks (xdotool/ydotool/Wayland) and Linux Shift+Insert support for rich text workflows.
+- **Per-OS paste automation** with xdotool fallback and Linux Shift+Insert support for rich text workflows.
 
 Example: OpenAI compatible configuration
 
@@ -63,7 +63,7 @@ Example: Local server (e.g. Ollama)
 
 - Node.js >= 16
 - npm >= 8
-- Linux users: install `xdotool` (X11) or `ydotool`/`wl-clipboard` for best paste automation results.
+- Linux users: install `xdotool` (X11) for best paste automation results.
 
 ### Install from Source
 

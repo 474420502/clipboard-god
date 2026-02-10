@@ -15,9 +15,9 @@ Clipboard God 是一个基于 Electron 和 React 的跨平台剪贴板管理器�
 
 - 长期保留的剪贴板历史，支持文本、截图与图片预览。
 - 键盘优先的快速搜索、固定收藏和多主题界面，支持中英双语。
-- 截图捕获、下载管理、托盘菜单以及多平台粘贴兼容（含 Wayland）。
+- 截图捕获、下载管理、托盘菜单以及多平台粘贴兼容。
 - AI 动作可自定义：总结、翻译、重写、智能提示，支持为每个动作绑定快捷键。
-- Linux 自动粘贴支持 `Shift+Insert`、`Ctrl+V` 等组合，提供 xdotool/ydotool/Wayland 备用方案。
+- Linux 自动粘贴支持 `Shift+Insert`、`Ctrl+V` 等组合，提供 xdotool 备用方案。
 
 ## AI / LLM 功能
 
@@ -60,7 +60,7 @@ AI 功能完全可选，在设置页面选择 OpenAI 兼容接口或本地服务
 
 - Node.js >= 16
 - npm >= 8
-- Linux: 建议安装 `xdotool`（X11）或 `ydotool` / `wl-clipboard` 以获得最佳粘贴体验。
+- Linux: 建议安装 `xdotool`（X11）以获得最佳粘贴体验。
 
 ### 从源码运行
 

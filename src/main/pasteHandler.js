@@ -95,10 +95,8 @@ class PasteHandler {
       // 首先尝试使用 xdotool
       exec('which xdotool', (error, stdout, stderr) => {
         if (error || !stdout.trim()) {
-          // xdotool 不存在，尝试其他方法
-          this.tryAlternativePasteMethods(keyCombination)
-            .then(() => resolve())
-            .catch(reject);
+          // xdotool 不存在，无法自动粘贴
+          reject(new Error('xdotool 未安装，无法自动粘贴，请手动按 Ctrl+V'));
           return;
         }
 
@@ -148,44 +146,8 @@ class PasteHandler {
           return;
         }
 
-        // 方法2: 使用 ydotool (如果安装了)
-        exec('which ydotool', (error, stdout, stderr) => {
-          if (!error && stdout.trim()) {
-            // ydotool 按键码: 29=Ctrl, 42=Shift, 47=V
-            let ydoSequence;
-            if (comboLower === 'ctrl+shift+v') {
-              ydoSequence = 'ydotool key 29:1 42:1 47:1 47:0 42:0 29:0'; // Ctrl+Shift+V
-            } else if (comboLower === 'shift+insert') {
-              ydoSequence = 'ydotool key 42:1 110:1 110:0 42:0'; // Shift+Insert
-            } else {
-              ydoSequence = 'ydotool key 29:1 47:1 47:0 29:0'; // Ctrl+V
-            }
-            exec(ydoSequence, (error, stdout, stderr) => {
-              if (!error) {
-                console.log(`使用 ydotool ${keyCombination} 粘贴成功`);
-                resolve();
-                return;
-              }
-
-              // 所有方法都失败了
-              reject(new Error('所有粘贴方法都失败了'));
-            });
-            return;
-          }
-
-          // 方法3: 使用 wl-clipboard (Wayland)
-          exec('which wl-paste', (error, stdout, stderr) => {
-            if (!error && stdout.trim()) {
-              // 对于 Wayland，我们只能记录需要手动粘贴
-              console.log('检测到 Wayland 环境，请使用 Ctrl+V 手动粘贴');
-              resolve();
-              return;
-            }
-
-            // 所有方法都失败了
-            reject(new Error('所有粘贴方法都失败了，您可能需要手动按 Ctrl+V 粘贴'));
-          });
-        });
+        // 所有方法都失败了
+        reject(new Error('自动粘贴失败，您可能需要手动按 Ctrl+V 粘贴'));
       });
     });
   }

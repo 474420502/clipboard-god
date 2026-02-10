@@ -1,0 +1,44 @@
+# Qt/CMake build files
+qt/build/
+qt/build-*/
+qt/_deps/
+qt/.qt/
+qt/.rcc/
+qt/*/CMakeFiles
+qt/*/CMakeCache.txt
+qt/*/cmake_install.cmake
+qt/*/Makefile
+qt/*/*.cmake
+qt/*/.cmake
+qt/CMakePresets.json.user
+qt/CMakeCache.txt
+qt/CMakeFiles/
+qt/Makefile
+qt/cmake_install.cmake
+qt/CTestTestfile.cmake
+qt/compile_commands.json
+qt/*.pro
+qt/*.pri
+qt/moc_*
+qt/qrc_*
+qt/ui_*
+qt/*.o
+qt/*.obj
+qt/*.a
+qt/*.so
+qt/*.dll
+qt/*.dylib
+qt/*.framework
+qt/*.app/
+
+# Qt Creator
+qt/.qtc_clangd/
+qt/.qtc_package_manager/
+
+# Qt runtime data
+qt/*.log
+qt/*.user
+qt/*~
+
+# Qt translations (generated)
+qt/i18n/*.qm

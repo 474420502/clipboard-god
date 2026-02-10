@@ -1,0 +1,6 @@
+module ClipboardGod
+typeinfo clipboard-god-qt.qmltypes
+prefer :/ClipboardGod/
+Main 1.0 qml/Main.qml
+ShortcutCapture 1.0 qml/components/ShortcutCapture.qml
+

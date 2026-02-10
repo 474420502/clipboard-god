@@ -1,0 +1,1 @@
+// Deprecated: portal screenshot tests removed.
