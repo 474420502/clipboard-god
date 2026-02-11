@@ -12,44 +12,23 @@ cmake --build /home/eson/workspace/clipboard-god/qt/build
 
 Result: build succeeded, binary at `qt/build/clipboard-god-qt`.
 
-## Wayland Portal Shortcuts Support
+## X11 Shortcut Support
 
 ### Build Options
 
-- `USE_WAYLAND_PORTAL` (default: ON): Enable xdg-desktop-portal shortcuts for Wayland
 - `USE_QHOTKEY` (default: ON): Enable QHotkey for X11 shortcuts
 
 ### Build Examples
 
 ```bash
-# Enable Wayland Portal shortcuts (default)
-cmake -S . -B build -DUSE_WAYLAND_PORTAL=ON
+# Enable QHotkey (X11)
+cmake -S . -B build -DUSE_QHOTKEY=ON
 
-# Disable Wayland Portal shortcuts
-cmake -S . -B build -DUSE_WAYLAND_PORTAL=OFF
-
-# Disable QHotkey (X11 only)
-cmake -S . -B build -DUSE_QHOTKEY=ON -DUSE_WAYLAND_PORTAL=ON
-```
-
-### Runtime Dependencies
-
-For Wayland portal shortcuts to work:
-- `xdg-desktop-portal` >= 1.14
-- `xdg-desktop-portal-gtk` (or your desktop's portal implementation)
-- DBus session bus
-
-### Testing
-
-```bash
-# Run all tests
-ctest --test-dir build
-
-# Run Wayland shortcut tests
-ctest --test-dir build -R WaylandShortcut
+# Disable QHotkey (X11 shortcuts off)
+cmake -S . -B build -DUSE_QHOTKEY=OFF
 ```
 
 ## Notes
 - If `cmake -S . -B build -G Ninja` is run from the repo root, it fails because there is no top-level CMakeLists.txt. Use the `qt` directory as the source path.
-- Wayland portal shortcuts require a running DBus session and portal service.
+- Wayland shortcut portals are not supported.
 - On X11, QHotkey is used if available.

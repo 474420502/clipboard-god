@@ -1,4 +1,5 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, screen, clipboard, Notification, dialog } = require('electron');
+const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const ClipboardManager = require('./clipboardManager');
@@ -87,6 +88,19 @@ class MainProcess {
     // X11连接状态监控
     this._x11ConnectionCount = 0;
     this._x11ConnectionMonitoring = false;
+    this._lastActiveWindowId = '';
+  }
+
+  captureActiveWindowId(reason = '') {
+    if (process.platform !== 'linux') return;
+    exec('xdotool getactivewindow', (error, stdout) => {
+      if (error || !stdout) return;
+      const windowId = String(stdout).trim();
+      if (windowId) {
+        this._lastActiveWindowId = windowId;
+        safeConsole.log('记录活动窗口:', windowId, reason ? `(${reason})` : '');
+      }
+    });
   }
 
   // Validate shortcut string to ensure it contains at least one modifier key
@@ -327,6 +341,7 @@ class MainProcess {
         if (this.mainWindow.isVisible()) {
           this.mainWindow.hide();
         } else {
+          this.captureActiveWindowId('global-shortcut');
           this.mainWindow.show();
           // Notify renderer that the global shortcut opened the window so the UI
           // can reset state (clear search and hide search input) and not inherit previous data.
@@ -1167,7 +1182,8 @@ class MainProcess {
         // 等待一小段时间以确保焦点切换回前一个应用
         setTimeout(() => {
           // 写入剪贴板并执行粘贴
-          PasteHandler.writeAndPaste(item)
+          const targetWindowId = this._lastActiveWindowId || '';
+          PasteHandler.writeAndPaste(item, { targetWindowId })
             .then(() => {
               safeConsole.log('粘贴操作完成');
               this._pasteLock = false;

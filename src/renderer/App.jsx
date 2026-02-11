@@ -201,6 +201,11 @@ function App() {
 
     const handleError = (error) => {
       console.error('Received error from main process:', error);
+      const prefix = t('error.prefix') || 'Error: ';
+      const message = (typeof error === 'string' && error.trim())
+        ? error
+        : (error && error.message ? error.message : 'Unknown error');
+      showStatusToast(`${prefix}${message}`);
     };
 
     // subscribe to updates / errors via preload wrappers

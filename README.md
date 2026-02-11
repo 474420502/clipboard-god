@@ -31,7 +31,7 @@ All AI features are opt-in and configurable from Settings. Pick OpenAI-compatibl
 - **One-click prompts** for summarise, translate, rewrite, and custom actions with per-entry shortcuts.
 - **Inline image support** so clipboard snapshots or staged uploads are sent together with prompts.
 - **Configurable parameters** (model, API key, temperature, max tokens, context window, penalties).
-- **Per-OS paste automation** with xdotool fallback and Linux Shift+Insert support for rich text workflows.
+- **Per-OS paste automation** with xdotool on Linux X11 plus native keystrokes on Windows and macOS (Wayland is not supported).
 
 Example: OpenAI compatible configuration
 
@@ -65,7 +65,7 @@ Example: Local server (e.g. Ollama)
 
 - Node.js >= 16
 - npm >= 8
-- Linux users: install `xdotool` (X11) for best paste automation results.
+- Linux (X11) users: install `xdotool` for paste automation. Wayland is not supported.
 
 ### Install from Source
 
@@ -102,7 +102,7 @@ Key options include maximum history items, theme, language, global shortcut, and
 - `Ctrl+Alt+V` toggle history window (default global shortcut).
 - `1-9` paste the corresponding item from the history list.
 - Arrow keys navigate between items; `Enter` pastes the active entry.
-- `Shift+Insert` (Linux rich text) or `Ctrl+V` (default) for automated paste.
+- Linux (X11): `Ctrl+V` default with `Shift+Insert` fallback for automated paste.
 - `Esc` hides the window instantly.
 
 ## Build & Packaging

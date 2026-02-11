@@ -25,6 +25,32 @@ fi
 
 echo "🚀 Building Clipboard God..."
 
+# Native deps rebuild guard (X11 only; no Wayland support)
+STAMP_DIR=".cache/build"
+STAMP_FILE="$STAMP_DIR/native-deps.stamp"
+mkdir -p "$STAMP_DIR"
+
+PKG_HASH=""
+LOCK_HASH=""
+if command -v sha256sum >/dev/null 2>&1; then
+	PKG_HASH=$(sha256sum package.json 2>/dev/null | awk '{print $1}')
+	if [ -f package-lock.json ]; then
+		LOCK_HASH=$(sha256sum package-lock.json 2>/dev/null | awk '{print $1}')
+	fi
+fi
+
+ELECTRON_VERSION=""
+if [ -f node_modules/electron/package.json ]; then
+	ELECTRON_VERSION=$(node -p "require('./node_modules/electron/package.json').version" 2>/dev/null || echo "")
+fi
+
+STAMP_CONTENT="pkg=${PKG_HASH} lock=${LOCK_HASH} electron=${ELECTRON_VERSION} platform=$(uname -s) arch=$(uname -m)"
+
+SKIP_NATIVE_REBUILD=0
+if [ -d node_modules ] && [ -f "$STAMP_FILE" ] && grep -qxF "$STAMP_CONTENT" "$STAMP_FILE"; then
+	SKIP_NATIVE_REBUILD=1
+fi
+
 # If there is an existing staging directory from a previous run, and the
 # .deb wasn't produced (for example the previous run was interrupted),
 # automatically finalize the latest staging into a .deb and copy to dist-electron.
@@ -91,9 +117,19 @@ fi
 echo "🧹 Cleaning previous builds..."
 rm -rf dist dist-electron
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-npm install
+# Install dependencies (only when needed)
+if [ "$SKIP_NATIVE_REBUILD" = "1" ]; then
+	echo "📦 Dependencies unchanged; skipping npm install"
+else
+	echo "📦 Installing dependencies..."
+	npm install
+	# refresh electron version after install and update stamp
+	if [ -f node_modules/electron/package.json ]; then
+		ELECTRON_VERSION=$(node -p "require('./node_modules/electron/package.json').version" 2>/dev/null || echo "")
+	fi
+	STAMP_CONTENT="pkg=${PKG_HASH} lock=${LOCK_HASH} electron=${ELECTRON_VERSION} platform=$(uname -s) arch=$(uname -m)"
+	echo "$STAMP_CONTENT" > "$STAMP_FILE"
+fi
 
 # Build the application
 echo "🔨 Building application..."
@@ -101,7 +137,12 @@ npm run build
 
 # Create distributables
 echo "📦 Creating distributables..."
-npm run dist
+if [ "$SKIP_NATIVE_REBUILD" = "1" ]; then
+	# Skip native rebuild when nothing changed
+	npx electron-builder --config.npmRebuild=false --config.nodeGypRebuild=false
+else
+	npx electron-builder
+fi
 
 # -------------------------
 # Optional: build .deb package

@@ -158,6 +158,9 @@ class TrayManager {
         if (mainWindow.isVisible()) {
           mainWindow.hide();
         } else {
+          if (mainProcess && typeof mainProcess.captureActiveWindowId === 'function') {
+            mainProcess.captureActiveWindowId('tray-click');
+          }
           mainWindow.show();
         }
       }

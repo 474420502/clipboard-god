@@ -103,3 +103,4 @@ qt/i18n/*.qm
 tmp
 
 Paddle.js/
+paddleocr.js/
