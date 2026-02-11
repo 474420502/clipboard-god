@@ -52,13 +52,16 @@ const recognizeWithPaddle = async (imageInput, options = {}) => {
     try {
         await ensureInit();
         const img = await loadImage(imageInput);
+        
+        // 直接使用原图，让 paddlejs 内部处理预处理
         const canvas = options.canvas || document.createElement('canvas');
+        
         const res = await ocrModule.recognize(img, {
             canvas,
             style: options.style
         });
 
-        const textArr = Array.isArray(res?.text)
+        let textArr = Array.isArray(res?.text)
             ? res.text
             : (res?.text ? [String(res.text)] : []);
 

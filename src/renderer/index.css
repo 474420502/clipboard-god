@@ -829,38 +829,47 @@ html {
 
 /* OCR dialog */
 .ocr-modal {
-    width: 90%;
-    max-width: 720px;
+    width: 100%;
+    height: 98%;
     background: var(--settings-bg, #fff);
     color: var(--settings-text, #111);
     border-radius: 10px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    padding: 16px;
+    padding: 5px;
     display: flex;
     flex-direction: column;
-    max-height: 80vh;
 }
 
 .ocr-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 2px;
     flex-shrink: 0;
+}
+
+.ocr-modal-header h3 {
+    margin: 0;
+    font-size: 12px;
 }
 
 .ocr-modal-body {
     flex-grow: 1;
     overflow: auto;
-    margin-bottom: 10px;
+    margin-bottom: 1px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-height: 0;
+    height: 100%;
 }
 
 .ocr-lang-section,
 .ocr-preprocess-section {
     border: 1px solid var(--settings-input-border);
     border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 12px;
+    padding: 6px 8px;
+    margin-bottom: 0;
     background: var(--settings-input-bg);
 }
 
@@ -886,7 +895,9 @@ html {
 
 .ocr-lang-panel,
 .ocr-preprocess-panel {
-    margin-top: 8px;
+    margin-top: 5px;
+    max-height: 180px;
+    overflow: auto;
 }
 
 .ocr-lang-title {
@@ -915,15 +926,15 @@ html {
 .ocr-lang-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 8px;
-    margin-top: 8px;
+    gap: 5px;
+    margin-top: 5px;
 }
 
 .ocr-lang-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 6px;
+    padding: 6px 8px;
     border: 1px solid var(--settings-input-border);
     border-radius: 6px;
     cursor: pointer;
@@ -956,15 +967,15 @@ html {
 }
 
 .ocr-lang-hint {
-    margin-top: 8px;
+    margin-top: 5px;
     font-size: 12px;
     opacity: 0.75;
 }
 
 /* Preprocess options */
 .ocr-preprocess-option {
-    margin-bottom: 12px;
-    padding-bottom: 12px;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
     border-bottom: 1px solid var(--settings-border);
 }
 
@@ -994,7 +1005,7 @@ html {
 }
 
 .ocr-preprocess-help {
-    margin-top: 4px;
+    margin-top: 3px;
     margin-left: 24px;
     font-size: 12px;
     opacity: 0.7;
@@ -1005,11 +1016,11 @@ html {
 .ocr-confidence-section {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 6px;
+    padding: 5px 8px;
     background: var(--settings-bg);
     border-radius: 6px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
     border: 1px solid var(--settings-border);
 }
 
@@ -1031,7 +1042,7 @@ html {
 .ocr-loading,
 .ocr-empty,
 .ocr-error {
-    padding: 16px;
+    padding: 6px;
     color: var(--settings-text, #111);
     opacity: 0.85;
     text-align: center;
@@ -1039,7 +1050,7 @@ html {
 
 .ocr-textarea {
     width: 100%;
-    min-height: 240px;
+    min-height: 200px;
     resize: vertical;
     padding: 10px;
     font-family: inherit;
@@ -1049,13 +1060,20 @@ html {
     border-radius: 6px;
     box-sizing: border-box;
     line-height: 1.4;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
 }
 
 .ocr-modal-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
+    gap: 5px;
     flex-shrink: 0;
+}
+
+.ocr-modal .btn {
+    padding: 6px 12px;
 }
 
 .btn-close {

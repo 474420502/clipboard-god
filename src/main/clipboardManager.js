@@ -1,4 +1,5 @@
 const { clipboard } = require('electron');
+const fs = require('fs');
 const SqliteStorage = require('./storage/sqliteStorage');
 
 class ClipboardManager {
@@ -20,7 +21,7 @@ class ClipboardManager {
     // convert to expected in-memory format and keep db row id in _dbId
     this.history = rows.map(r => {
       if (r.type === 'text') return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'text', content: r.content, timestamp: new Date(r.timestamp), pinned: r.pinned ? 1 : 0 };
-      return {
+      return this._normalizeImagePaths({
         id: r.id || Date.now(),
         _dbId: r._dbId || null,
         type: 'image',
@@ -29,8 +30,21 @@ class ClipboardManager {
         image_path: r.image_path,
         image_thumb: r.image_thumb,
         pinned: r.pinned ? 1 : 0
-      };
+      });
     });
+  }
+
+  _normalizeImagePaths(item) {
+    if (!item || item.type !== 'image') return item;
+    const normalized = { ...item };
+    if (normalized.image_thumb && !fs.existsSync(normalized.image_thumb)) {
+      normalized.image_thumb = null;
+    }
+    if (normalized.image_path && !fs.existsSync(normalized.image_path)) {
+      normalized.image_path = null;
+      normalized.content = null;
+    }
+    return normalized;
   }
 
   _normalizeTimestamp(value) {
@@ -146,6 +160,17 @@ class ClipboardManager {
 
   // 获取历史记录
   getHistory() {
+    let changed = false;
+    for (let i = 0; i < this.history.length; i++) {
+      const item = this.history[i];
+      if (!item || item.type !== 'image') continue;
+      const normalized = this._normalizeImagePaths(item);
+      if (normalized.image_thumb !== item.image_thumb || normalized.image_path !== item.image_path || normalized.content !== item.content) {
+        this.history[i] = normalized;
+        changed = true;
+      }
+    }
+    if (changed) this.notifyListeners();
     return this.history;
   }
 

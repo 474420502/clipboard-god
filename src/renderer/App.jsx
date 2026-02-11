@@ -42,13 +42,6 @@ function App() {
   const [qrDialogState, setQrDialogState] = useState({ open: false, qrcodes: [], selectedId: null, loading: false });
   const [ocrDialogState, setOcrDialogState] = useState({ open: false, text: '', loading: false, error: '', imagePath: '', confidence: null });
   const [ocrLanguages, setOcrLanguages] = useState(['chi_sim', 'eng']);
-  const [ocrPreprocess, setOcrPreprocess] = useState({
-    binarize: false,
-    contrast: false,
-    denoise: false,
-    dpi300: false,
-    preserveSpaces: false
-  });
   const [settings, setSettings] = useState({
     previewLength: 120,
     maxHistoryItems: 500,
@@ -60,15 +53,7 @@ function App() {
     launchOnStartup: false,
     locale: 'zh-CN',
     ocrLanguages: ['chi_sim', 'eng'],
-    ocrLangSelectorExpanded: false,
-    ocrSettingsExpanded: false,
-    ocrPreprocess: {
-      binarize: false,
-      contrast: false,
-      denoise: false,
-      dpi300: false,
-      preserveSpaces: false
-    }
+    ocrLangSelectorExpanded: false
   });
 
   // Refs for global key handler to avoid re-registering listeners
@@ -101,24 +86,12 @@ function App() {
           if (typeof cfg.locale !== 'undefined') mapped.locale = cfg.locale;
           if (typeof cfg.ocrLanguages !== 'undefined') mapped.ocrLanguages = cfg.ocrLanguages;
           if (typeof cfg.ocrLangSelectorExpanded !== 'undefined') mapped.ocrLangSelectorExpanded = cfg.ocrLangSelectorExpanded;
-          if (typeof cfg.ocrSettingsExpanded !== 'undefined') mapped.ocrSettingsExpanded = cfg.ocrSettingsExpanded;
-          if (typeof cfg.ocrPreprocess !== 'undefined') mapped.ocrPreprocess = cfg.ocrPreprocess;
           // include llms map when present so renderer can show entries in settings
           if (typeof cfg.llms !== 'undefined') mapped.llms = cfg.llms;
 
           setSettings(prev => ({ ...prev, ...mapped }));
           if (typeof mapped.ocrLanguages !== 'undefined') {
             setOcrLanguages(Array.isArray(mapped.ocrLanguages) ? mapped.ocrLanguages : ['chi_sim', 'eng']);
-          }
-          if (typeof mapped.ocrPreprocess !== 'undefined') {
-            const next = mapped.ocrPreprocess || {};
-            setOcrPreprocess({
-              binarize: !!next.binarize,
-              contrast: !!next.contrast,
-              denoise: !!next.denoise,
-              dpi300: !!next.dpi300,
-              preserveSpaces: !!next.preserveSpaces
-            });
           }
         }
       })
@@ -548,7 +521,9 @@ function App() {
 
       setOcrDialogState({ open: true, text: '', loading: true, error: '', imagePath });
 
-      const res = await recognizeWithPaddle(imagePath);
+      const res = await recognizeWithPaddle(imagePath, {
+        languages: ocrLanguages
+      });
       if (res && res.error) {
         setOcrDialogState({ open: true, text: '', loading: false, error: res.error || (t('history.ocrFailed') || 'OCR failed'), imagePath });
         return;
@@ -610,59 +585,6 @@ function App() {
     }
   };
 
-  const handleToggleOcrSettingsExpanded = (expanded) => {
-    const next = !!expanded;
-    setSettings((prevSettings) => ({ ...prevSettings, ocrSettingsExpanded: next }));
-    try {
-      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-        window.electronAPI.setSettings({ ocrSettingsExpanded: next });
-      }
-    } catch (err) {
-      // ignore
-    }
-  };
-
-  const handleChangeOcrPreprocess = (key, value) => {
-    const next = { ...ocrPreprocess, [key]: value };
-    setOcrPreprocess(next);
-    setSettings((prevSettings) => ({ ...prevSettings, ocrPreprocess: next }));
-    try {
-      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-        window.electronAPI.setSettings({ ocrPreprocess: next });
-      }
-    } catch (err) {
-      // ignore
-    }
-  };
-
-  const handleRetryOcrWithPreprocess = () => {
-    runOcrWithPreprocess(ocrDialogState.imagePath || '');
-  };
-
-  // OCR with preprocessing support
-  const runOcrWithPreprocess = async (imagePath) => {
-    try {
-      if (!imagePath) {
-        setOcrDialogState((prev) => ({ ...prev, open: true, text: '', loading: false, error: t('history.ocrInvalidImage') || 'Image not available', imagePath: '', confidence: null }));
-        return;
-      }
-
-      setOcrDialogState((prev) => ({ ...prev, open: true, text: '', loading: true, error: '', imagePath, confidence: null }));
-
-      const res = await recognizeWithPaddle(imagePath);
-      if (res && res.error) {
-        setOcrDialogState((prev) => ({ ...prev, loading: false, error: res.error || (t('history.ocrFailed') || 'OCR failed'), confidence: null }));
-        return;
-      }
-      const text = res && res.text ? res.text : '';
-      setOcrDialogState((prev) => ({ ...prev, text, loading: false, error: '', confidence: null }));
-      if (!text.trim()) {
-        showStatusToast(t('history.ocrNotFound') || 'No text found');
-      }
-    } catch (err) {
-      setOcrDialogState((prev) => ({ ...prev, loading: false, error: t('history.ocrFailed') || 'OCR failed', confidence: null }));
-    }
-  };
 
   useEffect(() => {
     const onOpenQrDialog = async (e) => {
@@ -1059,10 +981,6 @@ function App() {
         onChangeLanguages={handleChangeOcrLanguages}
         langSelectorExpanded={!!settings.ocrLangSelectorExpanded}
         onToggleLangSelectorExpanded={handleToggleOcrLangExpanded}
-        preprocess={ocrPreprocess}
-        onChangePreprocess={handleChangeOcrPreprocess}
-        settingsExpanded={!!settings.ocrSettingsExpanded}
-        onToggleSettingsExpanded={handleToggleOcrSettingsExpanded}
       />
       <SettingsModal
         isOpen={isSettingsOpen}

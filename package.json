@@ -27,20 +27,20 @@
     "dist:all": "npm run build && electron-builder --win --mac --linux"
   },
   "dependencies": {
+    "@paddlejs-mediapipe/opencv": "^0.0.4",
+    "@paddlejs-models/ocr": "^1.2.4",
+    "@paddlejs/paddlejs-backend-webgl": "^1.2.9",
+    "@paddlejs/paddlejs-core": "^2.2.0",
     "better-sqlite3": "^12.4.1",
     "electron-screenshots": "^0.5.27",
     "i18next": "^23.0.0",
     "jsqr": "^1.4.0",
-    "@paddlejs-models/ocr": "^1.2.4",
-    "@paddlejs/paddlejs-backend-webgl": "^1.2.9",
-    "@paddlejs/paddlejs-core": "^2.2.0",
-    "@paddlejs-mediapipe/opencv": "^0.0.4",
-    "regenerator-runtime": "^0.14.1",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-i18next": "^13.0.0",
     "react-tooltip": "^5.30.0",
+    "regenerator-runtime": "^0.14.1",
     "sharp": "^0.34.5"
   },
   "devDependencies": {

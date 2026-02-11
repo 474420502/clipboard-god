@@ -14,23 +14,15 @@ function OCRResultDialog({
     selectedLanguages = [],
     onChangeLanguages,
     langSelectorExpanded = false,
-    onToggleLangSelectorExpanded,
-    settingsExpanded = false,
-    onToggleSettingsExpanded,
-    preprocess = { binarize: false, contrast: false, denoise: false },
-    onChangePreprocess
+    onToggleLangSelectorExpanded
 }) {
     const { t } = useTranslation();
     const [showLangSelector, setShowLangSelector] = useState(!!langSelectorExpanded);
-    const [showPreprocess, setShowPreprocess] = useState(!!settingsExpanded);
 
     React.useEffect(() => {
         setShowLangSelector(!!langSelectorExpanded);
     }, [langSelectorExpanded]);
 
-    React.useEffect(() => {
-        setShowPreprocess(!!settingsExpanded);
-    }, [settingsExpanded]);
 
     if (!open) return null;
 
@@ -48,12 +40,6 @@ function OCRResultDialog({
                 ? selectedLanguages.filter(l => l !== code)
                 : [...selectedLanguages, code];
             onChangeLanguages(newSelected);
-        }
-    };
-
-    const handlePreprocessChange = (key) => (e) => {
-        if (typeof onChangePreprocess === 'function') {
-            onChangePreprocess(key, e.target.checked);
         }
     };
 
@@ -108,83 +94,6 @@ function OCRResultDialog({
                                     ))}
                                 </div>
                                 <div className="ocr-lang-hint">{t('history.ocrLangHint')}</div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Preprocess settings section */}
-                    <div className="ocr-preprocess-section">
-                        <button
-                            type="button"
-                            className="ocr-preprocess-toggle"
-                            onClick={() => {
-                                const next = !showPreprocess;
-                                setShowPreprocess(next);
-                                if (typeof onToggleSettingsExpanded === 'function') {
-                                    onToggleSettingsExpanded(next);
-                                }
-                            }}
-                        >
-                            <span>{t('history.ocrSettingsTitle')}</span>
-                            <span className="ocr-preprocess-toggle-icon">{showPreprocess ? '▲' : '▼'}</span>
-                        </button>
-                        {showPreprocess && (
-                            <div className="ocr-preprocess-panel">
-                                <div className="ocr-preprocess-option">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!preprocess.binarize}
-                                            onChange={handlePreprocessChange('binarize')}
-                                        />
-                                        <span className="ocr-preprocess-label">{t('history.ocrPreprocessBinarize')}</span>
-                                    </label>
-                                    <div className="ocr-preprocess-help">{t('history.ocrPreprocessBinarizeHelp')}</div>
-                                </div>
-                                <div className="ocr-preprocess-option">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!preprocess.contrast}
-                                            onChange={handlePreprocessChange('contrast')}
-                                        />
-                                        <span className="ocr-preprocess-label">{t('history.ocrPreprocessContrast')}</span>
-                                    </label>
-                                    <div className="ocr-preprocess-help">{t('history.ocrPreprocessContrastHelp')}</div>
-                                </div>
-                                <div className="ocr-preprocess-option">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!preprocess.denoise}
-                                            onChange={handlePreprocessChange('denoise')}
-                                        />
-                                        <span className="ocr-preprocess-label">{t('history.ocrPreprocessDenoise')}</span>
-                                    </label>
-                                    <div className="ocr-preprocess-help">{t('history.ocrPreprocessDenoiseHelp')}</div>
-                                </div>
-                                <div className="ocr-preprocess-option">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!preprocess.dpi300}
-                                            onChange={handlePreprocessChange('dpi300')}
-                                        />
-                                        <span className="ocr-preprocess-label">{t('history.ocrPreprocessDpi')}</span>
-                                    </label>
-                                    <div className="ocr-preprocess-help">{t('history.ocrPreprocessDpiHelp')}</div>
-                                </div>
-                                <div className="ocr-preprocess-option">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!preprocess.preserveSpaces}
-                                            onChange={handlePreprocessChange('preserveSpaces')}
-                                        />
-                                        <span className="ocr-preprocess-label">{t('history.ocrPreprocessPreserveSpaces')}</span>
-                                    </label>
-                                    <div className="ocr-preprocess-help">{t('history.ocrPreprocessPreserveSpacesHelp')}</div>
-                                </div>
                             </div>
                         )}
                     </div>
