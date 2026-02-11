@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   copyQRCodeContent: (content) => ipcRenderer.invoke('copy-qr-content', content),
   // OCR utilities
   copyOCRContent: (content) => ipcRenderer.invoke('copy-ocr-content', content),
+  openOcrWindow: (payload) => ipcRenderer.invoke('open-ocr-window', payload),
 
   // cleanupListeners removed; use per-listener unsubscribe functions instead
 });

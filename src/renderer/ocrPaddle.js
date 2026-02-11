@@ -52,22 +52,30 @@ const recognizeWithPaddle = async (imageInput, options = {}) => {
     try {
         await ensureInit();
         const img = await loadImage(imageInput);
-        
+
         // 直接使用原图，让 paddlejs 内部处理预处理
         const canvas = options.canvas || document.createElement('canvas');
-        
+
         const res = await ocrModule.recognize(img, {
             canvas,
             style: options.style
         });
 
-        let textArr = Array.isArray(res?.text)
-            ? res.text
+        const textArr = Array.isArray(res?.text)
+            ? res.text.map((item) => String(item))
             : (res?.text ? [String(res.text)] : []);
+
+        const pointsArr = Array.isArray(res?.points) ? res.points : [];
+        const blocks = textArr.map((text, index) => ({
+            id: String(index),
+            text,
+            points: Array.isArray(pointsArr[index]) ? pointsArr[index] : []
+        }));
 
         return {
             text: textArr.join('\n'),
-            points: res?.points || []
+            points: pointsArr,
+            blocks
         };
     } catch (err) {
         try { console.error('Paddle OCR recognize failed:', err); } catch (_) { }

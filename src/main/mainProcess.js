@@ -59,6 +59,7 @@ class MainProcess {
     this.tooltipWindow = null;
     this.tooltipPayload = null;
     this.tooltipSize = null;
+    this.ocrWindow = null;
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
     // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 500
     const maxHistoryConfig = Config.get('maxHistoryItems');
@@ -571,6 +572,64 @@ class MainProcess {
       return chatWin;
     } catch (err) {
       safeConsole.error('openLlmChatWindow 错误:', err);
+      throw err;
+    }
+  }
+
+  openOcrWindow(payload = {}) {
+    try {
+      const imagePath = payload && payload.imagePath ? String(payload.imagePath) : '';
+      const languages = Array.isArray(payload.languages) ? payload.languages : [];
+      if (!imagePath) throw new Error('ocr-image-missing');
+
+      const existingWindow = this.ocrWindow && !this.ocrWindow.isDestroyed() ? this.ocrWindow : null;
+      const ocrWin = existingWindow || new BrowserWindow({
+        width: 1100,
+        height: 720,
+        show: true,
+        title: 'OCR Window',
+        webPreferences: {
+          contextIsolation: true,
+          preload: path.join(__dirname, '../preload/index.js')
+        }
+      });
+
+      if (!existingWindow) {
+        this.ocrWindow = ocrWin;
+        if (resourceManager) {
+          resourceManager.registerX11Resource('ocrWindow', ocrWin);
+        }
+        try { ocrWin.setMenu(null); } catch (_) { }
+        ocrWin.on('closed', () => {
+          this.ocrWindow = null;
+          if (resourceManager) {
+            try { resourceManager.unregisterResource('ocrWindow'); } catch (_) { }
+          }
+        });
+      }
+
+      const langParam = languages.map((lang) => encodeURIComponent(String(lang))).join(',');
+      if (process.env.VITE_DEV_SERVER_URL) {
+        const baseUrl = process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '');
+        const url = `${baseUrl}/?window=ocr&imagePath=${encodeURIComponent(imagePath)}&langs=${langParam}`;
+        ocrWin.loadURL(url);
+      } else {
+        const filePath = path.join(__dirname, '../../dist/index.html');
+        ocrWin.loadFile(filePath, {
+          query: {
+            window: 'ocr',
+            imagePath,
+            langs: languages.join(',')
+          }
+        });
+      }
+
+      try { ocrWin.show(); } catch (_) { }
+      try { ocrWin.focus(); } catch (_) { }
+
+      return ocrWin;
+    } catch (err) {
+      safeConsole.error('openOcrWindow error:', err);
       throw err;
     }
   }
@@ -1412,6 +1471,16 @@ class MainProcess {
         return { success: true };
       } catch (err) {
         safeConsole.error('copy-ocr-content error:', err);
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle('open-ocr-window', async (_event, payload) => {
+      try {
+        this.openOcrWindow(payload || {});
+        return { success: true };
+      } catch (err) {
+        safeConsole.error('open-ocr-window error:', err);
         return { success: false, error: err.message };
       }
     });

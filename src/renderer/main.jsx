@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import OCRWindow from './components/OCRWindow';
 import './index.css'; // 导入样式
 import i18next from './i18n';
 import { I18nextProvider } from 'react-i18next';
@@ -35,9 +36,12 @@ function AppWrapper() {
     );
   }
 
+  const params = new URLSearchParams(window.location.search || '');
+  const windowType = params.get('window');
+
   return (
     <I18nextProvider i18n={i18next}>
-      <App />
+      {windowType === 'ocr' ? <OCRWindow /> : <App />}
     </I18nextProvider>
   );
 }

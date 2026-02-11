@@ -20,8 +20,6 @@ import SettingsModal from './components/SettingsModal';
 import useNumberShortcuts from './hooks/useNumberShortcuts';
 import EditModal from './components/EditModal';
 import QRCodeSelectorDialog from './components/QRCodeSelectorDialog';
-import OCRResultDialog from './components/OCRResultDialog';
-import { recognizeWithPaddle } from './ocrPaddle';
 
 function App() {
   const { t } = useTranslation();
@@ -40,7 +38,6 @@ function App() {
   const [suppressMouseHover, setSuppressMouseHover] = useState(false);
   const [editModalState, setEditModalState] = useState({ open: false, item: null });
   const [qrDialogState, setQrDialogState] = useState({ open: false, qrcodes: [], selectedId: null, loading: false });
-  const [ocrDialogState, setOcrDialogState] = useState({ open: false, text: '', loading: false, error: '', imagePath: '', confidence: null });
   const [ocrLanguages, setOcrLanguages] = useState(['chi_sim', 'eng']);
   const [settings, setSettings] = useState({
     previewLength: 120,
@@ -484,10 +481,6 @@ function App() {
     setQrDialogState((prev) => ({ ...prev, open: false, loading: false }));
   };
 
-  const closeOcrDialog = () => {
-    setOcrDialogState((prev) => ({ ...prev, open: false, loading: false }));
-  };
-
   const handleCopySelectedQr = async () => {
     try {
       if (!window.electronAPI || typeof window.electronAPI.copyQRCodeContent !== 'function') return;
@@ -512,79 +505,20 @@ function App() {
     }
   };
 
-  const runOcr = async (imagePath) => {
+  const openOcrWindow = async (imagePath) => {
     try {
-      if (!imagePath) {
-        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrInvalidImage') || 'Image not available', imagePath: '' });
+      if (!window.electronAPI || typeof window.electronAPI.openOcrWindow !== 'function') {
+        showStatusToast(t('history.ocrFailed') || 'OCR failed');
         return;
       }
-
-      setOcrDialogState({ open: true, text: '', loading: true, error: '', imagePath });
-
-      const res = await recognizeWithPaddle(imagePath, {
+      await window.electronAPI.openOcrWindow({
+        imagePath,
         languages: ocrLanguages
       });
-      if (res && res.error) {
-        setOcrDialogState({ open: true, text: '', loading: false, error: res.error || (t('history.ocrFailed') || 'OCR failed'), imagePath });
-        return;
-      }
-      const text = res && res.text ? res.text : '';
-      setOcrDialogState({ open: true, text, loading: false, error: '', imagePath });
-      if (!text.trim()) {
-        showStatusToast(t('history.ocrNotFound') || 'No text found');
-      }
-    } catch (err) {
-      setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath });
-    }
-  };
-
-  const handleCopyOcr = async () => {
-    try {
-      if (!window.electronAPI || typeof window.electronAPI.copyOCRContent !== 'function') return;
-      if (!ocrDialogState.text || !ocrDialogState.text.trim()) return;
-      await window.electronAPI.copyOCRContent(ocrDialogState.text);
-      showStatusToast(t('history.ocrCopied') || 'OCR text copied');
     } catch (err) {
       showStatusToast(t('history.ocrFailed') || 'OCR failed');
     }
   };
-
-  const handleRetryOcr = () => {
-    runOcr(ocrDialogState.imagePath || '');
-  };
-
-  const ocrLanguageOptions = useMemo(() => ([
-    { code: 'chi_sim', label: t('history.ocrLangChiSim') },
-    { code: 'eng', label: t('history.ocrLangEng') }
-  ]), [t]);
-
-  const handleChangeOcrLanguages = (langs) => {
-    const list = Array.isArray(langs) ? langs : [];
-    const cleaned = list.map((lang) => String(lang || '').trim()).filter(Boolean);
-    const next = cleaned.length ? cleaned : ['chi_sim', 'eng'];
-    setOcrLanguages(next);
-    setSettings((prevSettings) => ({ ...prevSettings, ocrLanguages: next }));
-    try {
-      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-        window.electronAPI.setSettings({ ocrLanguages: next });
-      }
-    } catch (err) {
-      // ignore
-    }
-  };
-
-  const handleToggleOcrLangExpanded = (expanded) => {
-    const next = !!expanded;
-    setSettings((prevSettings) => ({ ...prevSettings, ocrLangSelectorExpanded: next }));
-    try {
-      if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-        window.electronAPI.setSettings({ ocrLangSelectorExpanded: next });
-      }
-    } catch (err) {
-      // ignore
-    }
-  };
-
 
   useEffect(() => {
     const onOpenQrDialog = async (e) => {
@@ -637,9 +571,13 @@ function App() {
     const onOpenOcrDialog = (e) => {
       try {
         const imagePath = e && e.detail && e.detail.imagePath;
-        runOcr(imagePath);
+        if (!imagePath) {
+          showStatusToast(t('history.ocrInvalidImage') || 'Image not available');
+          return;
+        }
+        openOcrWindow(imagePath);
       } catch (err) {
-        setOcrDialogState({ open: true, text: '', loading: false, error: t('history.ocrFailed') || 'OCR failed', imagePath: '' });
+        showStatusToast(t('history.ocrFailed') || 'OCR failed');
       }
     };
 
@@ -966,21 +904,6 @@ function App() {
         onCopySelected={handleCopySelectedQr}
         onCopyAll={handleCopyAllQr}
         loading={qrDialogState.loading}
-      />
-      <OCRResultDialog
-        open={ocrDialogState.open}
-        text={ocrDialogState.text}
-        loading={ocrDialogState.loading}
-        error={ocrDialogState.error}
-        confidence={ocrDialogState.confidence}
-        onClose={closeOcrDialog}
-        onCopy={handleCopyOcr}
-        onRetry={handleRetryOcr}
-        languages={ocrLanguageOptions}
-        selectedLanguages={ocrLanguages}
-        onChangeLanguages={handleChangeOcrLanguages}
-        langSelectorExpanded={!!settings.ocrLangSelectorExpanded}
-        onToggleLangSelectorExpanded={handleToggleOcrLangExpanded}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
