@@ -1,23 +1,29 @@
 # Building the Clipboard God .deb package
 
-This repository includes a simple packaging helper `build-deb.sh` that creates a Debian package (.deb) containing the app, desktop entry and icons.
+This repository includes a packaging helper `build.sh` that can create a Debian package (.deb) containing the app, desktop entry, and icons.
 
 Usage:
 
 1. Ensure you have the build artifacts available (recommended):
-   - `linux-unpacked/` should contain the packaged Electron app (or otherwise populate `/opt/clipboard-god` in the package).
+   - `dist-electron/linux-unpacked/` should contain the packaged Electron app (or otherwise populate `/opt/clipboard-god` in the package).
    - `assets/` should contain icon PNGs named like `icon-16.png`, `icon-32.png`, `icon-256.png`, etc., or a fallback `icon.png`.
 
 2. Run the builder (optionally pass version):
 
 ```bash
-./build-deb.sh 1.0.0
+bash build.sh 1.1.0
+```
+
+To skip `.deb` packaging (build AppImage/other electron-builder outputs only):
+
+```bash
+SKIP_DEB=1 bash build.sh 1.1.0
 ```
 
 3. Install the generated package:
 
 ```bash
-sudo dpkg -i dist/clipboard-god_1.0.0_amd64.deb
+sudo dpkg -i dist/clipboard-god_1.1.0_amd64.deb
 sudo apt-get install -f # if dependencies are missing
 ```
 

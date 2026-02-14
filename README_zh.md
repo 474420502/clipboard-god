@@ -2,10 +2,15 @@
 
 Clipboard God 是一个基于 Electron 和 React 的跨平台剪贴板管理器。它提供可搜索的剪贴板历史、截图工具、托盘集成，并支持可选的 AI/LLM 功能用于文本摘要、翻译与智能粘贴。
 
-## 发行 v1.0.4
+## 发行 v1.1.0
 
-- 修复：开机自启动现在会正确启动打包后的程序（在 Linux 上优先使用 /usr/bin/clipboard-god），而不会再调用开发时的 Electron 二进制。
-- 修复："开机自启" 设置现在会持久保存，并在设置界面正确显示。
+主要更新：
+
+- OCR：提供独立 OCR 窗口，支持框选区域识别、点击分块复制、显示置信度，并强化文本排版控制。
+- OCR：所有 OCR 相关设置已归纳到标题区域的 **OCR 菜单** 中（不与右侧操作按钮同级混排）。
+- 交互：OCR 窗口补齐键盘快捷操作（复制/重试/缩放/取消/关闭）。
+
+完整更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 视频演示
 
@@ -18,6 +23,21 @@ Clipboard God 是一个基于 Electron 和 React 的跨平台剪贴板管理器�
 - 截图捕获、下载管理、托盘菜单以及多平台粘贴兼容。
 - AI 动作可自定义：总结、翻译、重写、智能提示，支持为每个动作绑定快捷键。
 - Linux（X11）自动粘贴依赖 xdotool，支持 `Ctrl+V` 与 `Shift+Insert` 组合（不兼容 Wayland）。
+
+## OCR（从图片提取文字）
+
+对任意图片类剪贴板条目，你都可以进行 OCR 提取文字。
+
+- 在图片条目上点击 OCR（按钮或右键菜单）。
+- OCR 窗口支持：
+  - **点击绿色文字框**（或右侧分块）复制该段文字。
+  - 复制全部识别结果。
+  - **框选**区域后仅对选区重新识别。
+  - 缩放 / 适合窗口。
+- OCR 相关设置统一在标题区域的 **OCR 菜单**：
+  - 语言
+  - 文本排版
+  - 模型与预处理
 
 ## AI / LLM 功能
 
@@ -100,11 +120,21 @@ npm start
 - Linux（X11）自动粘贴默认使用 `Ctrl+V`，必要时回退 `Shift+Insert`。
 - `Esc`：立即隐藏窗口。
 
+OCR 窗口快捷键：
+
+- `Esc`：取消框选 / 关闭 OCR 菜单 / 关闭窗口。
+- `Ctrl/Cmd+C`：复制全部识别文本。
+- `Ctrl/Cmd+R`：重新识别。
+- `Ctrl/Cmd+加号` / `Ctrl/Cmd+减号` / `Ctrl/Cmd+0`：放大 / 缩小 / 还原。
+- `F`：适合窗口。
+
 ## 构建与打包
 
 - 前端使用 Vite 构建，electron-builder 负责产出可分发安装包。
-- 执行 `npm run build` 后，发行文件位于 `dist-electron/`。
-- 项目自带 `deb/` 脚本，可生成 Debian 包并自动处理 desktop/icon 缓存。
+- 执行 `npm run build` 会生成前端与 electron 相关产物。
+- 如需完整发行构建（包含可选 `.deb` 打包），建议直接运行 `bash build.sh`。
+- `.deb` 包由 `build.sh` 产出并放在 `dist/`，同时会复制一份到 `dist-electron/`。
+- Linux 打包说明见 [DEB_BUILD.md](DEB_BUILD.md)。
 - GitHub Actions 工作流在推送类似 `v1.2.3` 的标签时自动构建三平台发行包。
 
 ## 故障排除

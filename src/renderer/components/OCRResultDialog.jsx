@@ -23,6 +23,42 @@ function OCRResultDialog({
         setShowLangSelector(!!langSelectorExpanded);
     }, [langSelectorExpanded]);
 
+    React.useEffect(() => {
+        if (!open) return;
+
+        const onKeyDown = (e) => {
+            try {
+                if (!e) return;
+                const key = String(e.key || '');
+                const lower = key.toLowerCase();
+                const ctrlOrCmd = !!(e.ctrlKey || e.metaKey);
+                const active = document.activeElement;
+                const isEditable = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
+
+                if (key === 'Escape') {
+                    if (typeof onClose === 'function') onClose();
+                    e.preventDefault();
+                    return;
+                }
+
+                if (ctrlOrCmd && lower === 'r') {
+                    if (typeof onRetry === 'function') onRetry();
+                    e.preventDefault();
+                    return;
+                }
+
+                // Copy shortcut only when not focusing an editable control
+                if (ctrlOrCmd && lower === 'c' && !isEditable) {
+                    if (typeof onCopy === 'function') onCopy();
+                    e.preventDefault();
+                }
+            } catch (_) { }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [open, onClose, onRetry, onCopy]);
+
 
     if (!open) return null;
 
@@ -63,39 +99,48 @@ function OCRResultDialog({
                     </button>
                 </div>
                 <div className="ocr-modal-body">
-                    {/* Language selector section */}
-                    <div className="ocr-lang-section">
-                        <button
-                            type="button"
-                            className="ocr-lang-toggle"
-                            onClick={() => {
-                                const next = !showLangSelector;
-                                setShowLangSelector(next);
-                                if (typeof onToggleLangSelectorExpanded === 'function') {
-                                    onToggleLangSelectorExpanded(next);
-                                }
-                            }}
-                        >
-                            <span>{t('history.ocrLangTitle')} ({selectedLanguages.length})</span>
-                            <span className="ocr-lang-toggle-icon">{showLangSelector ? '▲' : '▼'}</span>
-                        </button>
-                        {showLangSelector && (
-                            <div className="ocr-lang-panel">
-                                <div className="ocr-lang-grid">
-                                    {(languages || []).map((lang) => (
-                                        <label key={lang.code} className="ocr-lang-item">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedLanguages.includes(lang.code)}
-                                                onChange={() => handleLanguageToggle(lang.code)}
-                                            />
-                                            <span className="ocr-lang-label">{lang.label || lang.code}</span>
-                                        </label>
-                                    ))}
+                    {/* Language selector section with clear isolation */}
+                    <div className="ocr-settings-panel">
+                        <div className="ocr-settings-panel-header">
+                            <span className="ocr-settings-panel-icon">🌐</span>
+                            <span className="ocr-settings-panel-title">{t('history.ocrLangTitle') || 'OCR Languages'}</span>
+                            <span className="ocr-settings-panel-badge">{selectedLanguages.length}</span>
+                        </div>
+                        <div className="ocr-settings-panel-content">
+                            <button
+                                type="button"
+                                className="ocr-lang-toggle"
+                                onClick={() => {
+                                    const next = !showLangSelector;
+                                    setShowLangSelector(next);
+                                    if (typeof onToggleLangSelectorExpanded === 'function') {
+                                        onToggleLangSelectorExpanded(next);
+                                    }
+                                }}
+                            >
+                                <span>{showLangSelector ? t('history.ocrLangHide') || 'Hide languages' : t('history.ocrLangShow') || 'Select languages'}</span>
+                                <span className="ocr-lang-toggle-icon">{showLangSelector ? '▲' : '▼'}</span>
+                            </button>
+                            {showLangSelector && (
+                                <div className="ocr-lang-panel">
+                                    <div className="ocr-lang-grid">
+                                        {(languages || []).map((lang) => (
+                                            <label key={lang.code} className="ocr-lang-item">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedLanguages.includes(lang.code)}
+                                                    onChange={() => handleLanguageToggle(lang.code)}
+                                                />
+                                                <span className="ocr-lang-label">{lang.label || lang.code}</span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="ocr-lang-hint">{t('history.ocrLangHint')}</div>
-                            </div>
-                        )}
+                            )}
+                        </div>
+                        <div className="ocr-settings-panel-footer">
+                            <span className="ocr-lang-hint">{t('history.ocrLangHint')}</span>
+                        </div>
                     </div>
 
                     {/* Confidence display */}

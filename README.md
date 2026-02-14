@@ -7,10 +7,15 @@ Clipboard God is a cross-platform clipboard manager built with Electron and Reac
 
 > Note: The Qt/QML port under qt/ is temporarily deprecated and not maintained as a release target.
 
-## Release v1.0.4
+## Release v1.1.0
 
-- Fix: Autostart on system boot now correctly launches the packaged application (prefer /usr/bin/clipboard-god on Linux) instead of invoking the development Electron binary.
-- Fix: "Launch on startup" setting is now persisted and reflected in the Settings UI across restarts.
+Highlights:
+
+- OCR: Dedicated OCR window with selectable regions, per-block copy, confidence display, and improved text layout controls.
+- OCR: All OCR-related settings are grouped under a single **OCR Menu** (not mixed with action buttons).
+- UX: More keyboard-first actions in the OCR window (copy, retry, zoom, cancel/close).
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
 ## Video Demo
 
@@ -23,6 +28,21 @@ Clipboard God is a cross-platform clipboard manager built with Electron and Reac
 - Multi-theme interface, tray integration, and localisation (English and Simplified Chinese).
 - Screenshot capture, download helpers, and quick paste support on Windows, macOS, and Linux.
 - Optional AI actions that send content to local or remote LLMs for summarising, rewriting, or translating.
+
+## OCR (Extract Text From Images)
+
+You can extract text from any image entry in the clipboard history.
+
+- Open OCR from an image item (button or context menu).
+- The OCR window supports:
+  - **Click a green text box** (or a block on the right) to copy that block.
+  - **Copy all** recognized text.
+  - **Select** an area to re-run OCR on the selected region.
+  - Zoom controls and auto-fit.
+- OCR settings are grouped under **OCR Menu** in the title area:
+  - Languages
+  - Text layout
+  - OCR model & preprocessing
 
 ## AI & Automation Tools
 
@@ -105,11 +125,21 @@ Key options include maximum history items, theme, language, global shortcut, and
 - Linux (X11): `Ctrl+V` default with `Shift+Insert` fallback for automated paste.
 - `Esc` hides the window instantly.
 
+OCR window shortcuts:
+
+- `Esc` cancel selection / close OCR menu / close window.
+- `Ctrl/Cmd+C` copy all recognized text.
+- `Ctrl/Cmd+R` re-run OCR.
+- `Ctrl/Cmd+Plus` / `Ctrl/Cmd+Minus` / `Ctrl/Cmd+0` zoom in/out/reset.
+- `F` fit image to window.
+
 ## Build & Packaging
 
 - Uses Vite for renderer builds and electron-builder for packaging.
-- `npm run build` produces distributable binaries under `dist-electron/`.
-- Debian packages (`.deb`) can be generated via the provided scripts in `deb/`.
+- `npm run build` produces renderer + electron bundles.
+- For a full distribution build (including optional `.deb` packaging), use `bash build.sh`.
+- Debian packages (`.deb`) are produced by `build.sh` and staged under `dist/` (a copy is also placed into `dist-electron/`).
+- See [DEB_BUILD.md](DEB_BUILD.md) for Linux packaging notes.
 - CI workflow (GitHub Actions) builds tagged releases for Windows, macOS, and Linux.
 
 ## Troubleshooting & Support
@@ -143,6 +173,3 @@ MIT License
 ## Author
 
 Eson <474420502@qq.com>
-
-
-`<parameter name="filePath">`/home/eson/workspace/clipboard-god/README.md
