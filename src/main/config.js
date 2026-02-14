@@ -37,8 +37,24 @@ const DEFAULT_CONFIG = {
     denoise: false,
     dpi300: false,
     preserveSpaces: false
-  }
-  ,
+  },
+  // OCR 文本排版阈值
+  ocrTextLayout: {
+    lineMergeThresholdRatio: 0.5,
+    lineMergeThresholdPx: 0,
+    spaceGapRatio: 0.2,
+    spaceGapMinPx: 2,
+    insertSpaceByGap: true,
+    splitByGap: true
+  },
+  // OCR 模型与预处理
+  ocrModelSource: 'builtin',
+  ocrModelLanguage: 'chinese',
+  ocrPreprocessModels: {
+    docOrientation: true,
+    docUnwarp: false,
+    textlineOrientation: true
+  },
   // 语言
   locale: 'en',
   // llms

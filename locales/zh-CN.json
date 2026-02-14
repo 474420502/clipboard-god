@@ -23,6 +23,7 @@
             "general": "常规",
             "appearance": "外观",
             "shortcuts": "快捷键",
+            "ocr": "OCR",
             "llm": "LLM"
         },
         "general": {
@@ -124,6 +125,31 @@
             "deleteConfirm": "删除条目 \"{{name}}\" ?",
             "delete": "删除",
             "saveNote": "保存时会把所有条目写回配置文件。"
+        },
+        "ocr": {
+            "title": "OCR",
+            "modelSource": "模型来源",
+            "modelSourceHelp": "使用内置 PP-OCRv5 mobile 模型。",
+            "modelLanguage": "识别语言",
+            "modelLanguageHelp": "识别语言目前仅对外部模型生效。",
+            "docOrientation": "文档旋转校正",
+            "docOrientationHelp": "识别前自动旋转文档到正确方向。",
+            "docUnwarp": "文档去畸变",
+            "docUnwarpHelp": "识别前修正弯曲/透视文档。",
+            "textlineOrientation": "文本行方向校正",
+            "textlineOrientationHelp": "识别前校正倒置文本行。",
+            "insertSpaceByGap": "按间距插入空格",
+            "insertSpaceByGapHelp": "当文本块间距较大时自动插入空格。",
+            "splitByGap": "按空白切分",
+            "splitByGapHelp": "当框内存在较大空白时拆分为多个小框识别。",
+            "lineMergeThresholdRatio": "同行合并阈值（比例）",
+            "lineMergeThresholdRatioHelp": "值越大越容易合并为同一行。",
+            "lineMergeThresholdPx": "同行合并阈值（像素）",
+            "lineMergeThresholdPxHelp": "最小像素阈值，用于合并同一行文本。",
+            "spaceGapRatio": "空格阈值（比例）",
+            "spaceGapRatioHelp": "值越大越少自动插空格。",
+            "spaceGapMinPx": "空格阈值（像素）",
+            "spaceGapMinPxHelp": "最小像素间距，用于插入空格。"
         }
     },
     "menu": {
@@ -198,6 +224,13 @@
         "ocrPreprocessPreserveSpaces": "保留空格",
         "ocrPreprocessPreserveSpacesHelp": "更好保留原始排版空格",
         "ocrConfidenceTitle": "识别置信度",
+        "ocrLayoutTitle": "文本排版",
+        "ocrLayoutInsertSpace": "按间距插入空格",
+        "ocrLayoutSplitByGap": "按空白切分",
+        "ocrLayoutLineMergeRatio": "同行合并比例",
+        "ocrLayoutLineMergePx": "同行合并像素",
+        "ocrLayoutSpaceGapRatio": "空格比例",
+        "ocrLayoutSpaceGapPx": "空格像素",
         "ocrConfidenceHigh": "高",
         "ocrConfidenceMedium": "中",
         "ocrConfidenceLow": "低",

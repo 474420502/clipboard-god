@@ -4,6 +4,7 @@ import electron from 'vite-plugin-electron';
 import path from 'path';
 
 export default defineConfig({
+  assetsInclude: ['**/*.onnx', '**/*.txt', '**/*.wasm'],
   plugins: [
     react(),
     electron([

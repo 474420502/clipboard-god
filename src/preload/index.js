@@ -71,6 +71,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // OCR utilities
   copyOCRContent: (content) => ipcRenderer.invoke('copy-ocr-content', content),
   openOcrWindow: (payload) => ipcRenderer.invoke('open-ocr-window', payload),
+  // Read packaged app resources (binary/text) - used as a fallback when fetch(file://...) fails in production
+  readAppResourceBinary: (input) => ipcRenderer.invoke('read-app-resource-binary', input),
+  readAppResourceText: (input) => ipcRenderer.invoke('read-app-resource-text', input),
 
   // cleanupListeners removed; use per-listener unsubscribe functions instead
 });

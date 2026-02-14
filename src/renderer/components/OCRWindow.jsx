@@ -12,6 +12,11 @@ const getSearchParam = (key) => {
     }
 };
 
+const getBoolParam = (key) => {
+    const raw = String(getSearchParam(key) || '').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+};
+
 const normalizePoint = (point) => {
     if (Array.isArray(point)) {
         return { x: Number(point[0] || 0), y: Number(point[1] || 0) };
@@ -26,6 +31,14 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 function OCRWindow() {
     const { t } = useTranslation();
+    const defaultOcrTextLayout = {
+        lineMergeThresholdRatio: 0.5,
+        lineMergeThresholdPx: 0,
+        spaceGapRatio: 0.2,
+        spaceGapMinPx: 2,
+        insertSpaceByGap: true,
+        splitByGap: true
+    };
     const imagePath = getSearchParam('imagePath');
     const initialLangs = getSearchParam('langs');
     const parsedLangs = initialLangs
@@ -42,9 +55,18 @@ function OCRWindow() {
     const [selecting, setSelecting] = useState(false);
     const [selectedLanguages, setSelectedLanguages] = useState(parsedLangs);
     const [langExpanded, setLangExpanded] = useState(false);
+    const [layoutExpanded, setLayoutExpanded] = useState(false);
     const [toast, setToast] = useState('');
     const [imageSize, setImageSize] = useState({ width: 1, height: 1 });
     const [scale, setScale] = useState(1);
+    const [ocrTextLayout, setOcrTextLayout] = useState({ ...defaultOcrTextLayout });
+    const [ocrModelSource, setOcrModelSource] = useState('builtin');
+    const [ocrModelLanguage, setOcrModelLanguage] = useState('chinese');
+    const [ocrPreprocessModels, setOcrPreprocessModels] = useState({
+        docOrientation: true,
+        docUnwarp: false,
+        textlineOrientation: true
+    });
 
     const imgRef = useRef(null);
     const canvasRef = useRef(null);
@@ -68,7 +90,21 @@ function OCRWindow() {
         try {
             setLoading(true);
             setError('');
-            const res = await recognizeWithPaddle(input, { languages: selectedLanguages });
+            const res = await recognizeWithPaddle(input, {
+                languages: selectedLanguages,
+                ...ocrTextLayout,
+                modelSource: ocrModelSource,
+                modelLanguage: ocrModelLanguage,
+                preprocessModels: ocrPreprocessModels
+            });
+            try {
+                if (typeof globalThis !== 'undefined' && globalThis.__OCR_DEBUG__ === true) {
+                    console.log('[OCRWindow] recognize result:', res);
+                    if (res && res.upscaleDebug) {
+                        console.log('[OCRWindow] upscaleDebug:', res.upscaleDebug);
+                    }
+                }
+            } catch (_) { }
             if (res && res.error) {
                 setError(res.error || (t('history.ocrFailed') || 'OCR failed'));
                 setBlocks([]);
@@ -88,7 +124,45 @@ function OCRWindow() {
             setFullText('');
             setLoading(false);
         }
-    }, [selectedLanguages, t, showToast]);
+    }, [selectedLanguages, ocrTextLayout, ocrModelSource, ocrModelLanguage, ocrPreprocessModels, t, showToast]);
+
+    useEffect(() => {
+        try {
+            const enabled = getBoolParam('debug') || getBoolParam('ocrDebug');
+            if (enabled && typeof globalThis !== 'undefined') {
+                globalThis.__OCR_DEBUG__ = true;
+            }
+        } catch (_) { }
+    }, []);
+
+    useEffect(() => {
+        if (!window.electronAPI || typeof window.electronAPI.getSettings !== 'function') return;
+        window.electronAPI.getSettings()
+            .then((cfg) => {
+                if (!cfg || typeof cfg !== 'object') return;
+                if (cfg.ocrTextLayout && typeof cfg.ocrTextLayout === 'object') {
+                    setOcrTextLayout({ ...defaultOcrTextLayout, ...cfg.ocrTextLayout });
+                }
+                if (typeof cfg.ocrModelSource !== 'undefined') {
+                    setOcrModelSource(cfg.ocrModelSource || 'builtin');
+                }
+                if (typeof cfg.ocrModelLanguage !== 'undefined') {
+                    setOcrModelLanguage(cfg.ocrModelLanguage || 'chinese');
+                }
+                if (cfg.ocrPreprocessModels && typeof cfg.ocrPreprocessModels === 'object') {
+                    setOcrPreprocessModels({
+                        docOrientation: true,
+                        docUnwarp: false,
+                        textlineOrientation: true,
+                        ...cfg.ocrPreprocessModels
+                    });
+                }
+                if (typeof cfg.ocrLangSelectorExpanded !== 'undefined') {
+                    setLangExpanded(!!cfg.ocrLangSelectorExpanded);
+                }
+            })
+            .catch(() => { });
+    }, []);
 
     useEffect(() => {
         if (!imagePath) {
@@ -213,7 +287,13 @@ function OCRWindow() {
             setLoading(true);
             setError('');
             const dataUrl = canvas.toDataURL('image/png');
-            const res = await recognizeWithPaddle(dataUrl, { languages: selectedLanguages });
+            const res = await recognizeWithPaddle(dataUrl, {
+                languages: selectedLanguages,
+                ...ocrTextLayout,
+                modelSource: ocrModelSource,
+                modelLanguage: ocrModelLanguage,
+                preprocessModels: ocrPreprocessModels
+            });
             if (res && res.error) {
                 setError(res.error || (t('history.ocrFailed') || 'OCR failed'));
                 return;
@@ -248,6 +328,20 @@ function OCRWindow() {
         try {
             if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
                 window.electronAPI.setSettings({ ocrLanguages: cleaned });
+            }
+        } catch (_) { }
+    };
+
+    const updateOcrLayout = (field, value) => {
+        const next = {
+            ...defaultOcrTextLayout,
+            ...(ocrTextLayout || {}),
+            [field]: value
+        };
+        setOcrTextLayout(next);
+        try {
+            if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
+                window.electronAPI.setSettings({ ocrTextLayout: next });
             }
         } catch (_) { }
     };
@@ -436,6 +530,89 @@ function OCRWindow() {
                                     ))}
                                 </div>
                                 <div className="ocr-lang-hint">{t('history.ocrLangHint') || ''}</div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="ocr-layout-section">
+                        <button
+                            type="button"
+                            className="ocr-lang-toggle"
+                            onClick={() => setLayoutExpanded((prev) => !prev)}
+                        >
+                            <span>{t('history.ocrLayoutTitle') || 'Text layout'}</span>
+                            <span className="ocr-lang-toggle-icon">{layoutExpanded ? '▲' : '▼'}</span>
+                        </button>
+                        {layoutExpanded && (
+                            <div className="ocr-layout-panel">
+                                <label className="ocr-layout-option">
+                                    <input
+                                        type="checkbox"
+                                        checked={ocrTextLayout.insertSpaceByGap !== false}
+                                        onChange={(e) => updateOcrLayout('insertSpaceByGap', e.target.checked)}
+                                    />
+                                    <span>{t('history.ocrLayoutInsertSpace') || 'Insert space by gap'}</span>
+                                </label>
+                                <label className="ocr-layout-option">
+                                    <input
+                                        type="checkbox"
+                                        checked={ocrTextLayout.splitByGap !== false}
+                                        onChange={(e) => updateOcrLayout('splitByGap', e.target.checked)}
+                                    />
+                                    <span>{t('history.ocrLayoutSplitByGap') || 'Split by blank gap'}</span>
+                                </label>
+
+                                <div className="ocr-layout-control">
+                                    <span>{t('history.ocrLayoutLineMergeRatio') || 'Line merge ratio'}</span>
+                                    <input
+                                        type="range"
+                                        min="0.2"
+                                        max="1.2"
+                                        step="0.05"
+                                        value={ocrTextLayout.lineMergeThresholdRatio}
+                                        onChange={(e) => updateOcrLayout('lineMergeThresholdRatio', parseFloat(e.target.value))}
+                                    />
+                                    <strong>{ocrTextLayout.lineMergeThresholdRatio.toFixed(2)}</strong>
+                                </div>
+
+                                <div className="ocr-layout-control">
+                                    <span>{t('history.ocrLayoutLineMergePx') || 'Line merge px'}</span>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="40"
+                                        step="1"
+                                        value={ocrTextLayout.lineMergeThresholdPx}
+                                        onChange={(e) => updateOcrLayout('lineMergeThresholdPx', parseInt(e.target.value, 10) || 0)}
+                                    />
+                                    <strong>{ocrTextLayout.lineMergeThresholdPx}px</strong>
+                                </div>
+
+                                <div className="ocr-layout-control">
+                                    <span>{t('history.ocrLayoutSpaceGapRatio') || 'Space gap ratio'}</span>
+                                    <input
+                                        type="range"
+                                        min="0.2"
+                                        max="0.8"
+                                        step="0.05"
+                                        value={ocrTextLayout.spaceGapRatio}
+                                        onChange={(e) => updateOcrLayout('spaceGapRatio', parseFloat(e.target.value))}
+                                    />
+                                    <strong>{ocrTextLayout.spaceGapRatio.toFixed(2)}</strong>
+                                </div>
+
+                                <div className="ocr-layout-control">
+                                    <span>{t('history.ocrLayoutSpaceGapPx') || 'Space gap px'}</span>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="30"
+                                        step="1"
+                                        value={ocrTextLayout.spaceGapMinPx}
+                                        onChange={(e) => updateOcrLayout('spaceGapMinPx', parseInt(e.target.value, 10) || 0)}
+                                    />
+                                    <strong>{ocrTextLayout.spaceGapMinPx}px</strong>
+                                </div>
                             </div>
                         )}
                     </div>

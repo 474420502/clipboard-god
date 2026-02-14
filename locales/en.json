@@ -23,6 +23,7 @@
             "general": "General",
             "appearance": "Appearance",
             "shortcuts": "Shortcuts",
+            "ocr": "OCR",
             "llm": "LLM"
         },
         "general": {
@@ -124,6 +125,31 @@
             "deleteConfirm": "Delete entry \"{{name}}\"?",
             "delete": "Delete",
             "saveNote": "All entries are written back to config on save."
+        },
+        "ocr": {
+            "title": "OCR",
+            "modelSource": "Model source",
+            "modelSourceHelp": "Use the built-in PP-OCRv5 mobile model.",
+            "modelLanguage": "Recognition language",
+            "modelLanguageHelp": "Language selection is only used by external models.",
+            "docOrientation": "Doc orientation",
+            "docOrientationHelp": "Rotate documents to the correct orientation before OCR.",
+            "docUnwarp": "Doc unwarp",
+            "docUnwarpHelp": "Fix curved/warped documents before OCR.",
+            "textlineOrientation": "Textline orientation",
+            "textlineOrientationHelp": "Rotate upside-down text lines before recognition.",
+            "insertSpaceByGap": "Insert space by gap",
+            "insertSpaceByGapHelp": "Insert a space when the gap between boxes is large.",
+            "splitByGap": "Split text by blank gap",
+            "splitByGapHelp": "Split a large box into smaller ones when there is a big blank gap.",
+            "lineMergeThresholdRatio": "Line merge threshold (ratio)",
+            "lineMergeThresholdRatioHelp": "Larger values keep more words on the same line.",
+            "lineMergeThresholdPx": "Line merge threshold (px)",
+            "lineMergeThresholdPxHelp": "Minimum pixel threshold to keep words on the same line.",
+            "spaceGapRatio": "Space gap threshold (ratio)",
+            "spaceGapRatioHelp": "Larger values reduce auto-inserted spaces.",
+            "spaceGapMinPx": "Space gap threshold (px)",
+            "spaceGapMinPxHelp": "Minimum pixel gap to insert a space."
         }
     },
     "menu": {
@@ -198,6 +224,13 @@
         "ocrPreprocessPreserveSpaces": "Preserve spaces",
         "ocrPreprocessPreserveSpacesHelp": "Better preserve original spacing",
         "ocrConfidenceTitle": "Recognition Confidence",
+        "ocrLayoutTitle": "Text layout",
+        "ocrLayoutInsertSpace": "Insert space by gap",
+        "ocrLayoutSplitByGap": "Split by blank gap",
+        "ocrLayoutLineMergeRatio": "Line merge ratio",
+        "ocrLayoutLineMergePx": "Line merge px",
+        "ocrLayoutSpaceGapRatio": "Space gap ratio",
+        "ocrLayoutSpaceGapPx": "Space gap px",
         "ocrConfidenceHigh": "High",
         "ocrConfidenceMedium": "Medium",
         "ocrConfidenceLow": "Low",

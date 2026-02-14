@@ -2,6 +2,7 @@ const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer, Menu, scre
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { fileURLToPath } = require('url');
 const ClipboardManager = require('./clipboardManager');
 const TrayManager = require('./trayManager');
 const PasteHandler = require('./pasteHandler');
@@ -615,6 +616,35 @@ class MainProcess {
           resourceManager.registerX11Resource('ocrWindow', ocrWin);
         }
         try { ocrWin.setMenu(null); } catch (_) { }
+
+        // Allow opening devtools for OCR window even when the app menu toggles only the main window.
+        // This is especially useful in production builds where the default menu is removed.
+        try {
+          ocrWin.webContents.on('before-input-event', (event, input) => {
+            try {
+              const key = String(input?.key || '').toLowerCase();
+              const ctrlOrCmd = !!(input?.control || input?.meta);
+              const shift = !!input?.shift;
+              const isToggle = (ctrlOrCmd && shift && key === 'i') || key === 'f12';
+              if (!isToggle) return;
+              event.preventDefault();
+              if (ocrWin && !ocrWin.isDestroyed()) {
+                try {
+                  if (ocrWin.webContents.isDevToolsOpened && ocrWin.webContents.isDevToolsOpened()) {
+                    ocrWin.webContents.closeDevTools();
+                  } else {
+                    ocrWin.webContents.openDevTools({ mode: 'detach' });
+                  }
+                } catch (e) {
+                  try { ocrWin.webContents.toggleDevTools(); } catch (_) { }
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
+          });
+        } catch (_) { }
+
         ocrWin.on('closed', () => {
           this.ocrWindow = null;
           if (resourceManager) {
@@ -624,9 +654,10 @@ class MainProcess {
       }
 
       const langParam = languages.map((lang) => encodeURIComponent(String(lang))).join(',');
+      const debugParam = (process.env.OCR_DEBUG === '1' || process.env.OCR_DEBUG === 'true') ? '1' : '';
       if (process.env.VITE_DEV_SERVER_URL) {
         const baseUrl = process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '');
-        const url = `${baseUrl}/?window=ocr&imagePath=${encodeURIComponent(imagePath)}&langs=${langParam}`;
+        const url = `${baseUrl}/?window=ocr&imagePath=${encodeURIComponent(imagePath)}&langs=${langParam}${debugParam ? `&debug=${debugParam}` : ''}`;
         ocrWin.loadURL(url);
       } else {
         const filePath = path.join(__dirname, '../../dist/index.html');
@@ -634,7 +665,8 @@ class MainProcess {
           query: {
             window: 'ocr',
             imagePath,
-            langs: languages.join(',')
+            langs: languages.join(','),
+            ...(debugParam ? { debug: debugParam } : {})
           }
         });
       }
@@ -1491,6 +1523,69 @@ class MainProcess {
       }
     });
 
+    const resolveResourcePath = (input) => {
+      if (!input) return '';
+      const value = String(input);
+      try {
+        if (/^file:\/\//i.test(value)) {
+          return fileURLToPath(value);
+        }
+      } catch (_) {
+        // fallthrough
+      }
+      if (path.isAbsolute(value)) return value;
+      // Treat as app-relative (e.g. dist/assets/...)
+      return path.join(app.getAppPath(), value);
+    };
+
+    const isPathInside = (child, parent) => {
+      try {
+        const parentResolved = path.resolve(parent);
+        const childResolved = path.resolve(child);
+        if (childResolved === parentResolved) return true;
+        return childResolved.startsWith(parentResolved + path.sep);
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const isSafeAppResource = (absPath) => {
+      if (!absPath) return false;
+      const appPath = app.getAppPath();
+      const resourcesPath = process.resourcesPath;
+      return isPathInside(absPath, appPath) || (resourcesPath ? isPathInside(absPath, resourcesPath) : false);
+    };
+
+    ipcMain.handle('read-app-resource-binary', async (_event, input) => {
+      try {
+        const absPath = resolveResourcePath(input);
+        if (!absPath) return { success: false, error: 'invalid-path' };
+        if (!isSafeAppResource(absPath)) {
+          return { success: false, error: 'path-not-allowed' };
+        }
+        const buf = await fs.promises.readFile(absPath);
+        return { success: true, data: new Uint8Array(buf) };
+      } catch (err) {
+        safeConsole.error('read-app-resource-binary error:', err);
+        return { success: false, error: err && err.message ? err.message : 'read-failed' };
+      }
+    });
+
+    ipcMain.handle('read-app-resource-text', async (_event, input) => {
+      try {
+        const absPath = resolveResourcePath(input);
+        if (!absPath) return { success: false, error: 'invalid-path' };
+        if (!isSafeAppResource(absPath)) {
+          return { success: false, error: 'path-not-allowed' };
+        }
+        const text = await fs.promises.readFile(absPath, 'utf-8');
+        return { success: true, text: String(text || '') };
+      } catch (err) {
+        safeConsole.error('read-app-resource-text error:', err);
+        return { success: false, error: err && err.message ? err.message : 'read-failed' };
+      }
+    });
+
     ipcMain.handle('open-ocr-window', async (_event, payload) => {
       try {
         this.openOcrWindow(payload || {});
@@ -1604,8 +1699,24 @@ class MainProcess {
               accelerator: 'CmdOrCtrl+Shift+I',
               click: () => {
                 safeConsole.log('菜单: Toggle Developer Tools 被点击');
-                if (this.mainWindow) {
-                  this.mainWindow.toggleDevTools();
+                try {
+                  const focused = BrowserWindow.getFocusedWindow && BrowserWindow.getFocusedWindow();
+                  const target = focused || this.mainWindow;
+                  if (target && !target.isDestroyed()) {
+                    try {
+                      if (target.webContents.isDevToolsOpened && target.webContents.isDevToolsOpened()) {
+                        target.webContents.closeDevTools();
+                      } else {
+                        target.webContents.openDevTools({ mode: 'detach' });
+                      }
+                    } catch (e) {
+                      target.webContents.toggleDevTools();
+                    }
+                  }
+                } catch (e) {
+                  if (this.mainWindow) {
+                    try { this.mainWindow.toggleDevTools(); } catch (_) { }
+                  }
                 }
               }
             }

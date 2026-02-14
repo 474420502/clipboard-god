@@ -50,7 +50,22 @@ function App() {
     launchOnStartup: false,
     locale: 'zh-CN',
     ocrLanguages: ['chi_sim', 'eng'],
-    ocrLangSelectorExpanded: false
+    ocrLangSelectorExpanded: false,
+    ocrTextLayout: {
+      lineMergeThresholdRatio: 0.5,
+      lineMergeThresholdPx: 0,
+      spaceGapRatio: 0.2,
+      spaceGapMinPx: 2,
+      insertSpaceByGap: true,
+      splitByGap: true
+    },
+    ocrModelSource: 'builtin',
+    ocrModelLanguage: 'chinese',
+    ocrPreprocessModels: {
+      docOrientation: true,
+      docUnwarp: false,
+      textlineOrientation: true
+    }
   });
 
   // Refs for global key handler to avoid re-registering listeners
@@ -83,6 +98,10 @@ function App() {
           if (typeof cfg.locale !== 'undefined') mapped.locale = cfg.locale;
           if (typeof cfg.ocrLanguages !== 'undefined') mapped.ocrLanguages = cfg.ocrLanguages;
           if (typeof cfg.ocrLangSelectorExpanded !== 'undefined') mapped.ocrLangSelectorExpanded = cfg.ocrLangSelectorExpanded;
+          if (typeof cfg.ocrTextLayout !== 'undefined') mapped.ocrTextLayout = cfg.ocrTextLayout;
+          if (typeof cfg.ocrModelSource !== 'undefined') mapped.ocrModelSource = cfg.ocrModelSource;
+          if (typeof cfg.ocrModelLanguage !== 'undefined') mapped.ocrModelLanguage = cfg.ocrModelLanguage;
+          if (typeof cfg.ocrPreprocessModels !== 'undefined') mapped.ocrPreprocessModels = cfg.ocrPreprocessModels;
           // include llms map when present so renderer can show entries in settings
           if (typeof cfg.llms !== 'undefined') mapped.llms = cfg.llms;
 
@@ -516,12 +535,17 @@ function App() {
         showStatusToast(t('history.ocrFailed') || 'OCR failed');
         return;
       }
-      await window.electronAPI.openOcrWindow({
+      const res = await window.electronAPI.openOcrWindow({
         imagePath,
         languages: ocrLanguages
       });
+      if (res && res.success === false) {
+        const reason = res.error ? String(res.error) : 'open-ocr-window-failed';
+        showStatusToast(`${t('history.ocrFailed') || 'OCR failed'}: ${reason}`);
+      }
     } catch (err) {
-      showStatusToast(t('history.ocrFailed') || 'OCR failed');
+      const reason = err && err.message ? String(err.message) : 'open-ocr-window-failed';
+      showStatusToast(`${t('history.ocrFailed') || 'OCR failed'}: ${reason}`);
     }
   };
 
@@ -924,7 +948,12 @@ function App() {
           theme: settings.theme,
           launchOnStartup: settings.launchOnStartup,
           locale: settings.locale,
-          llms: settings.llms || {}
+          llms: settings.llms || {},
+          ocrLanguages: settings.ocrLanguages,
+          ocrTextLayout: settings.ocrTextLayout,
+          ocrModelSource: settings.ocrModelSource,
+          ocrModelLanguage: settings.ocrModelLanguage,
+          ocrPreprocessModels: settings.ocrPreprocessModels
         }), [
           settings.previewLength,
           settings.maxHistoryItems,
@@ -935,7 +964,12 @@ function App() {
           settings.theme,
           settings.launchOnStartup,
           settings.locale,
-          settings.llms
+          settings.llms,
+          settings.ocrLanguages,
+          settings.ocrTextLayout,
+          settings.ocrModelSource,
+          settings.ocrModelLanguage,
+          settings.ocrPreprocessModels
         ])}
       />
     </div>

@@ -1,5 +1,9 @@
+import { recognizeWithPaddleV5 } from '../pp-ocr-v5';
+
 let initPromise = null;
 let ocrModule = null;
+// let ocrEngine = 'paddlejs';
+let ocrEngine = 'v5';
 
 try {
     if (typeof globalThis !== 'undefined') {
@@ -48,8 +52,39 @@ const loadImage = (input) => new Promise((resolve, reject) => {
     img.src = src;
 });
 
+const resolveEngine = (options = {}) => {
+    if (options.engine) return options.engine;
+    if (typeof ocrEngine === 'string' && ocrEngine) return ocrEngine;
+    if (typeof globalThis !== 'undefined' && typeof globalThis.__OCR_ENGINE__ === 'string') {
+        return globalThis.__OCR_ENGINE__;
+    }
+    return 'paddlejs';
+};
+
 const recognizeWithPaddle = async (imageInput, options = {}) => {
     try {
+        const engine = resolveEngine(options);
+        if (engine === 'v5' || engine === 'paddle-v5' || engine === 'paddleocr-v5') {
+            const { engine: _engine, ...rest } = options || {};
+            if (rest.upscaleOnLowConfidence === undefined) {
+                rest.upscaleOnLowConfidence = { enabled: true };
+            }
+            try {
+                if (typeof globalThis !== 'undefined' && globalThis.__OCR_DEBUG__ === true) {
+                    const cur = rest.upscaleOnLowConfidence && typeof rest.upscaleOnLowConfidence === 'object'
+                        ? rest.upscaleOnLowConfidence
+                        : { enabled: true };
+                    rest.upscaleOnLowConfidence = {
+                        attempts: 3,
+                        debug: true,
+                        ...cur,
+                        enabled: cur.enabled !== false
+                    };
+                }
+            } catch (_) { }
+            return await recognizeWithPaddleV5(imageInput, rest);
+        }
+
         await ensureInit();
         const img = await loadImage(imageInput);
 
@@ -87,4 +122,8 @@ const recognizeWithPaddle = async (imageInput, options = {}) => {
     }
 };
 
-export { recognizeWithPaddle };
+const setOcrEngine = (engine) => {
+    ocrEngine = engine || 'paddlejs';
+};
+
+export { recognizeWithPaddle, setOcrEngine };

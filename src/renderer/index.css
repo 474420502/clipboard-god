@@ -865,7 +865,8 @@ html {
 }
 
 .ocr-lang-section,
-.ocr-preprocess-section {
+.ocr-preprocess-section,
+.ocr-layout-section {
     border: 1px solid var(--settings-input-border);
     border-radius: 8px;
     padding: 6px 8px;
@@ -894,7 +895,8 @@ html {
 }
 
 .ocr-lang-panel,
-.ocr-preprocess-panel {
+.ocr-preprocess-panel,
+.ocr-layout-panel {
     margin-top: 5px;
     max-height: 180px;
     overflow: auto;
@@ -970,6 +972,34 @@ html {
     margin-top: 5px;
     font-size: 12px;
     opacity: 0.75;
+}
+
+.ocr-layout-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 4px;
+    font-size: 13px;
+}
+
+.ocr-layout-option input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent-color);
+}
+
+.ocr-layout-control {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+    padding: 6px 0;
+}
+
+.ocr-layout-control input[type="range"] {
+    width: 100%;
 }
 
 /* Preprocess options */

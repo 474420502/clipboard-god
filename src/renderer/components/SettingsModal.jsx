@@ -5,6 +5,32 @@ import ShortcutCapture from './ShortcutCapture';
 
 function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
   const { t } = useTranslation();
+  const defaultOcrTextLayout = {
+    lineMergeThresholdRatio: 0.5,
+    lineMergeThresholdPx: 0,
+    spaceGapRatio: 0.2,
+    spaceGapMinPx: 2,
+    insertSpaceByGap: true,
+    splitByGap: true
+  };
+  const defaultOcrPreprocessModels = {
+    docOrientation: true,
+    docUnwarp: false,
+    textlineOrientation: true
+  };
+  const ocrLanguageOptions = [
+    { value: 'chinese', label: 'Chinese (Simplified/Traditional)' },
+    { value: 'english', label: 'English' },
+    { value: 'arabic', label: 'Arabic' },
+    { value: 'eslav', label: 'Slavic (East)' },
+    { value: 'greek', label: 'Greek' },
+    { value: 'hindi', label: 'Hindi' },
+    { value: 'korean', label: 'Korean' },
+    { value: 'latin', label: 'Latin' },
+    { value: 'tamil', label: 'Tamil' },
+    { value: 'telugu', label: 'Telugu' },
+    { value: 'thai', label: 'Thai' }
+  ];
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(initialSettings || {
     previewLength: 120,
@@ -16,13 +42,18 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
     enableTooltips: true,
     launchOnStartup: false,
     locale: 'zh-CN', // 默认语言
-    ocrLanguages: ['chi_sim', 'eng']
+    ocrLanguages: ['chi_sim', 'eng'],
+    ocrTextLayout: { ...defaultOcrTextLayout },
+    ocrModelSource: 'builtin',
+    ocrModelLanguage: 'chinese',
+    ocrPreprocessModels: { ...defaultOcrPreprocessModels }
   });
 
   const tabs = [
     { id: 'general', label: t('settings.tabs.general'), icon: '⚙️' },
     { id: 'appearance', label: t('settings.tabs.appearance'), icon: '🎨' },
     { id: 'shortcuts', label: t('settings.tabs.shortcuts'), icon: '⌨️' },
+    { id: 'ocr', label: t('settings.tabs.ocr'), icon: '🅾️' },
     { id: 'llm', label: t('settings.tabs.llm'), icon: '🤖' }
   ];
 
@@ -42,6 +73,17 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
         window.electronAPI.hideTooltip();
       }
     } catch (err) { }
+  };
+
+  const updateOcrLayoutField = (field, value) => {
+    setSettings(prev => ({
+      ...prev,
+      ocrTextLayout: {
+        ...defaultOcrTextLayout,
+        ...(prev.ocrTextLayout || {}),
+        [field]: value
+      }
+    }));
   };
 
   const handleSave = () => {
@@ -92,7 +134,11 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 launchOnStartup: typeof res.config.launchOnStartup !== 'undefined' ? res.config.launchOnStartup : false,
                 llms: res.config.llms || settings.llms || {},
                 locale: res.config.locale || settings.locale,
-                ocrLanguages: res.config.ocrLanguages || settings.ocrLanguages || ['chi_sim', 'eng']
+                ocrLanguages: res.config.ocrLanguages || settings.ocrLanguages || ['chi_sim', 'eng'],
+                ocrTextLayout: res.config.ocrTextLayout || settings.ocrTextLayout || { ...defaultOcrTextLayout },
+                ocrModelSource: res.config.ocrModelSource || settings.ocrModelSource || 'builtin',
+                ocrModelLanguage: res.config.ocrModelLanguage || settings.ocrModelLanguage || 'chinese',
+                ocrPreprocessModels: res.config.ocrPreprocessModels || settings.ocrPreprocessModels || { ...defaultOcrPreprocessModels }
               };
             }
 
@@ -109,7 +155,11 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                 launchOnStartup: settings.launchOnStartup,
                 llms: settings.llms || {},
                 locale: settings.locale,
-                ocrLanguages: settings.ocrLanguages || ['chi_sim', 'eng']
+                ocrLanguages: settings.ocrLanguages || ['chi_sim', 'eng'],
+                ocrTextLayout: settings.ocrTextLayout || { ...defaultOcrTextLayout },
+                ocrModelSource: settings.ocrModelSource || 'builtin',
+                ocrModelLanguage: settings.ocrModelLanguage || 'chinese',
+                ocrPreprocessModels: settings.ocrPreprocessModels || { ...defaultOcrPreprocessModels }
               };
             }
 
@@ -184,6 +234,11 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
         enableTooltips: typeof src.enableTooltips !== 'undefined' ? src.enableTooltips : true,
         launchOnStartup: typeof src.launchOnStartup !== 'undefined' ? src.launchOnStartup : false,
         locale: typeof src.locale !== 'undefined' ? src.locale : 'zh-CN',
+        ocrLanguages: src.ocrLanguages || ['chi_sim', 'eng'],
+        ocrTextLayout: src.ocrTextLayout || { ...defaultOcrTextLayout },
+        ocrModelSource: src.ocrModelSource || 'builtin',
+        ocrModelLanguage: src.ocrModelLanguage || 'chinese',
+        ocrPreprocessModels: src.ocrPreprocessModels || { ...defaultOcrPreprocessModels },
         llms: src.llms || {},
         _selectedLlm: src._selectedLlm || ''
       }));
@@ -368,6 +423,182 @@ function SettingsModal({ isOpen, onClose, onSave, initialSettings }) {
                     placeholder={t('settings.shortcuts.screenshotShortcut.placeholder')}
                   />
                   <div className="small">{t('settings.shortcuts.screenshotShortcut.help')}</div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'ocr' && (
+              <div className="settings-section">
+                <h4>{t('settings.ocr.title')}</h4>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.modelLanguage')}</label>
+                  <select
+                    value={settings.ocrModelLanguage || 'chinese'}
+                    onChange={(e) => handleChange('ocrModelLanguage', e.target.value)}
+                  >
+                    {ocrLanguageOptions.map((lang) => (
+                      <option key={lang.value} value={lang.value}>{lang.label}</option>
+                    ))}
+                  </select>
+                  <div className="small">{t('settings.ocr.modelLanguageHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.modelSource')}</label>
+                  <select
+                    value={settings.ocrModelSource || 'builtin'}
+                    onChange={(e) => handleChange('ocrModelSource', e.target.value)}
+                  >
+                    <option value="builtin">Built-in (PP-OCRv5 mobile)</option>
+                  </select>
+                  <div className="small">{t('settings.ocr.modelSourceHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.docOrientation')}</label>
+                  <input
+                    type="checkbox"
+                    checked={settings.ocrPreprocessModels?.docOrientation !== false}
+                    onChange={(e) => handleChange('ocrPreprocessModels', {
+                      ...defaultOcrPreprocessModels,
+                      ...(settings.ocrPreprocessModels || {}),
+                      docOrientation: e.target.checked
+                    })}
+                  />
+                  <div className="small">{t('settings.ocr.docOrientationHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.docUnwarp')}</label>
+                  <input
+                    type="checkbox"
+                    checked={!!settings.ocrPreprocessModels?.docUnwarp}
+                    onChange={(e) => handleChange('ocrPreprocessModels', {
+                      ...defaultOcrPreprocessModels,
+                      ...(settings.ocrPreprocessModels || {}),
+                      docUnwarp: e.target.checked
+                    })}
+                  />
+                  <div className="small">{t('settings.ocr.docUnwarpHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.textlineOrientation')}</label>
+                  <input
+                    type="checkbox"
+                    checked={settings.ocrPreprocessModels?.textlineOrientation !== false}
+                    onChange={(e) => handleChange('ocrPreprocessModels', {
+                      ...defaultOcrPreprocessModels,
+                      ...(settings.ocrPreprocessModels || {}),
+                      textlineOrientation: e.target.checked
+                    })}
+                  />
+                  <div className="small">{t('settings.ocr.textlineOrientationHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.insertSpaceByGap')}</label>
+                  <input
+                    type="checkbox"
+                    checked={settings.ocrTextLayout?.insertSpaceByGap !== false}
+                    onChange={(e) => updateOcrLayoutField('insertSpaceByGap', e.target.checked)}
+                  />
+                  <div className="small">{t('settings.ocr.insertSpaceByGapHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.splitByGap')}</label>
+                  <input
+                    type="checkbox"
+                    checked={settings.ocrTextLayout?.splitByGap !== false}
+                    onChange={(e) => updateOcrLayoutField('splitByGap', e.target.checked)}
+                  />
+                  <div className="small">{t('settings.ocr.splitByGapHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.lineMergeThresholdRatio')}</label>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="1.2"
+                    step="0.05"
+                    value={settings.ocrTextLayout?.lineMergeThresholdRatio ?? defaultOcrTextLayout.lineMergeThresholdRatio}
+                    onChange={(e) => updateOcrLayoutField('lineMergeThresholdRatio', parseFloat(e.target.value))}
+                  />
+                  <input
+                    type="number"
+                    min="0.2"
+                    max="1.2"
+                    step="0.05"
+                    value={settings.ocrTextLayout?.lineMergeThresholdRatio ?? defaultOcrTextLayout.lineMergeThresholdRatio}
+                    onChange={(e) => updateOcrLayoutField('lineMergeThresholdRatio', parseFloat(e.target.value) || 0)}
+                  />
+                  <div className="small">{t('settings.ocr.lineMergeThresholdRatioHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.lineMergeThresholdPx')}</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="40"
+                    step="1"
+                    value={settings.ocrTextLayout?.lineMergeThresholdPx ?? defaultOcrTextLayout.lineMergeThresholdPx}
+                    onChange={(e) => updateOcrLayoutField('lineMergeThresholdPx', parseInt(e.target.value, 10) || 0)}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="40"
+                    step="1"
+                    value={settings.ocrTextLayout?.lineMergeThresholdPx ?? defaultOcrTextLayout.lineMergeThresholdPx}
+                    onChange={(e) => updateOcrLayoutField('lineMergeThresholdPx', parseInt(e.target.value, 10) || 0)}
+                  />
+                  <div className="small">{t('settings.ocr.lineMergeThresholdPxHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.spaceGapRatio')}</label>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="0.8"
+                    step="0.05"
+                    value={settings.ocrTextLayout?.spaceGapRatio ?? defaultOcrTextLayout.spaceGapRatio}
+                    onChange={(e) => updateOcrLayoutField('spaceGapRatio', parseFloat(e.target.value))}
+                  />
+                  <input
+                    type="number"
+                    min="0.2"
+                    max="0.8"
+                    step="0.05"
+                    value={settings.ocrTextLayout?.spaceGapRatio ?? defaultOcrTextLayout.spaceGapRatio}
+                    onChange={(e) => updateOcrLayoutField('spaceGapRatio', parseFloat(e.target.value) || 0)}
+                  />
+                  <div className="small">{t('settings.ocr.spaceGapRatioHelp')}</div>
+                </div>
+
+                <div className="setting-row">
+                  <label>{t('settings.ocr.spaceGapMinPx')}</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="30"
+                    step="1"
+                    value={settings.ocrTextLayout?.spaceGapMinPx ?? defaultOcrTextLayout.spaceGapMinPx}
+                    onChange={(e) => updateOcrLayoutField('spaceGapMinPx', parseInt(e.target.value, 10) || 0)}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="30"
+                    step="1"
+                    value={settings.ocrTextLayout?.spaceGapMinPx ?? defaultOcrTextLayout.spaceGapMinPx}
+                    onChange={(e) => updateOcrLayoutField('spaceGapMinPx', parseInt(e.target.value, 10) || 0)}
+                  />
+                  <div className="small">{t('settings.ocr.spaceGapMinPxHelp')}</div>
                 </div>
               </div>
             )}
