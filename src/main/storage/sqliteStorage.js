@@ -174,8 +174,33 @@ class SqliteStorage {
     }
 
     getHistory(limit = 100, offset = 0) {
-        const stmt = this.db.prepare('SELECT id, item_id, type, content, image_path, image_thumb, hash, timestamp, pinned FROM history ORDER BY timestamp DESC LIMIT ? OFFSET ?');
-        return stmt.all(limit, offset).map(r => ({
+        const normalizedLimit = Number.isFinite(limit) ? Math.max(0, Number(limit)) : 100;
+        const normalizedOffset = Number.isFinite(offset) ? Math.max(0, Number(offset)) : 0;
+
+        // Keep all pinned rows visible while limiting only non-pinned rows.
+        // This matches pruning behavior where pinned rows do not count toward maxHistory.
+        const rows = this.db.prepare(`
+            SELECT id, item_id, type, content, image_path, image_thumb, hash, timestamp, pinned
+            FROM (
+                SELECT id, item_id, type, content, image_path, image_thumb, hash, timestamp, pinned
+                FROM history
+                WHERE pinned = 1
+
+                UNION ALL
+
+                SELECT id, item_id, type, content, image_path, image_thumb, hash, timestamp, pinned
+                FROM (
+                    SELECT id, item_id, type, content, image_path, image_thumb, hash, timestamp, pinned
+                    FROM history
+                    WHERE pinned = 0
+                    ORDER BY timestamp DESC
+                    LIMIT ? OFFSET ?
+                )
+            )
+            ORDER BY timestamp DESC
+        `).all(normalizedLimit, normalizedOffset);
+
+        return rows.map(r => ({
             id: r.item_id || r.id || null,
             _dbId: r.id,
             type: r.type,
@@ -235,15 +260,20 @@ class SqliteStorage {
         try {
             const now = Date.now();
             const hash = crypto.createHash('sha256').update(String(newContent || '')).digest('hex');
+            let changedRows = 0;
             const tx = this.db.transaction((dbId, content, hash, now) => {
-                this.db.prepare('UPDATE history SET content = ?, hash = ?, timestamp = ? WHERE id = ?').run(content, hash, now, dbId);
+                const info = this.db.prepare('UPDATE history SET content = ?, hash = ?, timestamp = ? WHERE id = ?').run(content, hash, now, dbId);
+                changedRows = info && typeof info.changes === 'number' ? info.changes : 0;
                 try {
-                    if (this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) {
+                    if (changedRows > 0 && this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) {
                         this.db.prepare('UPDATE history_fts SET content = ? WHERE rowid = ?').run(content, dbId);
                     }
                 } catch (e) { }
             });
             tx(dbId, newContent, hash, now);
+            if (!changedRows) {
+                return { success: false, error: 'not-found' };
+            }
             return { success: true, hash, timestamp: now };
         } catch (e) {
             return { success: false, error: e.message };
@@ -253,7 +283,10 @@ class SqliteStorage {
     setPinnedByDbId(dbId, pinned) {
         try {
             const v = pinned ? 1 : 0;
-            this.db.prepare('UPDATE history SET pinned = ? WHERE id = ?').run(v, dbId);
+            const info = this.db.prepare('UPDATE history SET pinned = ? WHERE id = ?').run(v, dbId);
+            if (!info || !info.changes) {
+                return { success: false, error: 'not-found' };
+            }
             return { success: true };
         } catch (e) {
             return { success: false, error: e.message };

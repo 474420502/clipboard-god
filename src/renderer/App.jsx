@@ -292,9 +292,6 @@ function App() {
             return it;
           });
         });
-
-        // request a fresh history in background to reconcile any differences
-        try { if (window.electronAPI && typeof window.electronAPI.getHistory === 'function') window.electronAPI.getHistory(); } catch (err) { }
       } catch (err) { }
     };
     window.addEventListener('local-pin-toggled', onLocalPinToggled);

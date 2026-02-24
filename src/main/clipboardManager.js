@@ -328,6 +328,31 @@ class ClipboardManager {
         const item = this.history.splice(idx, 1)[0];
         this.history.unshift(item);
         this.notifyListeners();
+      } else {
+        const rows = this.storageBackend.getHistory(this.maxHistory, 0);
+        this.history = rows.map(r => {
+          if (r.type === 'text') {
+            return {
+              id: r.id || Date.now(),
+              _dbId: r._dbId || null,
+              type: 'text',
+              content: r.content,
+              timestamp: new Date(r.timestamp),
+              pinned: r.pinned ? 1 : 0
+            };
+          }
+          return this._normalizeImagePaths({
+            id: r.id || Date.now(),
+            _dbId: r._dbId || null,
+            type: 'image',
+            content: r.image_path || null,
+            timestamp: new Date(r.timestamp),
+            image_path: r.image_path,
+            image_thumb: r.image_thumb,
+            pinned: r.pinned ? 1 : 0
+          });
+        });
+        this.notifyListeners();
       }
       return true;
     } catch (e) {
@@ -356,6 +381,32 @@ class ClipboardManager {
         this.history[idx].pinned = pinned ? 1 : 0;
         // pinned items participate in ordering by timestamp but should NOT be
         // forcibly moved when pinned/unpinned. Preserve original list order.
+        this.notifyListeners();
+      } else {
+        // Fallback: keep in-memory history consistent with DB even if lookup misses.
+        const rows = this.storageBackend.getHistory(this.maxHistory, 0);
+        this.history = rows.map(r => {
+          if (r.type === 'text') {
+            return {
+              id: r.id || Date.now(),
+              _dbId: r._dbId || null,
+              type: 'text',
+              content: r.content,
+              timestamp: new Date(r.timestamp),
+              pinned: r.pinned ? 1 : 0
+            };
+          }
+          return this._normalizeImagePaths({
+            id: r.id || Date.now(),
+            _dbId: r._dbId || null,
+            type: 'image',
+            content: r.image_path || null,
+            timestamp: new Date(r.timestamp),
+            image_path: r.image_path,
+            image_thumb: r.image_thumb,
+            pinned: r.pinned ? 1 : 0
+          });
+        });
         this.notifyListeners();
       }
       return true;

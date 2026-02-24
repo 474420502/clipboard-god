@@ -11,6 +11,28 @@ try {
 }
 
 class PasteHandler {
+  static _xdotoolCheckPromise = null;
+  static _xdotoolAvailable = null;
+
+  static ensureXdotoolAvailable() {
+    if (this._xdotoolAvailable === true) return Promise.resolve(true);
+    if (this._xdotoolAvailable === false) return Promise.resolve(false);
+    if (this._xdotoolCheckPromise) return this._xdotoolCheckPromise;
+
+    this._xdotoolCheckPromise = new Promise((resolve) => {
+      exec('command -v xdotool', (error, stdout) => {
+        const ok = !error && !!(stdout && String(stdout).trim());
+        this._xdotoolAvailable = ok;
+        resolve(ok);
+      });
+    }).finally(() => {
+      // Allow re-check in case environment changes, but keep cached boolean.
+      this._xdotoolCheckPromise = null;
+    });
+
+    return this._xdotoolCheckPromise;
+  }
+
   // 写入内容到剪贴板
   static writeToClipboard(item) {
     try {
@@ -95,43 +117,25 @@ class PasteHandler {
           resolve();
         });
       } else {
-        // Linux (X11) - 根据内容类型和当前窗口类型选择粘贴组合
+        // Linux (X11)
+        // 目标窗口ID由主进程传入（隐藏主窗后焦点应回到之前应用）。不再额外调用 xprop/xdotool
+        // 获取窗口信息：这些探测会引入明显延迟，但当前并不会影响按键选择。
         const targetWindowId = options && options.targetWindowId ? String(options.targetWindowId) : '';
-        this.getTargetWindowInfo(targetWindowId)
-          .then((info) => {
-            const windowClass = info && info.windowClass ? info.windowClass : '';
-            const windowName = info && info.windowName ? info.windowName : '';
-            const windowId = info && info.windowId ? info.windowId : '';
-            const isTerminal = this.isTerminalWindow(windowClass, windowName);
-            let keyCombinations;
-            if (item.type === 'image') {
-              keyCombinations = ['ctrl+v'];
-            } else {
-              keyCombinations = ['shift+insert'];
-            }
-            console.log('Linux 使用快捷键:', keyCombinations.join(', '), 'windowClass=', windowClass || 'unknown', 'windowName=', windowName || '', 'terminal=', isTerminal);
 
-            // 对于图片，使用更长的延迟确保剪贴板准备好
-            const delay = item.type === 'image' ? 500 : 100;
+        // 文本优先尝试最常见的 Ctrl+V；失败再 fallback 到 Shift+Insert / Ctrl+Shift+V
+        const keyCombinations = item.type === 'image'
+          ? ['ctrl+v']
+          : ['ctrl+v', 'shift+insert', 'ctrl+shift+v'];
 
-            setTimeout(() => {
-              const options = { forceHardKey: item.type !== 'image', avoidWindowArg: item.type !== 'image' };
-              this.executePasteWithRetry(keyCombinations, windowId, options)
-                .then(() => resolve())
-                .catch(reject);
-            }, delay);
-          })
-          .catch(() => {
-            const keyCombinations = item.type === 'image'
-              ? ['ctrl+v']
-              : ['shift+insert'];
-            const delay = item.type === 'image' ? 500 : 100;
-            setTimeout(() => {
-              this.executePasteWithRetry(keyCombinations)
-                .then(() => resolve())
-                .catch(reject);
-            }, delay);
-          });
+        // 对于图片，使用更长的延迟确保剪贴板准备好；文本尽量缩短以提升体感
+        const delay = item.type === 'image' ? 150 : 30;
+
+        setTimeout(() => {
+          const options2 = { forceHardKey: item.type !== 'image', avoidWindowArg: item.type !== 'image' };
+          this.executePasteWithRetry(keyCombinations, targetWindowId, options2)
+            .then(() => resolve())
+            .catch(reject);
+        }, delay);
       }
     });
   }
@@ -213,8 +217,8 @@ class PasteHandler {
 
   static executeXdotoolKey(keyCombination, windowId, options = {}) {
     return new Promise((resolve, reject) => {
-      exec('which xdotool', (error, stdout) => {
-        if (error || !stdout.trim()) {
+      this.ensureXdotoolAvailable().then((ok) => {
+        if (!ok) {
           reject(new Error('xdotool 未安装，无法自动粘贴'));
           return;
         }
