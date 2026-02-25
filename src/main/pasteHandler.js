@@ -119,23 +119,41 @@ class PasteHandler {
       } else {
         // Linux (X11)
         // 目标窗口ID由主进程传入（隐藏主窗后焦点应回到之前应用）。不再额外调用 xprop/xdotool
-        // 获取窗口信息：这些探测会引入明显延迟，但当前并不会影响按键选择。
+        // 获取窗口信息并根据是否终端动态选择粘贴按键顺序。
         const targetWindowId = options && options.targetWindowId ? String(options.targetWindowId) : '';
-
-        // 文本优先尝试最常见的 Ctrl+V；失败再 fallback 到 Shift+Insert / Ctrl+Shift+V
-        const keyCombinations = item.type === 'image'
-          ? ['ctrl+v']
-          : ['ctrl+v', 'shift+insert', 'ctrl+shift+v'];
 
         // 对于图片，使用更长的延迟确保剪贴板准备好；文本尽量缩短以提升体感
         const delay = item.type === 'image' ? 150 : 30;
 
-        setTimeout(() => {
-          const options2 = { forceHardKey: item.type !== 'image', avoidWindowArg: item.type !== 'image' };
-          this.executePasteWithRetry(keyCombinations, targetWindowId, options2)
-            .then(() => resolve())
-            .catch(reject);
-        }, delay);
+        this.getTargetWindowInfo(targetWindowId)
+          .then((windowInfo) => {
+            const terminalPreferred = this.isTerminalWindow(windowInfo.windowClass, windowInfo.windowName);
+
+            const keyCombinations = item.type === 'image'
+              ? ['ctrl+v']
+              : (terminalPreferred
+                ? ['shift+insert', 'ctrl+shift+v', 'ctrl+v']
+                : ['ctrl+v', 'shift+insert', 'ctrl+shift+v']);
+
+            setTimeout(() => {
+              const options2 = { forceHardKey: item.type !== 'image', avoidWindowArg: item.type !== 'image' };
+              this.executePasteWithRetry(keyCombinations, targetWindowId, options2)
+                .then(() => resolve())
+                .catch(reject);
+            }, delay);
+          })
+          .catch(() => {
+            const keyCombinations = item.type === 'image'
+              ? ['ctrl+v']
+              : ['ctrl+v', 'shift+insert', 'ctrl+shift+v'];
+
+            setTimeout(() => {
+              const options2 = { forceHardKey: item.type !== 'image', avoidWindowArg: item.type !== 'image' };
+              this.executePasteWithRetry(keyCombinations, targetWindowId, options2)
+                .then(() => resolve())
+                .catch(reject);
+            }, delay);
+          });
       }
     });
   }
@@ -258,6 +276,7 @@ class PasteHandler {
       const map = {
         'shift+insert': { key: 'insert', mods: ['shift'] },
         'ctrl+v': { key: 'v', mods: ['control'] },
+        'ctrl+shift+v': { key: 'v', mods: ['control', 'shift'] },
         'ctrl+shift+insert': { key: 'insert', mods: ['control', 'shift'] }
       };
       const cfg = map[comboLower];
