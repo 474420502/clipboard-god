@@ -286,15 +286,20 @@ EOF
 
 	mkdir -p dist
 	DEB_FILE="dist/${PKG_NAME}_${VERSION}_${ARCH}.deb"
+	LATEST_DEB_FILE="dist/${PKG_NAME}_latest_${ARCH}.deb"
 	dpkg-deb --build "$STAGING" "$DEB_FILE"
+	cp -f "$DEB_FILE" "$LATEST_DEB_FILE"
 
 	echo "Built $DEB_FILE"
+	echo "Updated latest alias: $LATEST_DEB_FILE"
 	echo "You can install it with: sudo dpkg -i $DEB_FILE"
+	echo "Or safer (always newest): sudo dpkg -i $LATEST_DEB_FILE"
 
 	# Also copy .deb into dist-electron for convenience (group release artifacts together)
 	if [ -d dist-electron ]; then
 		mkdir -p dist-electron
 		cp "$DEB_FILE" dist-electron/ || true
+		cp -f "$DEB_FILE" "dist-electron/${PKG_NAME}_latest_${ARCH}.deb" || true
 		echo "Copied $DEB_FILE -> dist-electron/"
 	fi
 fi

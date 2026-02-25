@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.1 (2026-02-26)
+
+### Fixed
+
+- Paste: Improved Linux terminal paste reliability by prioritizing terminal-friendly key sequences (`Shift+Insert`, `Ctrl+Shift+V`) before `Ctrl+V` when terminal windows are detected.
+- Paste: Added missing `robotjs` key mapping for `Ctrl+Shift+V` to improve compatibility in terminal-focused workflows.
+
+## v1.0.7 (2026-02-26)
+
+### Fixed
+
+- Paste: Improved Linux terminal paste reliability by preferring terminal-friendly key sequences (`Shift+Insert`, `Ctrl+Shift+V`) before falling back to `Ctrl+V` when a terminal window is detected.
+- Paste: Added missing `robotjs` mapping for `Ctrl+Shift+V` to improve compatibility across terminal environments.
+
 ## v1.1.0 (2026-02-14)
 
 ### Added
