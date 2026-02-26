@@ -123,7 +123,7 @@ class PasteHandler {
         const targetWindowId = options && options.targetWindowId ? String(options.targetWindowId) : '';
 
         // 对于图片，使用更长的延迟确保剪贴板准备好；文本尽量缩短以提升体感
-        const delay = item.type === 'image' ? 150 : 30;
+        const delay = item.type === 'image' ? 100 : 10;
 
         this.getTargetWindowInfo(targetWindowId)
           .then((windowInfo) => {

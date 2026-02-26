@@ -178,7 +178,7 @@ bool PasteManager::writeAndPasteText(const QString &text)
         return false;
 
     // 短暂延迟确保剪贴板就绪
-    QThread::msleep(50);
+    QThread::msleep(20);
 
     // 执行粘贴
     return performPaste();
@@ -191,7 +191,7 @@ bool PasteManager::writeAndPasteImage(const QString &filePath)
         return false;
 
     // 较长的延迟确保图片剪贴板就绪
-    QThread::msleep(100);
+    QThread::msleep(60);
 
     // 执行粘贴
     return performPaste();
