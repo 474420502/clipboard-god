@@ -4,7 +4,7 @@ import { truncateText } from '../utils/text';
 
 const DEBUG = !!(import.meta && import.meta.env && import.meta.env.DEV);
 
-function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, enableTooltips = true, isSelected = false, setSelectedIndex }) {
+function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, enableTooltips = true, isSelected = false, setSelectedIndex, style = undefined }) {
   const itemRef = useRef(null);
   const menuRef = useRef(null);
   const { t } = useTranslation();
@@ -373,6 +373,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
     <li
       ref={itemRef}
       className={`history-item ${isSelected ? 'selected' : ''} ${isImage ? 'image-item' : ''} ${item.pinned ? 'pinned' : ''}`}
+      style={style}
       onClick={handlePaste}
       onContextMenu={handleContextMenu}
       onMouseEnter={setSelectedIndex ? (e) => {

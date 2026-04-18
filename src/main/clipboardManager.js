@@ -1,4 +1,5 @@
 const { clipboard } = require('electron');
+const crypto = require('crypto');
 const fs = require('fs');
 const SqliteStorage = require('./storage/sqliteStorage');
 
@@ -9,33 +10,25 @@ class ClipboardManager {
     this._pendingItems = [];
     this._flushTimer = null;
     this._flushInProgress = false;
+    this._monitoring = false;
+    this.interval = null;
     this._flushDelayMs = typeof options.flushDelayMs === 'number' ? options.flushDelayMs : 120;
+    this._pathValidationIntervalMs = typeof options.pathValidationIntervalMs === 'number' ? options.pathValidationIntervalMs : 30000;
 
-    // 最大历史条目数，默认 100000
     this.maxHistory = typeof options.maxHistory === 'number' ? options.maxHistory : 100000;
-
-    // 初始化存储后端：使用 SqliteStorage
     this.storageBackend = new SqliteStorage({ maxHistory: this.maxHistory });
-    // load history from db
-    const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-    // convert to expected in-memory format and keep db row id in _dbId
-    this.history = rows.map(r => {
-      if (r.type === 'text') return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'text', content: r.content, timestamp: new Date(r.timestamp), pinned: r.pinned ? 1 : 0 };
-      return this._normalizeImagePaths({
-        id: r.id || Date.now(),
-        _dbId: r._dbId || null,
-        type: 'image',
-        content: r.image_path || null,
-        timestamp: new Date(r.timestamp),
-        image_path: r.image_path,
-        image_thumb: r.image_thumb,
-        pinned: r.pinned ? 1 : 0
-      });
-    });
+    this.history = this._loadHistoryFromStorage();
+    this.previousText = this._normalizeText(clipboard.readText());
+    const initialImageSignature = this._readClipboardImageSignature();
+    this.previousImageHash = initialImageSignature ? initialImageSignature.hash : null;
   }
 
   _normalizeImagePaths(item) {
     if (!item || item.type !== 'image') return item;
+    const lastCheckedAt = Number(item._pathsCheckedAt || 0);
+    if (lastCheckedAt && (Date.now() - lastCheckedAt) < this._pathValidationIntervalMs) {
+      return item;
+    }
     const normalized = { ...item };
     if (normalized.image_thumb && !fs.existsSync(normalized.image_thumb)) {
       normalized.image_thumb = null;
@@ -44,58 +37,145 @@ class ClipboardManager {
       normalized.image_path = null;
       normalized.content = null;
     }
+    normalized._pathsCheckedAt = Date.now();
     return normalized;
+  }
+
+  _hashBuffer(buffer) {
+    return crypto.createHash('sha256').update(buffer).digest('hex');
+  }
+
+  _normalizeText(text) {
+    return text ? text.replace(/\r\n/g, '\n').replace(/\r/g, '\n') : '';
+  }
+
+  _readClipboardImageSignature() {
+    const image = clipboard.readImage();
+    if (!image || image.isEmpty()) return null;
+    const pngBuffer = image.toPNG();
+    if (!pngBuffer || !pngBuffer.length) return null;
+    const hash = this._hashBuffer(pngBuffer);
+    return {
+      image,
+      pngBuffer,
+      hash,
+      dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`
+    };
+  }
+
+  _createImageItemFromSignature(signature) {
+    if (!signature) return null;
+    return {
+      id: Date.now(),
+      type: 'image',
+      content: signature.dataUrl,
+      imageBuffer: signature.pngBuffer,
+      hash: signature.hash,
+      timestamp: new Date()
+    };
   }
 
   _normalizeTimestamp(value) {
     if (value instanceof Date) return value;
     if (typeof value === 'number') return new Date(value);
-    if (typeof value === 'string') {
-      const parsed = Date.parse(value);
-      if (!Number.isNaN(parsed)) return new Date(parsed);
-    }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed)) return new Date(parsed);
     return new Date();
   }
 
-  // 开始监控剪贴板
-  startMonitoring() {
-    if (this._monitoring) return;
-    this._monitoring = true;
-    // 优先使用 watch API
-    if (clipboard.watch) {
-      this.previousText = clipboard.readText();
-      this.previousImage = clipboard.readImage().toDataURL();
+  _mapStorageRow(row) {
+    if (row.type === 'text') {
+      return {
+        id: row.id || Date.now(),
+        _dbId: row._dbId || null,
+        type: 'text',
+        content: row.content,
+        hash: row.hash || null,
+        timestamp: this._normalizeTimestamp(row.timestamp),
+        pinned: row.pinned ? 1 : 0
+      };
+    }
 
-      clipboard.watch((type) => {
-        if (type === 'text') {
-          const currentText = clipboard.readText();
-          if (currentText !== this.previousText) {
-            this.previousText = currentText;
-            this.checkClipboard();
-          }
-        } else if (type === 'image') {
-          const currentImage = clipboard.readImage().toDataURL();
-          if (currentImage !== this.previousImage) {
-            this.previousImage = currentImage;
-            this.checkClipboard();
-          }
-        }
-      });
-    } else {
-      // 备选方案
-      this.checkClipboard();
-      this.interval = setInterval(() => this.checkClipboard(), 1000);
+    return this._normalizeImagePaths({
+      id: row.id || Date.now(),
+      _dbId: row._dbId || null,
+      type: 'image',
+      content: row.image_path || null,
+      hash: row.hash || null,
+      timestamp: this._normalizeTimestamp(row.timestamp),
+      image_path: row.image_path,
+      image_thumb: row.image_thumb,
+      pinned: row.pinned ? 1 : 0
+    });
+  }
+
+  _loadHistoryFromStorage() {
+    const rows = this.storageBackend.getHistory(this.maxHistory, 0);
+    return rows.map(row => this._mapStorageRow(row));
+  }
+
+  _reloadHistoryFromStorage() {
+    this.history = this._loadHistoryFromStorage();
+  }
+
+  _trimInMemoryHistory() {
+    if (this.history.length <= this.maxHistory) return;
+
+    let nonPinnedCount = 0;
+    for (const item of this.history) {
+      if (!item || !item.pinned) nonPinnedCount += 1;
+    }
+
+    if (nonPinnedCount <= this.maxHistory) return;
+
+    for (let index = this.history.length - 1; index >= 0 && nonPinnedCount > this.maxHistory; index -= 1) {
+      const item = this.history[index];
+      if (!item || item.pinned) continue;
+      this.history.splice(index, 1);
+      nonPinnedCount -= 1;
     }
   }
 
-  // 停止监控剪贴板
+  startMonitoring() {
+    if (this._monitoring) return;
+    this._monitoring = true;
+
+    if (typeof clipboard.watch === 'function') {
+      try {
+        clipboard.watch((type) => {
+          if (type === 'text') {
+            const currentText = this._normalizeText(clipboard.readText());
+            if (currentText !== this.previousText) {
+              this.previousText = currentText;
+              this.checkClipboard();
+            }
+            return;
+          }
+
+          if (type === 'image') {
+            const signature = this._readClipboardImageSignature();
+            const currentHash = signature ? signature.hash : null;
+            if (currentHash !== this.previousImageHash) {
+              this.previousImageHash = currentHash;
+              this.checkClipboard();
+            }
+          }
+        });
+        return;
+      } catch (error) {
+        console.warn('clipboard.watch 不可用，回退到轮询模式:', error);
+      }
+    }
+
+    this.interval = setInterval(() => this.checkClipboard(), 1000);
+  }
+
   stopMonitoring() {
     this._monitoring = false;
-    if (clipboard.unwatch) {
+    if (typeof clipboard.unwatch === 'function') {
       try {
         clipboard.unwatch();
       } catch (e) {
-        // ignore unwatch errors
       }
     }
     if (this.interval) {
@@ -103,50 +183,42 @@ class ClipboardManager {
       this.interval = null;
     }
     try {
-      // flush pending items before shutdown
       this._flushPendingItems();
     } catch (e) {
-      // ignore flush errors during shutdown
     }
   }
 
-  // 检查剪贴板内容变化
   checkClipboard() {
     try {
-      const formats = clipboard.availableFormats();
+      const formats = typeof clipboard.availableFormats === 'function' ? clipboard.availableFormats() : [];
       let newItem = null;
 
-      // 检查是否有文本内容
       if (formats.includes('text/plain')) {
-        const text = clipboard.readText();
-        // 规范化行结束符：将 \r\n 和 \r 转换为 \n，避免在Linux终端显示 ^M
-        const normalizedText = text ? text.replace(/\r\n/g, '\n').replace(/\r/g, '\n') : '';
-        if (normalizedText && (!this.history.length || this.history[0].type !== 'text' || this.history[0].content !== normalizedText)) {
+        const normalizedText = this._normalizeText(clipboard.readText());
+        const textHash = normalizedText ? this._hashBuffer(Buffer.from(normalizedText, 'utf8')) : null;
+        const latestTextHash = this.history.length && this.history[0].type === 'text' ? this.history[0].hash : null;
+        this.previousText = normalizedText;
+
+        if (normalizedText && (!latestTextHash || latestTextHash !== textHash)) {
           newItem = {
             id: Date.now(),
             type: 'text',
             content: normalizedText,
+            hash: textHash,
             timestamp: new Date()
           };
         }
-      }
-      // 检查是否有图像内容
-      else if (formats.includes('image/png') || formats.includes('image/jpeg')) {
-        const image = clipboard.readImage();
-        if (!image.isEmpty()) {
-          const imageData = image.toDataURL();
-          if (!this.history.length || this.history[0].type !== 'image' || this.history[0].content !== imageData) {
-            newItem = {
-              id: Date.now(),
-              type: 'image',
-              content: imageData,
-              timestamp: new Date()
-            };
-          }
+      } else if (formats.includes('image/png') || formats.includes('image/jpeg')) {
+        const signature = this._readClipboardImageSignature();
+        const currentHash = signature ? signature.hash : null;
+        const latestImageHash = this.history.length && this.history[0].type === 'image' ? this.history[0].hash : null;
+        this.previousImageHash = currentHash;
+
+        if (signature && (!latestImageHash || latestImageHash !== signature.hash)) {
+          newItem = this._createImageItemFromSignature(signature);
         }
       }
 
-      // 如果有新内容，则添加到历史记录
       if (newItem) {
         this.addItem(newItem);
         return true;
@@ -158,10 +230,9 @@ class ClipboardManager {
     return false;
   }
 
-  // 获取历史记录
   getHistory() {
     let changed = false;
-    for (let i = 0; i < this.history.length; i++) {
+    for (let i = 0; i < this.history.length; i += 1) {
       const item = this.history[i];
       if (!item || item.type !== 'image') continue;
       const normalized = this._normalizeImagePaths(item);
@@ -174,41 +245,25 @@ class ClipboardManager {
     return this.history;
   }
 
-  // 设置最大历史数
   setMaxHistory(n) {
     if (typeof n === 'number' && n > 0) {
       this.maxHistory = n;
-      this.storageBackend.maxHistory = n; // 更新存储后端的 maxHistory
-      // SqliteStorage 会自动处理修剪
-      // Also prune in-memory history to match storage behavior
-      if (this.history.length > this.maxHistory) {
-        let nonPinnedCount = 0;
-        for (const it of this.history) {
-          if (!it || !it.pinned) nonPinnedCount += 1;
-        }
-        if (nonPinnedCount > this.maxHistory) {
-          for (let i = this.history.length - 1; i >= 0 && nonPinnedCount > this.maxHistory; i--) {
-            const it = this.history[i];
-            if (!it || !it.pinned) {
-              this.history.splice(i, 1);
-              nonPinnedCount -= 1;
-            }
-          }
-        }
-        this.notifyListeners();
-      }
+      this.storageBackend.maxHistory = n;
+      this._trimInMemoryHistory();
+      this.notifyListeners();
     }
   }
 
-  // 添加一项到历史，并负责裁剪、通知与持久化
   addItem(item) {
     try {
-      // 简单防重复：如果与第一个相同则不插入
       const lastPending = this._pendingItems.length ? this._pendingItems[this._pendingItems.length - 1] : null;
-      if (lastPending && lastPending.type === item.type && lastPending.content === item.content) {
+      const itemSignature = item.hash || item.content;
+      const pendingSignature = lastPending ? (lastPending.hash || lastPending.content) : null;
+      const latestHistorySignature = this.history.length ? (this.history[0].hash || this.history[0].content) : null;
+      if (lastPending && lastPending.type === item.type && pendingSignature === itemSignature) {
         return false;
       }
-      if (this.history.length && this.history[0].type === item.type && this.history[0].content === item.content) {
+      if (this.history.length && this.history[0].type === item.type && latestHistorySignature === itemSignature) {
         return false;
       }
 
@@ -244,56 +299,41 @@ class ClipboardManager {
       try {
         results = this.storageBackend.addItemsBatch(batch) || [];
       } catch (e) {
-        // fallback to single inserts on batch failure
         results = batch.map((it) => {
-          try { return this.storageBackend.addItem(it); } catch (err) { return null; }
+          try {
+            return this.storageBackend.addItem(it);
+          } catch (err) {
+            return null;
+          }
         });
       }
 
-      for (let i = 0; i < batch.length; i++) {
+      for (let i = 0; i < batch.length; i += 1) {
         const item = batch[i];
         const result = results[i];
         if (!result) continue;
 
-        const newItem = {
+        const newItem = this._normalizeImagePaths({
           id: result.id,
           _dbId: result.id,
           type: item.type,
           content: item.type === 'text' ? item.content : (result.image_path || item.content),
+          hash: result.hash || item.hash || null,
           timestamp: this._normalizeTimestamp(item.timestamp),
           image_path: result.image_path,
           image_thumb: result.image_thumb,
           pinned: result.pinned ? 1 : 0
-        };
+        });
 
-        // 如果是更新时间戳，则找到旧项，移到最前面
-        const existingIndex = this.history.findIndex(h => h._dbId === result.id || h.id === result.id);
+        const existingIndex = this.history.findIndex(historyItem => historyItem._dbId === result.id || historyItem.id === result.id);
         if (existingIndex > -1) {
           this.history.splice(existingIndex, 1);
         }
 
-        // 插入到最前面
         this.history.unshift(newItem);
       }
 
-      // 裁剪历史记录
-      if (this.history.length > this.maxHistory) {
-        // Only prune non-pinned items to match storage behavior
-        let nonPinnedCount = 0;
-        for (const it of this.history) {
-          if (!it || !it.pinned) nonPinnedCount += 1;
-        }
-        if (nonPinnedCount > this.maxHistory) {
-          for (let i = this.history.length - 1; i >= 0 && nonPinnedCount > this.maxHistory; i--) {
-            const it = this.history[i];
-            if (!it || !it.pinned) {
-              this.history.splice(i, 1);
-              nonPinnedCount -= 1;
-            }
-          }
-        }
-      }
-
+      this._trimInMemoryHistory();
       this.notifyListeners();
     } catch (err) {
       console.error('批量写入历史项失败:', err);
@@ -305,7 +345,6 @@ class ClipboardManager {
     }
   }
 
-  // Update the text content for an existing item (edit in-place)
   updateTextItem(dbId, newContent) {
     try {
       const res = this.storageBackend.updateTextItemByDbId(dbId, newContent);
@@ -323,35 +362,14 @@ class ClipboardManager {
       });
       if (idx > -1) {
         this.history[idx].content = newContent;
+        this.history[idx].hash = res.hash || this.history[idx].hash;
         this.history[idx].timestamp = this._normalizeTimestamp(res.timestamp);
         // move to front
         const item = this.history.splice(idx, 1)[0];
         this.history.unshift(item);
         this.notifyListeners();
       } else {
-        const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-        this.history = rows.map(r => {
-          if (r.type === 'text') {
-            return {
-              id: r.id || Date.now(),
-              _dbId: r._dbId || null,
-              type: 'text',
-              content: r.content,
-              timestamp: new Date(r.timestamp),
-              pinned: r.pinned ? 1 : 0
-            };
-          }
-          return this._normalizeImagePaths({
-            id: r.id || Date.now(),
-            _dbId: r._dbId || null,
-            type: 'image',
-            content: r.image_path || null,
-            timestamp: new Date(r.timestamp),
-            image_path: r.image_path,
-            image_thumb: r.image_thumb,
-            pinned: r.pinned ? 1 : 0
-          });
-        });
+        this._reloadHistoryFromStorage();
         this.notifyListeners();
       }
       return true;
@@ -361,7 +379,6 @@ class ClipboardManager {
     }
   }
 
-  // Set pinned flag for an item (by db id)
   setPinned(dbId, pinned = true) {
     try {
       const normalizedId = (dbId === null || typeof dbId === 'undefined') ? null : String(dbId);
@@ -379,34 +396,9 @@ class ClipboardManager {
       });
       if (idx > -1) {
         this.history[idx].pinned = pinned ? 1 : 0;
-        // pinned items participate in ordering by timestamp but should NOT be
-        // forcibly moved when pinned/unpinned. Preserve original list order.
         this.notifyListeners();
       } else {
-        // Fallback: keep in-memory history consistent with DB even if lookup misses.
-        const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-        this.history = rows.map(r => {
-          if (r.type === 'text') {
-            return {
-              id: r.id || Date.now(),
-              _dbId: r._dbId || null,
-              type: 'text',
-              content: r.content,
-              timestamp: new Date(r.timestamp),
-              pinned: r.pinned ? 1 : 0
-            };
-          }
-          return this._normalizeImagePaths({
-            id: r.id || Date.now(),
-            _dbId: r._dbId || null,
-            type: 'image',
-            content: r.image_path || null,
-            timestamp: new Date(r.timestamp),
-            image_path: r.image_path,
-            image_thumb: r.image_thumb,
-            pinned: r.pinned ? 1 : 0
-          });
-        });
+        this._reloadHistoryFromStorage();
         this.notifyListeners();
       }
       return true;
@@ -416,12 +408,10 @@ class ClipboardManager {
     }
   }
 
-  // 添加监听器
   addListener(callback) {
     this.listeners.push(callback);
   }
 
-  // 移除监听器
   removeListener(callback) {
     const index = this.listeners.indexOf(callback);
     if (index > -1) {
@@ -429,7 +419,6 @@ class ClipboardManager {
     }
   }
 
-  // 通知所有监听者
   notifyListeners() {
     this.listeners.forEach(listener => listener(this.history));
   }

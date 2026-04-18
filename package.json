@@ -63,11 +63,9 @@
     "files": [
       "dist/**/*",
       "main.js",
-      "mainProcess.js",
-      "src/**/*",
-      "paddleocr-onnx/preprocessing/**/*",
+      "src/main/**/*",
+      "src/preload/**/*",
       "assets/**/*",
-      "locales/**/*",
       "package.json"
     ],
     "asarUnpack": [

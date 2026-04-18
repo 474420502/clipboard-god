@@ -25,6 +25,7 @@ function App() {
   const { t } = useTranslation();
   const [history, setHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [searchOptions, setSearchOptions] = useState({
     type: 'all',
     sortBy: 'time',
@@ -115,6 +116,13 @@ function App() {
         console.error('Failed to load settings from main process:', err);
       });
   }, []);
+
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 140);
+    return () => clearTimeout(timerId);
+  }, [searchTerm]);
 
   // 应用主题到DOM
   useEffect(() => {
@@ -424,8 +432,8 @@ function App() {
     }
 
     // 按搜索词过滤
-    if (searchTerm) {
-      const termLower = searchTerm.toLowerCase();
+    if (debouncedSearchTerm) {
+      const termLower = debouncedSearchTerm.toLowerCase();
       result = result.filter(item => {
         if (item.type === 'text') {
           return item.content.toLowerCase().includes(termLower);
@@ -435,11 +443,12 @@ function App() {
     }
 
     // 排序
-    if (searchOptions.sortBy === 'length' && searchTerm) {
+    if (searchOptions.sortBy === 'length' && debouncedSearchTerm) {
       result.sort((a, b) => {
         if (a.type === 'text' && b.type === 'text') {
-          const aMatch = a.content.toLowerCase().includes(searchTerm.toLowerCase());
-          const bMatch = b.content.toLowerCase().includes(searchTerm.toLowerCase());
+          const needle = debouncedSearchTerm.toLowerCase();
+          const aMatch = a.content.toLowerCase().includes(needle);
+          const bMatch = b.content.toLowerCase().includes(needle);
 
           if (aMatch && bMatch) {
             // 都匹配时按匹配内容长度排序
@@ -455,7 +464,7 @@ function App() {
     }
 
     return result;
-  }, [history, searchTerm, searchOptions]);
+  }, [history, debouncedSearchTerm, searchOptions]);
 
   // 当搜索条件变化时，重置选择索引为第一个项目
   useEffect(() => {

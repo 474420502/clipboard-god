@@ -15,6 +15,9 @@ try {
 class SqliteStorage {
     constructor(options = {}) {
         this.maxHistory = options.maxHistory || 100000;
+        this.cleanupDelayMs = typeof options.cleanupDelayMs === 'number' ? options.cleanupDelayMs : 3000;
+        this._cleanupTimer = null;
+        this._cleanupInProgress = false;
         const cacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
         this.baseDir = path.join(cacheBase, 'clipboard-god');
         this.dbPath = path.join(this.baseDir, 'db.sqlite');
@@ -85,16 +88,15 @@ class SqliteStorage {
         return Buffer.from(m[2], 'base64');
     }
 
-    saveImageFromDataUrl(dataUrl) {
-        const buf = this._dataUrlToBuffer(dataUrl);
-        if (!buf) return null;
-        const hash = this._hashBuffer(buf);
+    saveImageBuffer(buf, hashHint = null) {
+        if (!Buffer.isBuffer(buf) || buf.length === 0) return null;
+        const hash = hashHint || this._hashBuffer(buf);
         const fileName = `${hash}.png`;
         const filePath = path.join(this.imagesDir, fileName);
         if (!fs.existsSync(filePath)) {
             fs.writeFileSync(filePath, buf);
         }
-        // create thumbnail
+
         const thumbName = `${hash}.thumb.png`;
         const thumbPath = path.join(this.imagesDir, thumbName);
         try {
@@ -105,7 +107,44 @@ class SqliteStorage {
         } catch (e) {
             // if nativeImage not available or fails, ignore
         }
+
         return { path: filePath, thumbPath, hash };
+    }
+
+    saveImageFromDataUrl(dataUrl) {
+        const buf = this._dataUrlToBuffer(dataUrl);
+        if (!buf) return null;
+        return this.saveImageBuffer(buf);
+    }
+
+    _scheduleOrphanCleanup() {
+        if (this._cleanupInProgress) return;
+        if (this._cleanupTimer) clearTimeout(this._cleanupTimer);
+        this._cleanupTimer = setTimeout(() => {
+            this._cleanupTimer = null;
+            this._cleanupOrphanedImages();
+        }, this.cleanupDelayMs);
+    }
+
+    _cleanupOrphanedImages() {
+        if (this._cleanupInProgress) return;
+        this._cleanupInProgress = true;
+        try {
+            const usedRows = this.db.prepare('SELECT DISTINCT hash FROM history WHERE type = ? AND hash IS NOT NULL').all('image');
+            const used = new Set(usedRows.map(r => r.hash));
+            const files = fs.readdirSync(this.imagesDir);
+            for (const file of files) {
+                const basename = path.parse(file).name;
+                const rawHash = basename.endsWith('.thumb') ? basename.replace(/\.thumb$/i, '') : basename;
+                if (!used.has(rawHash)) {
+                    try { fs.unlinkSync(path.join(this.imagesDir, file)); } catch (e) { }
+                }
+            }
+        } catch (e) {
+            // ignore cleanup failures
+        } finally {
+            this._cleanupInProgress = false;
+        }
     }
 
     _addItemInternal(item, options = {}) {
@@ -137,8 +176,10 @@ class SqliteStorage {
         }
 
         if (item.type === 'image') {
-            const saved = this.saveImageFromDataUrl(item.content || '');
-            const hash = saved ? saved.hash : null;
+            const saved = item.imageBuffer
+                ? this.saveImageBuffer(item.imageBuffer, item.hash || null)
+                : this.saveImageFromDataUrl(item.content || '');
+            const hash = saved ? saved.hash : (item.hash || null);
             const image_path = saved ? saved.path : null;
             const image_thumb = saved && saved.thumbPath ? saved.thumbPath : null;
             // check existing by hash
@@ -236,21 +277,7 @@ class SqliteStorage {
                     } catch (e) { }
                 });
                 tx(ids);
-                // cleanup image files that are no longer referenced
-                const usedRows = this.db.prepare('SELECT DISTINCT hash FROM history WHERE type = ? AND hash IS NOT NULL').all('image');
-                const used = new Set(usedRows.map(r => r.hash));
-                // scan images dir
-                try {
-                    const files = fs.readdirSync(this.imagesDir);
-                    for (const file of files) {
-                        const basename = path.parse(file).name; // filename without ext -> hash or hash.thumb
-                        const rawHash = basename.endsWith('.thumb') ? basename.replace(/\.thumb$/i, '') : basename;
-                        if (!used.has(rawHash)) {
-                            // remove file
-                            try { fs.unlinkSync(path.join(this.imagesDir, file)); } catch (e) { }
-                        }
-                    }
-                } catch (e) { }
+                this._scheduleOrphanCleanup();
             }
         }
     }

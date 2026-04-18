@@ -17,10 +17,49 @@ fi
 
 PKG_NAME="clipboard-god"
 DEFAULT_VERSION="1.0.0"
+KEEP_STAGING_BUILDS="${KEEP_STAGING_BUILDS:-2}"
 if command -v node >/dev/null 2>&1 && [ -f package.json ]; then
 	CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "$DEFAULT_VERSION")
 else
 	CURRENT_VERSION="$DEFAULT_VERSION"
+fi
+
+clean_all_artifacts() {
+	echo "🧹 Removing build artifacts..."
+	rm -rf dist dist-electron dist-deb-* linux-unpacked
+}
+
+prune_old_staging_dirs() {
+	local keep="${KEEP_STAGING_BUILDS:-2}"
+	if ! [[ "$keep" =~ ^[0-9]+$ ]]; then
+		keep=2
+	fi
+	if [ "$keep" -lt 0 ]; then
+		keep=0
+	fi
+
+	shopt -s nullglob
+	local dirs=(dist-deb-*)
+	shopt -u nullglob
+	if [ "${#dirs[@]}" -le "$keep" ]; then
+		return 0
+	fi
+
+	mapfile -t dirs < <(printf '%s\n' "${dirs[@]}" | sort -r)
+	local idx=0
+	for dir in "${dirs[@]}"; do
+		if [ "$idx" -lt "$keep" ]; then
+			idx=$((idx + 1))
+			continue
+		fi
+		echo "🗑️  Removing old staging directory: $dir"
+		rm -rf "$dir"
+	done
+}
+
+if [ "${1:-}" = "clean" ]; then
+	clean_all_artifacts
+	exit 0
 fi
 
 echo "🚀 Building Clipboard God..."
@@ -106,6 +145,7 @@ EOF
 				dpkg-deb --build "$STAGING_PATH" "$DEB_FILE_EXPECTED"
 				mkdir -p dist-electron
 				cp -v "$DEB_FILE_EXPECTED" dist-electron/ || true
+				prune_old_staging_dirs
 				echo ".deb rebuilt from previous staging and copied to dist-electron/"
 				exit 0
 			fi
@@ -115,7 +155,7 @@ fi
 
 # Clean previous builds
 echo "🧹 Cleaning previous builds..."
-rm -rf dist dist-electron
+rm -rf dist dist-electron linux-unpacked
 
 # Install dependencies (only when needed)
 if [ "$SKIP_NATIVE_REBUILD" = "1" ]; then
@@ -321,6 +361,8 @@ if [ -d dist-electron ]; then
 	rmdir "$TMPDIR" 2>/dev/null || true
 	shopt -u nullglob
 fi
+
+prune_old_staging_dirs
 
 echo "✅ Build complete!"
 echo ""
