@@ -142,7 +142,7 @@ class PasteHandler {
           .catch(() => {
             const keyCombinations = item.type === 'image'
               ? ['ctrl+v']
-              : ['ctrl+v', 'shift+insert', 'ctrl+shift+v'];
+              : ['shift+insert', 'ctrl+shift+v', 'ctrl+v'];
 
             setTimeout(() => {
               const options2 = { forceHardKey: item.type !== 'image', avoidWindowArg: item.type !== 'image' };
@@ -281,7 +281,8 @@ class PasteHandler {
     }
 
     if (context.ideWindow) {
-      return ['ctrl+shift+v', 'shift+insert', 'ctrl+v'];
+      // Avoid raw Ctrl+V in IDE windows to prevent literal ^V in integrated terminals.
+      return ['ctrl+shift+v', 'shift+insert'];
     }
 
     return ['ctrl+v', 'shift+insert', 'ctrl+shift+v'];
