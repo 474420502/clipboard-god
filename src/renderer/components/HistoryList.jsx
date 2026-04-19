@@ -44,7 +44,10 @@ function HistoryList({ history, previewLength, showShortcuts = true, enableToolt
 
   useEffect(() => {
     const element = listRef.current;
-    if (!element) return undefined;
+    if (!element) {
+      setViewportHeight(0);
+      return undefined;
+    }
 
     const updateViewportHeight = () => {
       setViewportHeight(element.clientHeight || 0);
@@ -59,7 +62,7 @@ function HistoryList({ history, previewLength, showShortcuts = true, enableToolt
 
     window.addEventListener('resize', updateViewportHeight);
     return () => window.removeEventListener('resize', updateViewportHeight);
-  }, []);
+  }, [history.length]);
 
   useEffect(() => {
     const element = listRef.current;

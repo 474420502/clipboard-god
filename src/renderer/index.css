@@ -462,7 +462,8 @@ html {
     overflow-y: auto;
     overflow-x: hidden;
     animation: slideUpList 0.4s ease-out;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
 }
 
 .history-spacer {
