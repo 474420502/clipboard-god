@@ -193,7 +193,7 @@ class IPCManager {
                 clipboardManager._lastPaste = { id: item.id, time: now };
                 const PasteHandler = require('../pasteHandler');
 
-                await PasteHandler.writeAndPaste(item);
+                await PasteHandler.writeAndPaste(item, { clipboardManager });
                 errorHandler.safeConsole.log('粘贴操作完成');
             } catch (error) {
                 errorHandler.handleError(error, '粘贴操作');

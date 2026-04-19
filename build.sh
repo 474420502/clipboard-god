@@ -90,12 +90,10 @@ if [ -d node_modules ] && [ -f "$STAMP_FILE" ] && grep -qxF "$STAMP_CONTENT" "$S
 	SKIP_NATIVE_REBUILD=1
 fi
 
-# If there is an existing staging directory from a previous run, and the
-# .deb wasn't produced (for example the previous run was interrupted),
-# automatically finalize the latest staging into a .deb and copy to dist-electron.
-# To force a full rebuild instead of finalizing, run with CONTINUE_BUILD=1
-# Example: CONTINUE_BUILD=1 ./build.sh
-if [ "${CONTINUE_BUILD:-0}" != "1" ]; then
+# Resume an interrupted .deb packaging run only when explicitly requested.
+# By default we remove stale staging directories so source changes always
+# produce a fresh package instead of finalizing an old dist-deb-* tree.
+if [ "${CONTINUE_BUILD:-0}" = "1" ]; then
 	LATEST_DIR=$(ls -1dt dist-deb-* 2>/dev/null | head -n1 || true)
 	if [ -n "$LATEST_DIR" ]; then
 		STAGING_SUB=$(ls -1 "$LATEST_DIR" 2>/dev/null | grep "^${PKG_NAME}_" | head -n1 || true)
@@ -155,7 +153,7 @@ fi
 
 # Clean previous builds
 echo "🧹 Cleaning previous builds..."
-rm -rf dist dist-electron linux-unpacked
+rm -rf dist dist-electron dist-deb-* linux-unpacked
 
 # Install dependencies (only when needed)
 if [ "$SKIP_NATIVE_REBUILD" = "1" ]; then

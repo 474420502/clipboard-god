@@ -1215,7 +1215,10 @@ class MainProcess {
         setTimeout(() => {
           // 写入剪贴板并执行粘贴
           const targetWindowId = this._lastActiveWindowId || '';
-          PasteHandler.writeAndPaste(item, { targetWindowId })
+          PasteHandler.writeAndPaste(item, {
+            targetWindowId,
+            clipboardManager: this.clipboardManager
+          })
             .then(() => {
               safeConsole.log('粘贴操作完成');
               this._pasteLock = false;

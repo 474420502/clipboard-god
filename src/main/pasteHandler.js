@@ -1,14 +1,5 @@
 const { exec } = require('child_process');
 const { clipboard, nativeImage } = require('electron');
-let robot;
-try {
-  robot = require('robotjs');
-  if (robot && typeof robot.setKeyboardDelay === 'function') {
-    robot.setKeyboardDelay(20);
-  }
-} catch (err) {
-  robot = null;
-}
 
 class PasteHandler {
   static _xdotoolCheckPromise = null;
@@ -34,11 +25,15 @@ class PasteHandler {
   }
 
   // 写入内容到剪贴板
-  static writeToClipboard(item) {
+  static writeToClipboard(item, options = {}) {
     try {
+      const clipboardManager = options && options.clipboardManager;
       if (item.type === 'text') {
         console.log('[PasteHandler] 写入剪贴板，类型=text，内容长度:', item.content ? item.content.length : 0);
         console.log('[PasteHandler] 内容预览:', item.content ? item.content.substring(0, 100) : 'null');
+        if (clipboardManager && typeof clipboardManager.suppressNextChange === 'function') {
+          clipboardManager.suppressNextChange({ type: 'text', content: item.content || '' });
+        }
         clipboard.writeText(item.content);
         if (process.platform === 'linux') {
           // 同时写入 CLIPBOARD 和 PRIMARY selection
@@ -79,6 +74,9 @@ class PasteHandler {
           throw new Error('无法解析图像数据用于写入剪贴板');
         }
 
+        if (clipboardManager && typeof clipboardManager.suppressNextChange === 'function') {
+          clipboardManager.suppressNextChange({ type: 'image', imageDataUrl: image.toDataURL() });
+        }
         clipboard.writeImage(image);
       }
       return true;
@@ -128,12 +126,11 @@ class PasteHandler {
         this.getTargetWindowInfo(targetWindowId)
           .then((windowInfo) => {
             const terminalPreferred = this.isTerminalWindow(windowInfo.windowClass, windowInfo.windowName);
-
-            const keyCombinations = item.type === 'image'
-              ? ['ctrl+v']
-              : (terminalPreferred
-                ? ['shift+insert', 'ctrl+shift+v', 'ctrl+v']
-                : ['ctrl+v', 'shift+insert', 'ctrl+shift+v']);
+            const ideWindow = this.isIdeWindow(windowInfo.windowClass, windowInfo.windowName);
+            const keyCombinations = this.getPasteKeyCombinations(item.type, {
+              terminalPreferred,
+              ideWindow
+            });
 
             setTimeout(() => {
               const options2 = { forceHardKey: item.type !== 'image', avoidWindowArg: item.type !== 'image' };
@@ -171,21 +168,6 @@ class PasteHandler {
         }
 
         const keyCombination = combos[index];
-
-        // Prefer robotjs when available
-        if (robot) {
-          this.tryRobotKey(keyCombination, windowId, options)
-            .then(() => {
-              console.log(`Linux 粘贴操作完成 (${keyCombination})`);
-              resolve();
-            })
-            .catch(() => {
-              this.executeXdotoolKey(keyCombination, windowId, options)
-                .then(() => resolve())
-                .catch(() => tryNext(index + 1, '自动粘贴失败'));
-            });
-          return;
-        }
 
         this.executeXdotoolKey(keyCombination, windowId, options)
           .then(() => resolve())
@@ -265,51 +247,6 @@ class PasteHandler {
     });
   }
 
-  static tryRobotKey(keyCombination, windowId, options = {}) {
-    return new Promise((resolve, reject) => {
-      if (!robot) {
-        reject(new Error('robotjs unavailable'));
-        return;
-      }
-
-      const comboLower = String(keyCombination || '').toLowerCase();
-      const map = {
-        'shift+insert': { key: 'insert', mods: ['shift'] },
-        'ctrl+v': { key: 'v', mods: ['control'] },
-        'ctrl+shift+v': { key: 'v', mods: ['control', 'shift'] },
-        'ctrl+shift+insert': { key: 'insert', mods: ['control', 'shift'] }
-      };
-      const cfg = map[comboLower];
-      if (!cfg) {
-        reject(new Error('robotjs unsupported combo'));
-        return;
-      }
-
-      const activateCmd = windowId ? `xdotool windowactivate --sync ${windowId} && xdotool sleep 0.02` : '';
-      const runKey = () => {
-        try {
-          if (cfg.mods && cfg.mods.length) robot.keyTap(cfg.key, cfg.mods);
-          else robot.keyTap(cfg.key);
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      };
-
-      if (activateCmd) {
-        exec(activateCmd, (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          setTimeout(runKey, 20);
-        });
-      } else {
-        setTimeout(runKey, 20);
-      }
-    });
-  }
-
   static sendHardKeySequence(keyCombination, windowId) {
     return new Promise((resolve, reject) => {
       const comboLower = String(keyCombination || '').toLowerCase();
@@ -334,9 +271,25 @@ class PasteHandler {
     });
   }
 
+  static getPasteKeyCombinations(itemType, context = {}) {
+    if (itemType === 'image') {
+      return ['ctrl+v'];
+    }
+
+    if (context.terminalPreferred) {
+      return ['shift+insert', 'ctrl+shift+v', 'ctrl+v'];
+    }
+
+    if (context.ideWindow) {
+      return ['ctrl+shift+v', 'shift+insert', 'ctrl+v'];
+    }
+
+    return ['ctrl+v', 'shift+insert', 'ctrl+shift+v'];
+  }
+
   // 写入并粘贴
   static writeAndPaste(item, options = {}) {
-    const success = this.writeToClipboard(item);
+    const success = this.writeToClipboard(item, options);
     if (!success) {
       throw new Error('写入剪贴板失败');
     }

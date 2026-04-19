@@ -12,6 +12,7 @@ class ClipboardManager {
     this._flushInProgress = false;
     this._monitoring = false;
     this.interval = null;
+    this._suppressedChange = null;
     this._flushDelayMs = typeof options.flushDelayMs === 'number' ? options.flushDelayMs : 120;
     this._pathValidationIntervalMs = typeof options.pathValidationIntervalMs === 'number' ? options.pathValidationIntervalMs : 30000;
 
@@ -29,6 +30,7 @@ class ClipboardManager {
     if (lastCheckedAt && (Date.now() - lastCheckedAt) < this._pathValidationIntervalMs) {
       return item;
     }
+
     const normalized = { ...item };
     if (normalized.image_thumb && !fs.existsSync(normalized.image_thumb)) {
       normalized.image_thumb = null;
@@ -56,7 +58,6 @@ class ClipboardManager {
     if (!pngBuffer || !pngBuffer.length) return null;
     const hash = this._hashBuffer(pngBuffer);
     return {
-      image,
       pngBuffer,
       hash,
       dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`
@@ -78,8 +79,13 @@ class ClipboardManager {
   _normalizeTimestamp(value) {
     if (value instanceof Date) return value;
     if (typeof value === 'number') return new Date(value);
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed)) return new Date(parsed);
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) return new Date(parsed);
+    }
+
+    const parsedDate = new Date(value);
+    if (!Number.isNaN(parsedDate.getTime())) return parsedDate;
     return new Date();
   }
 
@@ -136,6 +142,58 @@ class ClipboardManager {
     }
   }
 
+  suppressNextChange(item = null) {
+    if (!item || !item.type) {
+      this._suppressedChange = null;
+      return;
+    }
+
+    if (item.type === 'text') {
+      const content = this._normalizeText(item.text ?? item.content ?? '');
+      if (!content) {
+        this._suppressedChange = null;
+        return;
+      }
+
+      this._suppressedChange = {
+        type: 'text',
+        content
+      };
+      this.previousText = content;
+      return;
+    }
+
+    if (item.type === 'image') {
+      const content = item.imageDataUrl || item.content || '';
+      if (!content) {
+        this._suppressedChange = null;
+        return;
+      }
+
+      this._suppressedChange = {
+        type: 'image',
+        content
+      };
+      return;
+    }
+
+    this._suppressedChange = null;
+  }
+
+  _shouldSuppressClipboardItem(type, content) {
+    const suppressedChange = this._suppressedChange;
+    if (!suppressedChange) return false;
+
+    if (suppressedChange.type !== type) {
+      this._suppressedChange = null;
+      return false;
+    }
+
+    const matched = suppressedChange.content === content;
+    this._suppressedChange = null;
+    return matched;
+  }
+
   startMonitoring() {
     if (this._monitoring) return;
     this._monitoring = true;
@@ -190,16 +248,19 @@ class ClipboardManager {
 
   checkClipboard() {
     try {
-      const formats = typeof clipboard.availableFormats === 'function' ? clipboard.availableFormats() : [];
       let newItem = null;
+      const normalizedText = this._normalizeText(clipboard.readText());
 
-      if (formats.includes('text/plain')) {
-        const normalizedText = this._normalizeText(clipboard.readText());
-        const textHash = normalizedText ? this._hashBuffer(Buffer.from(normalizedText, 'utf8')) : null;
+      if (normalizedText) {
+        const textHash = this._hashBuffer(Buffer.from(normalizedText, 'utf8'));
         const latestTextHash = this.history.length && this.history[0].type === 'text' ? this.history[0].hash : null;
         this.previousText = normalizedText;
 
-        if (normalizedText && (!latestTextHash || latestTextHash !== textHash)) {
+        if (this._shouldSuppressClipboardItem('text', normalizedText)) {
+          return false;
+        }
+
+        if (!latestTextHash || latestTextHash !== textHash) {
           newItem = {
             id: Date.now(),
             type: 'text',
@@ -208,13 +269,20 @@ class ClipboardManager {
             timestamp: new Date()
           };
         }
-      } else if (formats.includes('image/png') || formats.includes('image/jpeg')) {
+      } else {
         const signature = this._readClipboardImageSignature();
-        const currentHash = signature ? signature.hash : null;
         const latestImageHash = this.history.length && this.history[0].type === 'image' ? this.history[0].hash : null;
-        this.previousImageHash = currentHash;
+        this.previousImageHash = signature ? signature.hash : null;
 
-        if (signature && (!latestImageHash || latestImageHash !== signature.hash)) {
+        if (!signature) {
+          return false;
+        }
+
+        if (this._shouldSuppressClipboardItem('image', signature.dataUrl)) {
+          return false;
+        }
+
+        if (!latestImageHash || latestImageHash !== signature.hash) {
           newItem = this._createImageItemFromSignature(signature);
         }
       }
@@ -364,7 +432,6 @@ class ClipboardManager {
         this.history[idx].content = newContent;
         this.history[idx].hash = res.hash || this.history[idx].hash;
         this.history[idx].timestamp = this._normalizeTimestamp(res.timestamp);
-        // move to front
         const item = this.history.splice(idx, 1)[0];
         this.history.unshift(item);
         this.notifyListeners();

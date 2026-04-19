@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- Paste: Removed the `robotjs` runtime dependency from the Electron build; Linux paste now uses the `xdotool` path only.
+- Paste: Prefer `Ctrl+Shift+V` before `Ctrl+V` inside IDE windows on Linux so VS Code integrated terminals don't receive a literal `^V`.
+
 ## v1.1.1 (2026-02-26)
 
 ### Fixed
