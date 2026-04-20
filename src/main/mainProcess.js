@@ -117,22 +117,21 @@ class MainProcess {
     return modifiers.some(modifier => upperShortcut.includes(modifier.toUpperCase()));
   }
 
-  // Create the tooltip BrowserWindow (lazy)
   createTooltipWindow() {
     if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) return;
 
     try {
       this.tooltipWindow = new BrowserWindow({
-        width: 420,
-        height: 200,
+        width: 720,
+        height: 360,
         show: false,
         frame: false,
         resizable: false,
-        // Do not force alwaysOnTop so z-order follows parent/main window
-        alwaysOnTop: false,
+        alwaysOnTop: true,
         focusable: false,
         skipTaskbar: true,
         transparent: true,
+        hasShadow: true,
         parent: this.mainWindow || undefined,
         modal: false,
         webPreferences: {
@@ -140,51 +139,16 @@ class MainProcess {
         }
       });
 
-      // 注册X11相关资源到资源管理器
+      try {
+        this.tooltipWindow.setIgnoreMouseEvents(true, { forward: true });
+      } catch (_) {
+        try { this.tooltipWindow.setIgnoreMouseEvents(true); } catch (_) { }
+      }
+
       if (resourceManager) {
         resourceManager.registerX11Resource('tooltipWindow', this.tooltipWindow);
       }
 
-      // Ensure tooltip hides when main window hides and follows show/hide
-      if (this.mainWindow && !this._tooltipMainWindowBound) {
-        this._tooltipMainWindowBound = true;
-        this.mainWindow.on('hide', () => {
-          try { this.tooltipPayload = null; this._tooltipSeq = (this._tooltipSeq || 0) + 1; } catch (_) { }
-          try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide(); } catch (_) { }
-          try {
-            // Notify renderer to hide any global context menu when main window hides
-            if (this.mainWindow && this.mainWindow.webContents) {
-              try { this.mainWindow.webContents.send('hide-context-menu'); } catch (e) { /* ignore send errors */ }
-            }
-          } catch (err) { }
-        });
-        this.mainWindow.on('show', () => {
-          // tooltip remains hidden until explicitly requested by renderer
-        });
-        // reposition tooltip when main window moves or resizes
-        this.mainWindow.on('move', () => {
-          try { this.repositionTooltip(); } catch (_) { }
-        });
-        this.mainWindow.on('resize', () => {
-          try { this.repositionTooltip(); } catch (_) { }
-        });
-        // Hide tooltip when the main window loses focus (user switched to another app)
-        this.mainWindow.on('blur', () => {
-          try { this.tooltipPayload = null; this._tooltipSeq = (this._tooltipSeq || 0) + 1; } catch (_) { }
-          try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide(); } catch (_) { }
-        });
-        // When main window regains focus, restore tooltip if there is a payload
-        this.mainWindow.on('focus', () => {
-          try {
-            if (this.tooltipPayload && this.tooltipWindow && !this.tooltipWindow.isDestroyed()) {
-              this.repositionTooltip();
-              try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
-            }
-          } catch (_) { }
-        });
-      }
-
-      // Clean up when tooltip closed
       this.tooltipWindow.on('closed', () => {
         this.tooltipWindow = null;
         if (resourceManager) {
@@ -197,54 +161,112 @@ class MainProcess {
     }
   }
 
-  // Reposition tooltip using last payload/size relative to mainWindow
+  hideTooltipWindow(resetPayload = true) {
+    try {
+      if (resetPayload) this.tooltipPayload = null;
+      this.tooltipSize = null;
+      this._tooltipSeq = (this._tooltipSeq || 0) + 1;
+      if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) {
+        this.tooltipWindow.hide();
+      }
+    } catch (err) {
+      safeConsole.warn('隐藏 tooltip 窗口失败:', err);
+    }
+  }
+
   repositionTooltip() {
     try {
-      if (!this.tooltipWindow || this.tooltipWindow.isDestroyed() || !this.tooltipPayload || !this.tooltipSize) return;
-      if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+      if (!this.tooltipWindow || this.tooltipWindow.isDestroyed() || !this.tooltipPayload) return false;
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) return false;
 
       const mainBounds = this.mainWindow.getBounds();
-      const { anchorRect } = this.tooltipPayload;
-      const size = this.tooltipSize;
-      const offsetX = 8;
-
-      // Tooltip width can be up to twice the main window width; clamp to a sane maximum
-      const tooltipWidth = Math.max(100, Math.min(mainBounds.width * 2, 1600));
-      // Tooltip height follows main window height but clamped to a reasonable max
-      const tooltipHeight = Math.max(30, Math.min(mainBounds.height, 2000));
-
-      // Determine available space on left and right of the main window within the display work area
       const display = screen.getDisplayMatching(mainBounds);
-      const workArea = display ? display.workArea : { x: 0, y: 0, width: 10000, height: 10000 };
+      const workArea = display ? display.workArea : screen.getPrimaryDisplay().workArea;
+      const windowGap = 12;
+      const workAreaPadding = 12;
+      const preferredSide = this.tooltipPayload.preferredSide === 'left' ? 'left' : 'right';
+      const minWidth = Math.max(320, Number(this.tooltipPayload.minWidth) || 320);
+      const minHeight = Math.max(90, Number(this.tooltipPayload.minHeight) || 120);
+      const preferredWidth = Math.max(minWidth, Number(this.tooltipPayload.preferredWidth) || 720);
+      const preferredHeight = Math.max(minHeight, Number(this.tooltipPayload.preferredHeight) || 360);
+      const contentLength = Math.max(0, Number(this.tooltipPayload.contentLength) || 0);
+      const isHtml = !!this.tooltipPayload.isHtml;
+      const imageMetrics = this.tooltipPayload.imageMetrics || null;
+      const rightSpace = Math.max(0, workArea.x + workArea.width - (mainBounds.x + mainBounds.width) - windowGap - workAreaPadding);
+      const leftSpace = Math.max(0, mainBounds.x - workArea.x - windowGap - workAreaPadding);
+      const wantsFullWidth = isHtml || contentLength > 320 || preferredWidth >= 900;
+      const wantsFullHeight = isHtml || contentLength > 900 || preferredHeight >= Math.max(mainBounds.height, 640);
+      let side = preferredSide;
 
-      const spaceRight = workArea.x + workArea.width - (mainBounds.x + mainBounds.width);
-      const spaceLeft = mainBounds.x - workArea.x;
-
-      // If there's enough room on the right, prefer right; otherwise flip to left
-      const placeRight = spaceRight >= tooltipWidth || spaceRight >= spaceLeft;
-
-      const desiredX = placeRight ? (mainBounds.x + mainBounds.width + offsetX) : (mainBounds.x - tooltipWidth - offsetX);
-      // Align tooltip top with main window top per user request
-      let desiredY = mainBounds.y;
-
-      // Ensure tooltip fits vertically within the workArea
-      if (desiredY + tooltipHeight > workArea.y + workArea.height) {
-        desiredY = Math.max(workArea.y, workArea.y + workArea.height - tooltipHeight - 10);
+      const preferredSpace = side === 'right' ? rightSpace : leftSpace;
+      const alternateSpace = side === 'right' ? leftSpace : rightSpace;
+      if (preferredSpace < minWidth && alternateSpace > preferredSpace) {
+        side = side === 'right' ? 'left' : 'right';
+      } else if (alternateSpace > preferredSpace + 120) {
+        side = side === 'right' ? 'left' : 'right';
       }
-      if (desiredY < workArea.y) desiredY = workArea.y + 10;
 
-      // Clamp horizontally to workArea
-      let finalX = desiredX;
-      if (finalX + tooltipWidth > workArea.x + workArea.width) {
-        finalX = workArea.x + workArea.width - tooltipWidth - 10;
+      const chosenSpace = side === 'right' ? rightSpace : leftSpace;
+      const maxAllowedWidth = Math.max(minWidth, workArea.width - workAreaPadding * 2);
+      let tooltipWidth = wantsFullWidth
+        ? chosenSpace
+        : Math.min(chosenSpace, preferredWidth);
+      if (contentLength > 1600 && chosenSpace > preferredWidth) {
+        tooltipWidth = chosenSpace;
       }
-      if (finalX < workArea.x) finalX = workArea.x + 10;
+      if (isHtml && imageMetrics && Number(imageMetrics.naturalWidth) > 0) {
+        const desiredImageWidth = Number(imageMetrics.naturalWidth) + 44;
+        tooltipWidth = Math.min(chosenSpace, Math.max(minWidth, desiredImageWidth));
+      }
+      tooltipWidth = Math.max(minWidth, Math.min(tooltipWidth, maxAllowedWidth));
 
-      try {
-        this.tooltipWindow.setBounds({ x: Math.round(finalX), y: Math.round(desiredY), width: Math.round(tooltipWidth), height: Math.round(tooltipHeight) });
-      } catch (err) { }
+      let tooltipX = side === 'right'
+        ? mainBounds.x + mainBounds.width + windowGap
+        : mainBounds.x - tooltipWidth - windowGap;
+
+      const minX = workArea.x + workAreaPadding;
+      const maxX = workArea.x + workArea.width - tooltipWidth - workAreaPadding;
+      tooltipX = Math.max(minX, Math.min(tooltipX, maxX));
+
+      let tooltipY = Math.max(workArea.y + workAreaPadding, mainBounds.y);
+      let availableHeight = workArea.y + workArea.height - tooltipY - workAreaPadding;
+      if (availableHeight < minHeight) {
+        tooltipY = Math.max(workArea.y + workAreaPadding, workArea.y + workArea.height - minHeight - workAreaPadding);
+        availableHeight = workArea.y + workArea.height - tooltipY - workAreaPadding;
+      }
+
+      let tooltipHeight = wantsFullHeight
+        ? availableHeight
+        : Math.min(availableHeight, Math.max(minHeight, Math.max(preferredHeight, mainBounds.height)));
+      if (!wantsFullHeight && contentLength < 160) {
+        tooltipHeight = Math.min(tooltipHeight, Math.max(minHeight, Math.round(mainBounds.height * 0.45)));
+      }
+      if (isHtml && imageMetrics && Number(imageMetrics.naturalHeight) > 0) {
+        const naturalWidth = Math.max(1, Number(imageMetrics.naturalWidth));
+        const naturalHeight = Math.max(1, Number(imageMetrics.naturalHeight));
+        const captionHeight = Math.max(0, Number(imageMetrics.captionHeight) || 0);
+        const innerWidth = Math.max(1, tooltipWidth - 36);
+        const widthScale = Math.min(1, innerWidth / naturalWidth);
+        const desiredImageHeight = Math.round(naturalHeight * widthScale);
+        tooltipHeight = Math.min(
+          availableHeight,
+          Math.max(minHeight, desiredImageHeight + captionHeight + 44)
+        );
+      }
+      tooltipHeight = Math.max(minHeight, Math.min(tooltipHeight, availableHeight));
+
+      this.tooltipSize = { w: tooltipWidth, h: tooltipHeight };
+
+      this.tooltipWindow.setBounds({
+        x: Math.round(tooltipX),
+        y: Math.round(tooltipY),
+        width: tooltipWidth,
+        height: tooltipHeight
+      });
+      return true;
     } catch (err) {
-      // ignore reposition errors
+      safeConsole.warn('重定位 tooltip 失败:', err);
+      return false;
     }
   }
 
@@ -266,6 +288,23 @@ class MainProcess {
       resourceManager.registerX11Resource('mainWindow', this.mainWindow);
     }
 
+    this.mainWindow.on('hide', () => {
+      try {
+        if (this.mainWindow && this.mainWindow.webContents) {
+          this.mainWindow.webContents.send('hide-context-menu');
+        }
+      } catch (_) { }
+      this.hideTooltipWindow();
+    });
+
+    this.mainWindow.on('move', () => {
+      try { this.repositionTooltip(); } catch (_) { }
+    });
+
+    this.mainWindow.on('resize', () => {
+      try { this.repositionTooltip(); } catch (_) { }
+    });
+
     // 当用户点击关闭按钮时，隐藏窗口而不是退出应用
     this.mainWindow.on('close', (event) => {
       // 阻止默认的关闭行为
@@ -281,12 +320,15 @@ class MainProcess {
     // 当窗口关闭时，取消引用窗口对象（仅在真正退出应用时发生）
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
-      this._tooltipMainWindowBound = false;
       if (resourceManager) {
         try { resourceManager.unregisterResource('mainWindow'); } catch (_) { }
       }
-      try { if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.destroy(); } catch (_) { }
+      try {
+        if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.destroy();
+      } catch (_) { }
       this.tooltipWindow = null;
+      this.tooltipPayload = null;
+      this.tooltipSize = null;
     });
 
     // 当主窗口失去焦点时（例如用户点击了其他应用），隐藏主窗口以及 tooltip
@@ -308,8 +350,7 @@ class MainProcess {
               this.mainWindow.webContents.send('reset-selection');
             }
           } catch (_) { }
-
-          if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide();
+          this.hideTooltipWindow();
         } catch (_) { }
       } catch (err) {
         // ignore
@@ -1271,117 +1312,111 @@ class MainProcess {
       }
     });
 
-    // Tooltip control from renderer: show/hide/update
     ipcMain.on('show-tooltip', (_event, payload) => {
       try {
-        // Respect global enableTooltips config: do not show if disabled
-        const cfg = Config.getAll();
-        if (cfg && cfg.enableTooltips === false) return;
-        // Do not show tooltip if there's no main window or it's not visible
-        if (!this.mainWindow || this.mainWindow.isDestroyed() || !this.mainWindow.isVisible() || this._isPasting) {
-          // skip showing tooltip when main window is hidden, destroyed, or during paste
-          return;
-        }
+        const config = Config.getAll();
+        if (config && config.enableTooltips === false) return;
+        if (!this.mainWindow || this.mainWindow.isDestroyed() || !this.mainWindow.isVisible() || this._isPasting) return;
 
         this.createTooltipWindow();
         if (!this.tooltipWindow) return;
 
-        // invalidate any pending tooltip load
         this._tooltipSeq = (this._tooltipSeq || 0) + 1;
-        const seq = this._tooltipSeq;
+        const currentSeq = this._tooltipSeq;
+        const {
+          content = '',
+          anchorRect = {},
+          html: isHtml = false,
+          preferredWidth,
+          preferredHeight,
+          minWidth,
+          minHeight,
+          preferredSide
+        } = payload || {};
+        const display = screen.getDisplayMatching(this.mainWindow.getBounds());
+        const workArea = display ? display.workArea : screen.getPrimaryDisplay().workArea;
+        const resolvedMinWidth = Math.max(320, Math.min(Number(minWidth) || 320, workArea.width - 40));
+        const resolvedPreferredWidth = Math.max(resolvedMinWidth, Math.min(Number(preferredWidth) || 720, workArea.width - 32));
+        const resolvedMinHeight = Math.max(80, Math.min(Number(minHeight) || 120, workArea.height - 40));
+        const resolvedPreferredHeight = Math.max(resolvedMinHeight, Math.min(Number(preferredHeight) || 720, workArea.height - 24));
+        const contentLength = String(content || '').length;
+        const textFontSize = contentLength > 12000 ? 13 : contentLength > 7000 ? 13.5 : contentLength > 3200 ? 14 : 15;
+        const textColumnCount = contentLength > 12000 ? 3 : contentLength > 3600 ? 2 : 1;
+        const textColumnCss = textColumnCount > 1
+          ? `column-count:${textColumnCount};column-gap:34px;column-rule:1px solid rgba(255,255,255,0.18);column-fill:auto;`
+          : '';
 
-        const { content = '', anchorRect = {}, html: isHtml = false } = payload || {};
-        this.tooltipPayload = { content, anchorRect };
+        this.tooltipPayload = {
+          anchorRect,
+          preferredSide: preferredSide === 'left' ? 'left' : 'right',
+          preferredWidth: resolvedPreferredWidth,
+          preferredHeight: resolvedPreferredHeight,
+          minWidth: resolvedMinWidth,
+          minHeight: resolvedMinHeight,
+          isHtml,
+          contentLength,
+          imageMetrics: null
+        };
 
-        // If the renderer requested HTML payload, trust it but still restrict via CSP
-        let pageHtml;
+        let pageContent = String(content || '');
         if (isHtml) {
-          // Inline any file:// URLs into data: URLs so the tooltip (loaded via data: URL)
-          // can render them without cross-origin/file protocol restrictions.
           try {
-            // find file://... occurrences in the content and replace with data URLs
-            const fileUrlRegex = /src=\"file:\/\/([^\"']+)\"/g;
-            let replaced = String(content);
-            let match;
-            while ((match = fileUrlRegex.exec(content)) !== null) {
+            const fileUrlRegex = /src="file:\/\/([^"']+)"/g;
+            pageContent = pageContent.replace(fileUrlRegex, (match, relativePath) => {
               try {
-                const filePath = '/' + match[1].replace(/^\/+/, ''); // normalize leading slash
-                if (fs.existsSync(filePath)) {
-                  const buf = fs.readFileSync(filePath);
-                  const ext = path.extname(filePath).toLowerCase();
-                  let mime = 'image/png';
-                  if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
-                  else if (ext === '.gif') mime = 'image/gif';
-                  else if (ext === '.webp') mime = 'image/webp';
-                  else if (ext === '.svg') mime = 'image/svg+xml';
-                  const b64 = buf.toString('base64');
-                  const dataUrl = `data:${mime};base64,${b64}`;
-                  replaced = replaced.replace(match[0], `src=\"${dataUrl}\"`);
-                }
-              } catch (err) {
-                // ignore replacement errors and keep original src
+                const filePath = '/' + String(relativePath || '').replace(/^\/+/, '');
+                if (!fs.existsSync(filePath)) return match;
+                const buffer = fs.readFileSync(filePath);
+                const extension = path.extname(filePath).toLowerCase();
+                let mimeType = 'image/png';
+                if (extension === '.jpg' || extension === '.jpeg') mimeType = 'image/jpeg';
+                else if (extension === '.gif') mimeType = 'image/gif';
+                else if (extension === '.webp') mimeType = 'image/webp';
+                else if (extension === '.svg') mimeType = 'image/svg+xml';
+                return `src="data:${mimeType};base64,${buffer.toString('base64')}"`;
+              } catch (_) {
+                return match;
               }
-            }
-
-            // Build tooltip HTML without requiring node inside the page. Inject main window
-            // dimensions as CSS variables so content can cap its size relative to the
-            // main window (max-width = 2 * mainWidth, max-height = mainHeight).
-            const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
-            const mainWidth = Math.max(100, Math.round(mainBounds.width));
-            const mainHeight = Math.max(100, Math.round(mainBounds.height));
-            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>:root{--main-width:${mainWidth}px;--main-height:${mainHeight}px;}html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:calc(var(--main-width) * 2);max-height:var(--main-height);overflow:auto;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${replaced}</div></body></html>`;
-          } catch (err) {
-            // fallback to raw content if replacement fails
-            const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
-            const mainWidth = Math.max(100, Math.round(mainBounds.width));
-            const mainHeight = Math.max(100, Math.round(mainBounds.height));
-            pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline';"><style>:root{--main-width:${mainWidth}px;--main-height:${mainHeight}px;}html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:calc(var(--main-width) * 2);max-height:var(--main-height);overflow:auto;line-height:1.4;white-space:normal;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${String(content)}</div></body></html>`;
-          }
+            });
+          } catch (_) { }
         } else {
-          // sanitized text-only payload
-          const escapeHtml = (value) => String(value)
+          pageContent = pageContent
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
-          const safeContent = escapeHtml(content);
-          const mainBounds = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : { width: 400, height: 600 };
-          const mainWidth = Math.max(100, Math.round(mainBounds.width));
-          const mainHeight = Math.max(100, Math.round(mainBounds.height));
-          pageHtml = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>:root{--main-width:${mainWidth}px;--main-height:${mainHeight}px;}html,body{margin:0;background:transparent;} .box{background:rgba(0,0,0,0.85);color:#fff;padding:12px;border-radius:6px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;max-width:calc(var(--main-width) * 2);max-height:var(--main-height);overflow:auto;line-height:1.4;white-space:pre-wrap;word-break:break-word;box-sizing:border-box;}</style></head><body><div class="box" id="box">${safeContent}</div></body></html>`;
         }
 
-        // Use loadURL with data URL
-        this.tooltipWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(pageHtml));
+        const pageHtml = isHtml
+          ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline';"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:transparent;overflow:hidden;pointer-events:none;}body{display:block;}#box{width:100%;height:100%;box-sizing:border-box;padding:16px 18px;border-radius:12px;background:rgba(14,14,14,0.94);color:#fff;box-shadow:0 18px 42px rgba(0,0,0,0.36);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;line-height:1.45;overflow:hidden;pointer-events:none;}#media-layout{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:12px;overflow:hidden;}#media-wrap{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;}#media-wrap img{display:block;width:auto !important;height:auto !important;max-width:100% !important;max-height:100% !important;object-fit:contain;border-radius:10px;}#media-caption{flex:none;width:100%;font-size:12px;color:#ddd;text-align:left;}</style></head><body><div id="box">${pageContent}</div></body></html>`
+          : `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:transparent;overflow:hidden;pointer-events:none;}body{display:block;}#box{width:100%;height:100%;box-sizing:border-box;padding:16px 18px;border-radius:12px;background:rgba(14,14,14,0.94);color:#fff;box-shadow:0 18px 42px rgba(0,0,0,0.36);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial;overflow:hidden;pointer-events:none;}#content{width:100%;height:100%;overflow:hidden;white-space:pre-wrap;word-break:break-word;line-height:1.58;font-size:${textFontSize}px;${textColumnCss}}</style></head><body><div id="box"><div id="content">${pageContent}</div></div></body></html>`;
 
-        // When the tooltip's webContents finish loading, attempt to measure content but
-        // ultimately size the tooltip to match the main window dimensions.
+        this.tooltipWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(pageHtml));
         this.tooltipWindow.webContents.once('did-finish-load', () => {
-          try {
-            // Abort showing if a newer tooltip was requested or window not visible
-            if (seq !== this._tooltipSeq) return;
-            if (!this.mainWindow || this.mainWindow.isDestroyed() || !this.mainWindow.isVisible() || this._isPasting) return;
-            // Ask for size by executing JavaScript to compute content size (kept for compatibility)
-            this.tooltipWindow.webContents.executeJavaScript(`(function(){const el=document.getElementById('box'); if(!el) return {w:300,h:50}; const r=el.getBoundingClientRect(); ({w:Math.ceil(r.width), h:Math.ceil(r.height)});})()`)
-              .then((size) => {
-                if (seq !== this._tooltipSeq) return;
-                // store measured content size but override tooltip size with main window size
-                this.tooltipSize = { w: size.w + 8, h: size.h + 8 };
-                // Reposition will use mainWindow size to set the tooltip bounds
-                this.repositionTooltip();
-                try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
-              })
-              .catch((err) => {
-                if (seq !== this._tooltipSeq) return;
-                // fallback: still set tooltipSize but reposition uses main window
-                this.tooltipSize = { w: 420, h: 120 };
-                this.repositionTooltip();
-                try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
-              });
-          } catch (err) {
-            try { this.tooltipWindow.showInactive(); } catch (err) { this.tooltipWindow.show(); }
+          if (currentSeq !== this._tooltipSeq) return;
+          if (!this.mainWindow || this.mainWindow.isDestroyed() || !this.mainWindow.isVisible() || this._isPasting) return;
+
+          if (!isHtml) {
+            if (!this.repositionTooltip()) return;
+            try { this.tooltipWindow.showInactive(); } catch (_) { this.tooltipWindow.show(); }
+            return;
           }
+
+          this.tooltipWindow.webContents.executeJavaScript(`(async function(){const img=document.querySelector('#media-wrap img');const caption=document.getElementById('media-caption');if(!img){return null;}if(!img.complete){try{await img.decode();}catch(_){}}return {naturalWidth: Number(img.naturalWidth)||0,naturalHeight: Number(img.naturalHeight)||0,captionHeight: caption ? Math.ceil(caption.getBoundingClientRect().height) : 0};})()`, true)
+            .then((imageMetrics) => {
+              if (currentSeq !== this._tooltipSeq) return;
+              if (imageMetrics) {
+                this.tooltipPayload.imageMetrics = imageMetrics;
+              }
+              if (!this.repositionTooltip()) return;
+              try { this.tooltipWindow.showInactive(); } catch (_) { this.tooltipWindow.show(); }
+            })
+            .catch(() => {
+              if (currentSeq !== this._tooltipSeq) return;
+              if (!this.repositionTooltip()) return;
+              try { this.tooltipWindow.showInactive(); } catch (_) { this.tooltipWindow.show(); }
+            });
         });
       } catch (err) {
         safeConsole.error('show-tooltip 处理失败:', err);
@@ -1389,10 +1424,7 @@ class MainProcess {
     });
 
     ipcMain.on('hide-tooltip', () => {
-      try {
-        try { this.tooltipPayload = null; this._tooltipSeq = (this._tooltipSeq || 0) + 1; } catch (_) { }
-        if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.hide();
-      } catch (err) { }
+      this.hideTooltipWindow();
     });
 
     // 截图相关功能

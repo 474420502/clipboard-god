@@ -6,21 +6,18 @@ const DEBUG = !!(import.meta && import.meta.env && import.meta.env.DEV);
 
 function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, enableTooltips = true, isSelected = false, setSelectedIndex, style = undefined }) {
   const itemRef = useRef(null);
-  const menuRef = useRef(null);
   const { t } = useTranslation();
   // expose t into a ref so rAF callbacks can access it without violating hook rules
   const i18nRef = useRef({ t });
   // keep ref updated when t changes
   useEffect(() => { i18nRef.current.t = t; }, [t]);
 
-  // rAF-based stability detection: wait until bounding rect is stable for N consecutive frames
   const rafId = useRef(null);
   const lastRect = useRef(null);
   const stableCount = useRef(0);
-  const STABLE_FRAMES = 3; // require 3 consecutive frames with identical rect
+  const STABLE_FRAMES = 3;
 
   useEffect(() => {
-    // cancel previous rAF if any
     if (rafId.current) {
       cancelAnimationFrame(rafId.current);
       rafId.current = null;
@@ -29,7 +26,6 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
     stableCount.current = 0;
 
     if (isSelected && itemRef.current) {
-      // If tooltips are disabled, ensure any existing tooltip is hidden
       if (!enableTooltips) {
         try {
           if (window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
@@ -64,14 +60,8 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
           }
 
           if (stableCount.current >= STABLE_FRAMES) {
-            // stable, show tooltip
             try {
-              // respect renderer-side toggle first
               if (enableTooltips && window.electronAPI && typeof window.electronAPI.showTooltip === 'function') {
-                // Round the bounding rect values to integers so tiny sub-pixel
-                // or fractional changes during scrolling don't cause the tooltip
-                // to reposition constantly. This keeps the tooltip visually
-                // stable while the list scrolls slightly.
                 const anchorRect = {
                   top: Math.round(rect.top),
                   left: Math.round(rect.left),
@@ -80,15 +70,30 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
                 };
 
                 if (isText) {
-                  window.electronAPI.showTooltip({ content: item.content, anchorRect });
+                  window.electronAPI.showTooltip({
+                    content: item.content,
+                    anchorRect,
+                    preferredWidth: 880,
+                    preferredHeight: 720,
+                    minWidth: 380,
+                    minHeight: 120,
+                    preferredSide: 'right'
+                  });
                 } else {
-                  // For images, send an HTML payload so the main process can render an image inside the tooltip
-                  // 优先使用主图像路径用于 tooltip 显示，确保图像能正常显示
                   const tooltipImagePath = item.image_path || item.image_thumb;
                   const src = tooltipImagePath ? `file://${tooltipImagePath}` : item.content;
-                  const { t } = i18nRef.current || { t: (k) => k };
-                  const html = `<div style="max-width:440px;max-height:320px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;"><img src=\"${src}\" style="max-width:420px;max-height:280px;border-radius:6px;display:block;" alt="image preview"/><div style="font-size:12px;color:#ddd;">${t('history.clickToPasteImage')}</div></div>`;
-                  window.electronAPI.showTooltip({ content: html, anchorRect, html: true });
+                  const { t } = i18nRef.current || { t: (key) => key };
+                  const html = `<div id="media-layout"><div id="media-wrap"><img src=\"${src}\" alt="image preview"/></div><div id="media-caption">${t('history.clickToPasteImage')}</div></div>`;
+                  window.electronAPI.showTooltip({
+                    content: html,
+                    anchorRect,
+                    html: true,
+                    preferredWidth: 1040,
+                    preferredHeight: 820,
+                    minWidth: 420,
+                    minHeight: 220,
+                    preferredSide: 'right'
+                  });
                 }
               }
             } catch (err) { }
@@ -104,7 +109,6 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
 
       rafId.current = requestAnimationFrame(checkStable);
     } else {
-      // Hide tooltip immediately when unselected
       try {
         if (enableTooltips && window.electronAPI && typeof window.electronAPI.hideTooltip === 'function') {
           window.electronAPI.hideTooltip();
@@ -120,7 +124,7 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
       lastRect.current = null;
       stableCount.current = 0;
     };
-  }, [isSelected, item.content, item.id, item._dbId, item.image_path, item.image_thumb, enableTooltips]);
+  }, [enableTooltips, isSelected, item.content, item.id, item._dbId, item.image_path, item.image_thumb]);
 
   const handlePaste = () => {
     try {
