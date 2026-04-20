@@ -4,10 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## v1.2.0 (2026-04-20)
+
 ### Changed
 
 - Paste: Removed the `robotjs` runtime dependency from the Electron build; Linux paste now uses the `xdotool` path only.
 - Paste: Prefer `Ctrl+Shift+V` before `Ctrl+V` inside IDE windows on Linux so VS Code integrated terminals don't receive a literal `^V`.
+- Tooltip: Restored the external preview window design and tuned it for click-through behavior, larger text previews, and image-first sizing.
+
+### Fixed
+
+- History list: Fixed virtualized list viewport measurement so the bottom area no longer shows stale blank space after data updates.
+- Tooltip: Reduced interaction blocking from the external tooltip window and improved image/text layout stability during selection changes.
+
 
 ## v1.1.1 (2026-02-26)
 

@@ -7,13 +7,14 @@ Clipboard God is a cross-platform clipboard manager built with Electron and Reac
 
 > Note: The Qt/QML port under qt/ is temporarily deprecated and not maintained as a release target.
 
-## Release v1.1.0
+## Release v1.2.0
 
 Highlights:
 
-- OCR: Dedicated OCR window with selectable regions, per-block copy, confidence display, and improved text layout controls.
-- OCR: All OCR-related settings are grouped under a single **OCR Menu** (not mixed with action buttons).
-- UX: More keyboard-first actions in the OCR window (copy, retry, zoom, cancel/close).
+- Paste: Linux paste no longer depends on `robotjs`; the current release uses the more predictable `xdotool` path.
+- Paste: VS Code integrated terminals are less likely to receive a literal `^V` because IDE windows now prefer `Ctrl+Shift+V` ahead of `Ctrl+V`.
+- Tooltip: External preview tooltip behavior was restored and refined for larger text previews, original-size-first images, and less intrusive interaction.
+- List: Virtualized history rendering was corrected so the lower area no longer leaves stale blank space.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
