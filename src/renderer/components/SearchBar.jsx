@@ -1,10 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings, visible = true, pinnedOnly = false, onPinnedOnlyChange }) {
+function SearchBar({
+  searchTerm,
+  setSearchTerm,
+  onAdvancedSearch,
+  onOpenSettings,
+  visible = true,
+  pinnedOnly = false,
+  searchType = 'all',
+  sortBy = 'time',
+  onPinnedOnlyChange
+}) {
   const [isAdvancedSearch, setIsAdvancedSearch] = useState(false);
-  const [searchType, setSearchType] = useState('all'); // 'all', 'text', 'image'
-  const [sortBy, setSortBy] = useState('time'); // 'time', 'length'
+  const [searchTypeDraft, setSearchTypeDraft] = useState(searchType); // 'all', 'text', 'image'
+  const [sortByDraft, setSortByDraft] = useState(sortBy); // 'time', 'length'
   const inputRef = useRef(null);
   const { t } = useTranslation();
 
@@ -32,11 +42,11 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings
   };
 
   const handleTypeChange = (e) => {
-    setSearchType(e.target.value);
+    setSearchTypeDraft(e.target.value);
   };
 
   const handleSortChange = (e) => {
-    setSortBy(e.target.value);
+    setSortByDraft(e.target.value);
   };
 
   const toggleAdvancedSearch = () => {
@@ -53,12 +63,20 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings
     if (typeof onAdvancedSearch === 'function') {
       onAdvancedSearch({
         term: searchTerm,
-        type: searchType,
-        sortBy: sortBy,
+        type: searchTypeDraft,
+        sortBy: sortByDraft,
         pinnedOnly: !!pinnedOnly
       });
     }
   };
+
+  useEffect(() => {
+    setSearchTypeDraft(searchType || 'all');
+  }, [searchType]);
+
+  useEffect(() => {
+    setSortByDraft(sortBy || 'time');
+  }, [sortBy]);
 
   // 仅在搜索框可见性变化时处理焦点，避免与用户输入冲突
   useEffect(() => {
@@ -129,7 +147,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings
           <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div>
               <label style={{ marginRight: '5px' }}>{t('search.advanced.typeLabel')}</label>
-              <select value={searchType} onChange={handleTypeChange}>
+              <select value={searchTypeDraft} onChange={handleTypeChange}>
                 <option value="all">{t('search.advanced.types.all')}</option>
                 <option value="text">{t('search.advanced.types.text')}</option>
                 <option value="image">{t('search.advanced.types.image')}</option>
@@ -138,7 +156,7 @@ function SearchBar({ searchTerm, setSearchTerm, onAdvancedSearch, onOpenSettings
 
             <div>
               <label style={{ marginRight: '5px' }}>{t('search.advanced.sortLabel')}</label>
-              <select value={sortBy} onChange={handleSortChange}>
+              <select value={sortByDraft} onChange={handleSortChange}>
                 <option value="time">{t('search.advanced.sortOptions.time')}</option>
                 <option value="length">{t('search.advanced.sortOptions.length')}</option>
               </select>

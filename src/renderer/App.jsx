@@ -21,16 +21,40 @@ import useNumberShortcuts from './hooks/useNumberShortcuts';
 import EditModal from './components/EditModal';
 import QRCodeSelectorDialog from './components/QRCodeSelectorDialog';
 
+const DEFAULT_SEARCH_OPTIONS = {
+  type: 'all',
+  sortBy: 'time',
+  pinnedOnly: false
+};
+
+function createDefaultSearchOptions() {
+  return { ...DEFAULT_SEARCH_OPTIONS };
+}
+
+function normalizeSearchOptions(nextOptions = {}) {
+  const normalized = {
+    type: nextOptions.type === 'image' ? 'image' : nextOptions.type === 'text' ? 'text' : 'all',
+    sortBy: nextOptions.sortBy === 'length' ? 'length' : 'time',
+    pinnedOnly: !!nextOptions.pinnedOnly
+  };
+
+  if (normalized.pinnedOnly) {
+    normalized.type = 'all';
+  }
+
+  if (normalized.type === 'image') {
+    normalized.pinnedOnly = false;
+  }
+
+  return normalized;
+}
+
 function App() {
   const { t } = useTranslation();
   const [history, setHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [searchOptions, setSearchOptions] = useState({
-    type: 'all',
-    sortBy: 'time',
-    pinnedOnly: false
-  });
+  const [searchOptions, setSearchOptions] = useState(() => createDefaultSearchOptions());
   const [statusToast, setStatusToast] = useState({ visible: false, text: '' });
   const toastTimerRef = useRef(null);
   const [searchVisible, setSearchVisible] = useState(false); // hidden by default
@@ -77,6 +101,45 @@ function App() {
   const useNumberShortcutsRef = useRef(!!settings.useNumberShortcuts);
   const editModalOpenRef = useRef(!!editModalState.open);
   const searchOptionsRef = useRef(searchOptions);
+
+  const setMouseHoverSuppressed = (value) => {
+    try {
+      window.__suppressMouseHover = value;
+    } catch (err) {
+      // ignore
+    }
+    setSuppressMouseHover(value);
+  };
+
+  const clearSearchUiState = ({ resetFilters = false } = {}) => {
+    setSearchVisible(false);
+    setSearchTerm('');
+    if (resetFilters) {
+      setSearchOptions(createDefaultSearchOptions());
+    }
+  };
+
+  const blurActiveEditableElement = () => {
+    try {
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        active.blur();
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const resetPanelUiState = ({ suppressMouseHover = false, resetSearch = false, blurActiveElement = false } = {}) => {
+    setMouseHoverSuppressed(suppressMouseHover);
+    if (resetSearch) {
+      clearSearchUiState({ resetFilters: true });
+    }
+    setSelectedIndex(0);
+    if (blurActiveElement) {
+      blurActiveEditableElement();
+    }
+  };
 
   // 在 App 挂载时，从主进程加载设置并作为单一来源
   useEffect(() => {
@@ -382,18 +445,11 @@ function App() {
     if (!window.electronAPI) return;
 
     const handler = () => {
-      setSearchVisible(false);
-      setSearchTerm('');
-      setSelectedIndex(0); // Reset selection to first item when window is reopened
-      // also blur active element to ensure focus state is clean
-      try {
-        const active = document.activeElement;
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
-          active.blur();
-        }
-      } catch (err) {
-        // ignore
-      }
+      resetPanelUiState({
+        suppressMouseHover: true,
+        resetSearch: true,
+        blurActiveElement: true
+      });
     };
 
     const offGlobalShortcut = window.electronAPI.onGlobalShortcut(handler);
@@ -407,8 +463,7 @@ function App() {
     if (!window.electronAPI || typeof window.electronAPI.onResetSelection !== 'function') return;
 
     const handler = () => {
-      setSelectedIndex(0);
-      setSuppressMouseHover(false);
+      resetPanelUiState();
     };
 
     const offResetSelection = window.electronAPI.onResetSelection(handler);
@@ -626,11 +681,11 @@ function App() {
     setSearchOptions((prev) => {
       imageOnlyWasOn = prev.type === 'image';
       willEnablePinned = !!value;
-      return {
+      return normalizeSearchOptions({
         ...prev,
         pinnedOnly: willEnablePinned,
         type: willEnablePinned ? 'all' : prev.type
-      };
+      });
     });
 
     if (willEnablePinned && imageOnlyWasOn) {
@@ -650,11 +705,11 @@ function App() {
       const nextType = prev.type === 'image' ? 'all' : 'image';
       willEnable = nextType === 'image';
       const nextPinnedOnly = nextType === 'image' ? false : prev.pinnedOnly;
-      return {
+      return normalizeSearchOptions({
         ...prev,
         type: nextType,
         pinnedOnly: nextPinnedOnly
-      };
+      });
     });
 
     showStatusToast(willEnable
@@ -703,8 +758,7 @@ function App() {
       // ESC: hide search first, otherwise hide window
       if (event.key === 'Escape') {
         if (searchVisibleNow) {
-          setSearchVisible(false);
-          setSearchTerm('');
+          clearSearchUiState();
           event.preventDefault();
         } else {
           try {
@@ -791,7 +845,7 @@ function App() {
   // Clear suppressMouseHover when the user moves the mouse
   useEffect(() => {
     const onPointerMove = () => {
-      if (suppressMouseHover) setSuppressMouseHover(false);
+      if (suppressMouseHover) setMouseHoverSuppressed(false);
     };
     window.addEventListener('mousemove', onPointerMove);
     window.addEventListener('pointermove', onPointerMove);
@@ -820,7 +874,10 @@ function App() {
   };
 
   const handleAdvancedSearch = (options) => {
-    setSearchOptions(options);
+    setSearchOptions((prev) => normalizeSearchOptions({
+      ...prev,
+      ...options
+    }));
   };
 
   const handleEditSave = async (newContent) => {
@@ -906,6 +963,8 @@ function App() {
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         visible={searchVisible}
+        searchType={searchOptions.type}
+        sortBy={searchOptions.sortBy}
         onAdvancedSearch={handleAdvancedSearch}
         onOpenSettings={() => setIsSettingsOpen(true)}
         pinnedOnly={searchOptions.pinnedOnly}

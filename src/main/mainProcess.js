@@ -192,10 +192,12 @@ class MainProcess {
       const contentLength = Math.max(0, Number(this.tooltipPayload.contentLength) || 0);
       const isHtml = !!this.tooltipPayload.isHtml;
       const imageMetrics = this.tooltipPayload.imageMetrics || null;
+      const measuredContentHeight = (!isHtml && this.tooltipPayload.measuredContentHeight) ? Number(this.tooltipPayload.measuredContentHeight) : 0;
+      const measuredContentWidth = (!isHtml && this.tooltipPayload.measuredContentWidth) ? Number(this.tooltipPayload.measuredContentWidth) : 0;
       const rightSpace = Math.max(0, workArea.x + workArea.width - (mainBounds.x + mainBounds.width) - windowGap - workAreaPadding);
       const leftSpace = Math.max(0, mainBounds.x - workArea.x - windowGap - workAreaPadding);
-      const wantsFullWidth = isHtml || contentLength > 320 || preferredWidth >= 900;
-      const wantsFullHeight = isHtml || contentLength > 900 || preferredHeight >= Math.max(mainBounds.height, 640);
+      const wantsFullWidth = isHtml || (measuredContentWidth === 0 && contentLength > 600);
+      const wantsFullHeight = isHtml || (measuredContentHeight === 0 && contentLength > 900);
       let side = preferredSide;
 
       const preferredSpace = side === 'right' ? rightSpace : leftSpace;
@@ -218,6 +220,10 @@ class MainProcess {
         const desiredImageWidth = Number(imageMetrics.naturalWidth) + 44;
         tooltipWidth = Math.min(chosenSpace, Math.max(minWidth, desiredImageWidth));
       }
+      // Shrink width if content naturally fits in less space
+      if (!isHtml && measuredContentWidth > 0 && measuredContentWidth < tooltipWidth) {
+        tooltipWidth = Math.max(minWidth, measuredContentWidth);
+      }
       tooltipWidth = Math.max(minWidth, Math.min(tooltipWidth, maxAllowedWidth));
 
       let tooltipX = side === 'right'
@@ -235,11 +241,17 @@ class MainProcess {
         availableHeight = workArea.y + workArea.height - tooltipY - workAreaPadding;
       }
 
-      let tooltipHeight = wantsFullHeight
-        ? availableHeight
-        : Math.min(availableHeight, Math.max(minHeight, Math.max(preferredHeight, mainBounds.height)));
-      if (!wantsFullHeight && contentLength < 160) {
-        tooltipHeight = Math.min(tooltipHeight, Math.max(minHeight, Math.round(mainBounds.height * 0.45)));
+      let tooltipHeight;
+      if (!isHtml && measuredContentHeight > 0) {
+        // Use actual measured content height — no heuristics
+        tooltipHeight = Math.min(availableHeight, Math.max(minHeight, measuredContentHeight));
+      } else if (wantsFullHeight) {
+        tooltipHeight = availableHeight;
+      } else {
+        tooltipHeight = Math.min(availableHeight, Math.max(minHeight, preferredHeight));
+        if (contentLength < 160) {
+          tooltipHeight = Math.min(tooltipHeight, Math.max(minHeight, Math.round(mainBounds.height * 0.45)));
+        }
       }
       if (isHtml && imageMetrics && Number(imageMetrics.naturalHeight) > 0) {
         const naturalWidth = Math.max(1, Number(imageMetrics.naturalWidth));
@@ -1399,7 +1411,20 @@ class MainProcess {
 
           if (!isHtml) {
             if (!this.repositionTooltip()) return;
-            try { this.tooltipWindow.showInactive(); } catch (_) { this.tooltipWindow.show(); }
+            // Measure actual rendered content dimensions, then resize window to fit content
+            this.tooltipWindow.webContents.executeJavaScript(
+              '(function(){var el=document.getElementById("content");if(!el)return null;var origWS=el.style.whiteSpace,origOV=el.style.overflow;el.style.whiteSpace="pre";el.style.overflow="scroll";var nw=Math.ceil(el.scrollWidth);el.style.whiteSpace=origWS;el.style.overflow=origOV;var h=Math.ceil(el.scrollHeight);return{naturalW:nw,h:h};})()', true
+            ).then((metrics) => {
+              if (currentSeq !== this._tooltipSeq) return;
+              if (metrics && this.tooltipPayload) {
+                if (metrics.h > 0) this.tooltipPayload.measuredContentHeight = metrics.h + 32;
+                if (metrics.naturalW > 0) this.tooltipPayload.measuredContentWidth = metrics.naturalW + 36;
+                this.repositionTooltip();
+              }
+              try { this.tooltipWindow.showInactive(); } catch (_) { this.tooltipWindow.show(); }
+            }).catch(() => {
+              try { this.tooltipWindow.showInactive(); } catch (_) { this.tooltipWindow.show(); }
+            });
             return;
           }
 
