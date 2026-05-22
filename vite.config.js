@@ -26,7 +26,7 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     rollupOptions: {
-      external: ['better-sqlite3', 'electron-screenshots']
+      external: ['better-sqlite3', '@474420502/electron-screenshots', '@474420502/react-screenshots']
     }
   },
   server: {

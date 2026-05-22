@@ -1,49 +1,215 @@
+const fs = require('fs');
 const { clipboard, nativeImage, desktopCapturer } = require('electron');
 let Screenshots;
 try {
-  Screenshots = require('electron-screenshots');
+  const screenshotsModule = require('@474420502/electron-screenshots');
+  Screenshots = screenshotsModule && screenshotsModule.default
+    ? screenshotsModule.default
+    : screenshotsModule;
 } catch (e) {
+  console.warn('加载 @474420502/electron-screenshots 失败，回退到 desktopCapturer:', e);
   Screenshots = null;
 }
 
+const OCR_LANGUAGE_LABELS = {
+  chi_sim: '简中',
+  chi_tra: '繁中',
+  eng: 'EN',
+  jpn: 'JP',
+  kor: 'KR',
+  deu: 'DE',
+  fra: 'FR',
+  spa: 'ES',
+  por: 'PT',
+  ita: 'IT',
+  rus: 'RU',
+  ara: 'AR',
+  vie: 'VI',
+  tha: 'TH',
+  nld: 'NL',
+  pol: 'PL'
+};
+
 class ScreenshotManager {
-  constructor(mainWindow, clipboardManager) {
+  constructor(mainWindow, clipboardManager, options = {}) {
     this.mainWindow = mainWindow;
     this.clipboardManager = clipboardManager;
     this.screenshots = null;
+    this.options = options;
+    this._useDesktopCapturer = false;
+  }
+
+  _emitError(error) {
+    const message = error && error.message ? error.message : String(error || 'unknown-error');
+    if (this.mainWindow && this.mainWindow.webContents) {
+      this.mainWindow.webContents.send('error', message);
+    }
+  }
+
+  _startDesktopCapturerScreenshot() {
+    desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } })
+      .then(sources => {
+        if (!sources || sources.length === 0) {
+          throw new Error('未找到屏幕源');
+        }
+        const src = sources[0];
+        const image = nativeImage.createFromDataURL(src.thumbnail.toDataURL());
+        if (image && !image.isEmpty()) {
+          this._processScreenshotBuffer(image.toPNG());
+          console.log('desktopCapturer 截图并保存到剪贴板完成');
+        }
+      })
+      .catch(err => {
+        console.error('desktopCapturer 捕获失败:', err);
+        this._emitError(err);
+      });
+  }
+
+  _captureImageWithDesktopCapturer(resolve, reject) {
+    desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } })
+      .then(sources => {
+        if (!sources || sources.length === 0) return reject(new Error('未找到屏幕源'));
+        const src = sources[0];
+        const dataUrl = src.thumbnail.toDataURL();
+        const base64Full = dataUrl;
+        const base64Raw = dataUrl.split(',')[1];
+        resolve({ base64Full, base64Raw });
+      })
+      .catch(err => reject(err));
+  }
+
+  _getOcrLanguages() {
+    if (!this.options || typeof this.options.getOcrLanguages !== 'function') {
+      return [];
+    }
+
+    const languages = this.options.getOcrLanguages();
+    if (!Array.isArray(languages)) {
+      return [];
+    }
+
+    return languages.map((lang) => String(lang || '').trim()).filter(Boolean);
+  }
+
+  _getOcrLanguageSummary() {
+    const languages = this._getOcrLanguages();
+    if (!languages.length) {
+      return '';
+    }
+
+    return languages
+      .slice(0, 3)
+      .map((lang) => OCR_LANGUAGE_LABELS[lang] || lang)
+      .join('/');
+  }
+
+  _getOcrWindowTitle() {
+    const summary = this._getOcrLanguageSummary();
+    return summary ? `打开 OCR 窗口 (${summary})` : '打开 OCR 窗口';
+  }
+
+  _buildDefaultOperationItems() {
+    return [
+      {
+        key: 'ocr',
+        title: this._getOcrWindowTitle(),
+        label: 'OCR',
+        position: 'before-confirm',
+        requiresSelection: true,
+        includeImage: true,
+        imageResource: {
+          fileNamePrefix: 'ocr'
+        },
+        handler: async (context) => {
+          await this._handleOcrOperation(context);
+        }
+      }
+    ];
+  }
+
+  async _setOperationItems(items) {
+    if (!this.screenshots || typeof this.screenshots.setOperationItems !== 'function') {
+      return;
+    }
+
+    await this.screenshots.setOperationItems(items);
+  }
+
+  async _handleOcrOperation(context) {
+    try {
+      if (context && typeof context.update === 'function') {
+        await context.update({
+          title: '打开中...',
+          checked: true,
+          disabled: true
+        });
+      }
+
+      let buffer = context && context.buffer && Buffer.isBuffer(context.buffer)
+        ? context.buffer
+        : null;
+
+      if (!buffer && context && context.imageResource && context.imageResource.filePath) {
+        buffer = fs.readFileSync(context.imageResource.filePath);
+      }
+
+      if (!buffer || !Buffer.isBuffer(buffer)) {
+        throw new Error('ocr-image-missing');
+      }
+
+      this._processScreenshotBuffer(buffer, { writeToClipboard: true });
+
+      if (context && typeof context.endCapture === 'function') {
+        await context.endCapture();
+      } else if (this.screenshots && typeof this.screenshots.endCapture === 'function') {
+        await this.screenshots.endCapture();
+      }
+
+      if (this.options && typeof this.options.openOcrWindow === 'function') {
+        await Promise.resolve(this.options.openOcrWindow(buffer));
+      }
+    } catch (error) {
+      if (context && typeof context.update === 'function') {
+        await context.update({
+          title: this._getOcrWindowTitle(),
+          checked: false,
+          disabled: false
+        }).catch(() => { });
+      }
+      this._emitError(error);
+    }
   }
 
   // 初始化截图功能
   init() {
-    // 如果 electron-screenshots 不可用，则 fallback 到 desktopCapturer
+    // 如果 @474420502/electron-screenshots 不可用，则 fallback 到 desktopCapturer
     if (!Screenshots || typeof Screenshots !== 'function') {
-      console.warn('electron-screenshots 模块不可用，使用 desktopCapturer 回退截图实现');
+      console.warn('@474420502/electron-screenshots 模块不可用，使用 desktopCapturer 回退截图实现');
       this._useDesktopCapturer = true;
       return;
     }
 
     this.screenshots = new Screenshots({
+      forwardEvents: ['error'],
+      operationItems: this._buildDefaultOperationItems(),
       lang: {
-        operation_cancel: '取消',
-        operation_save: '保存',
-        operation_redo: '撤销',
-        operation_undo: '反撤销',
-        operation_mosaic: '马赛克',
-        operation_text: '文本',
-        operation_rectangle: '矩形',
-        operation_ellipse: '椭圆',
-        operation_arrow: '箭头',
-        operation_brush: '画笔',
-        operation_finish: '完成'
+        magnifier_position_label: '位置',
+        operation_ok_title: '完成',
+        operation_cancel_title: '取消',
+        operation_save_title: '保存',
+        operation_redo_title: '重做',
+        operation_undo_title: '撤销',
+        operation_mosaic_title: '马赛克',
+        operation_text_title: '文本',
+        operation_rectangle_title: '矩形',
+        operation_ellipse_title: '椭圆',
+        operation_arrow_title: '箭头',
+        operation_brush_title: '画笔'
       }
     });
 
-    // 监听截图完成事件。我们使用一个可控的默认 handler（this._defaultOkHandler）
-    // 当通过 captureImage() 发起的截图需要仅返回数据时，会临时抑制该 handler，
-    // 避免把图像写入系统剪贴板或保存到历史。
-    this._allowDefaultOk = true;
+    // 监听截图完成事件。
     this._defaultOkHandler = (event, buffer) => {
-      if (!this._allowDefaultOk) return;
       this._processScreenshotBuffer(buffer, { writeToClipboard: true });
     };
     this.screenshots.on('ok', this._defaultOkHandler);
@@ -56,6 +222,12 @@ class ScreenshotManager {
     // 监听保存事件
     this.screenshots.on('save', (event, buffer) => {
       console.log('截图已保存到桌面');
+    });
+
+    this.screenshots.on('error', (_event, rendererEvent) => {
+      const payload = rendererEvent && rendererEvent.payload ? rendererEvent.payload : null;
+      const message = payload && payload.message ? payload.message : 'screenshot-renderer-error';
+      this._emitError(new Error(String(message)));
     });
   }
 
@@ -98,24 +270,7 @@ class ScreenshotManager {
   startScreenshot() {
     // 如果使用回退实现，则直接使用 desktopCapturer 捕获整个屏幕并写入剪贴板
     if (this._useDesktopCapturer) {
-      // 异步获取屏幕缩略图（可以选择更高分辨率）
-      desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } })
-        .then(sources => {
-          if (!sources || sources.length === 0) {
-            throw new Error('未找到屏幕源');
-          }
-          // 选择第一个屏幕源作为截图
-          const src = sources[0];
-          const image = nativeImage.createFromDataURL(src.thumbnail.toDataURL());
-          if (image && !image.isEmpty()) {
-            this._processScreenshotBuffer(image.toPNG());
-            console.log('desktopCapturer 截图并保存到剪贴板完成');
-          }
-        })
-        .catch(err => {
-          console.error('desktopCapturer 捕获失败:', err);
-          if (this.mainWindow && this.mainWindow.webContents) this.mainWindow.webContents.send('error', err.message);
-        });
+      this._startDesktopCapturerScreenshot();
       return;
     }
 
@@ -123,96 +278,45 @@ class ScreenshotManager {
       this.init();
     }
 
-    // Ensure the default handler is enabled so the screenshot writes to clipboard/history
-    try { this._allowDefaultOk = true; } catch (_) { }
-    this.screenshots.startCapture();
+    if (this._useDesktopCapturer || !this.screenshots) {
+      this._startDesktopCapturerScreenshot();
+      return;
+    }
+
+    Promise.resolve(this._setOperationItems(this._buildDefaultOperationItems()))
+      .catch((error) => this._emitError(error))
+      .finally(() => {
+        Promise.resolve(this.screenshots.startCapture())
+          .catch((error) => this._emitError(error));
+      });
   }
 
-  // Capture a single screenshot and return a Promise resolving to { base64Full, base64Raw }
-  captureImage(timeoutMs = 30000) {
-    return new Promise((resolve, reject) => {
-      // If using desktopCapturer fallback, capture immediately and resolve
-      if (this._useDesktopCapturer) {
-        console.log('ScreenshotManager.captureImage: using desktopCapturer fallback');
-        desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } })
-          .then(sources => {
-            if (!sources || sources.length === 0) return reject(new Error('未找到屏幕源'));
-            const src = sources[0];
-            const dataUrl = src.thumbnail.toDataURL();
-            const base64Full = dataUrl;
-            const base64Raw = dataUrl.split(',')[1];
-            resolve({ base64Full, base64Raw });
-          })
-          .catch(err => reject(err));
-        return;
-      }
+  async captureImage(timeoutMs = 30000) {
+    if (this._useDesktopCapturer) {
+      return new Promise((resolve, reject) => {
+        this._captureImageWithDesktopCapturer(resolve, reject);
+      });
+    }
 
-      // Otherwise use electron-screenshots which emits 'ok' with buffer
-      try {
-        if (!this.screenshots) this.init();
+    if (!this.screenshots) {
+      this.init();
+    }
 
-        let settled = false;
-        // Temporarily disable the global ok handler so the capture only resolves via our
-        // once('ok') listener and does not write to clipboard or history.
-        try {
-          console.log('ScreenshotManager.captureImage: disabling default ok handler');
-          this._allowDefaultOk = false;
-        } catch (_) { }
-        let to = null;
+    if (this._useDesktopCapturer || !this.screenshots) {
+      return new Promise((resolve, reject) => {
+        this._captureImageWithDesktopCapturer(resolve, reject);
+      });
+    }
 
-        const onOk = (_event, buffer) => {
-          try {
-            if (settled) return;
-            settled = true;
-            const image = nativeImage.createFromBuffer(buffer);
-            const base64Full = image.toDataURL();
-            const base64Raw = base64Full.split(',')[1];
-            cleanup();
-            if (to) { clearTimeout(to); to = null; }
-            // Restore default handler allowance after we processed the buffer
-            try { console.log('ScreenshotManager.captureImage: restoring default ok handler'); this._allowDefaultOk = true; } catch (_) { }
-            resolve({ base64Full, base64Raw });
-          } catch (err) {
-            cleanup();
-            if (to) { clearTimeout(to); to = null; }
-            reject(err);
-          }
-        };
+    if (typeof this.screenshots.captureOnce !== 'function') {
+      throw new Error('screenshots-captureOnce-unavailable');
+    }
 
-        const onCancel = () => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          if (to) { clearTimeout(to); to = null; }
-          try { this._allowDefaultOk = true; } catch (_) { }
-          reject(new Error('截图已取消'));
-        };
-
-        const cleanup = () => {
-          try { this.screenshots.removeListener('ok', onOk); } catch (_) { }
-          try { this.screenshots.removeListener('cancel', onCancel); } catch (_) { }
-        };
-
-        this.screenshots.once('ok', onOk);
-        this.screenshots.once('cancel', onCancel);
-
-        // start capture UI
-        this.screenshots.startCapture();
-
-        // timeout guard
-        to = setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          if (to) { clearTimeout(to); to = null; }
-          try { this._allowDefaultOk = true; } catch (_) { }
-          reject(new Error('截图超时'));
-        }, timeoutMs);
-
-      } catch (err) {
-        reject(err);
-      }
-    });
+    const result = await this.screenshots.captureOnce({ timeoutMs });
+    return {
+      base64Full: result.dataUrl,
+      base64Raw: result.base64
+    };
   }
 }
 

@@ -152,7 +152,9 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
   const handleExtractOCR = (e) => {
     try {
       if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-      const imagePath = item.image_path || item.image_thumb || '';
+      const imagePath = item.image_path
+        || item.image_thumb
+        || ((typeof item.content === 'string' && item.content.startsWith('data:image/')) ? item.content : '');
       const ev = new CustomEvent('open-ocr-dialog', { detail: { imagePath, item } });
       window.dispatchEvent(ev);
     } catch (err) {

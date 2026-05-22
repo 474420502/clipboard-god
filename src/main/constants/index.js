@@ -35,9 +35,7 @@ const IPC_CHANNELS = {
     RESET_SELECTION: 'reset-selection',
 
     // 截图相关
-    TAKE_SCREENSHOT: 'take-screenshot',
     START_SCREENSHOT: 'start-screenshot',
-    SCREENSHOT_SUCCESS: 'screenshot-success',
 
     // 编辑和固定
     EDIT_ITEM: 'edit-item',

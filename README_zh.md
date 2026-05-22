@@ -78,8 +78,8 @@ AI 功能完全可选，在设置页面选择 OpenAI 兼容接口或本地服务
 
 ### 环境要求
 
-- Node.js >= 16
-- npm >= 8
+- Node.js >= 20
+- pnpm >= 10
 - Linux（X11）: 需要安装 `xdotool` 才能自动粘贴（不兼容 Wayland）。
 
 ### 从源码运行
@@ -87,15 +87,40 @@ AI 功能完全可选，在设置页面选择 OpenAI 兼容接口或本地服务
 ```bash
 git clone https://github.com/474420502/clipboard-god.git
 cd clipboard-god
-npm install
-npm run dev
+git submodule update --init --recursive
+pnpm install
+pnpm run dev
 ```
+
+### 快速调试工作流
+
+日常调试不要默认跑 `bash build.sh`，只有在需要最终发行产物时再跑它。
+
+```bash
+# 初次 clone 后，或修改了 vendor/screenshots 之后，先执行一次
+pnpm run build:screenshots
+
+# 日常最快的编辑 / 调试循环，适合 renderer、preload 以及大多数主进程改动
+pnpm run dev:fast
+
+# 直接启动 Electron，并打开截图相关 DEBUG 日志
+pnpm run start:debug
+
+# 只验证打包后的运行效果，不生成 .deb、不安装系统包
+pnpm run pack:dir
+./dist-electron/linux-unpacked/clipboard-god
+```
+
+- `pnpm run dev` 仍然是更稳妥的初始化命令，因为它会先重建 screenshots workspace。
+- `pnpm run dev:fast` 会跳过这一步，依赖已准备好之后应优先使用它。
+- `pnpm run pack:dir` 比 `bash build.sh` 快得多，适合验证 packaged app 行为。
+- `bash build.sh` 建议仅用于最终发包前确认。
 
 ### 生产构建
 
 ```bash
-npm run build
-npm start
+pnpm run build
+pnpm start
 ```
 
 ### 发布版下载
@@ -131,7 +156,11 @@ OCR 窗口快捷键：
 ## 构建与打包
 
 - 前端使用 Vite 构建，electron-builder 负责产出可分发安装包。
-- 执行 `npm run build` 会生成前端与 electron 相关产物。
+- `pnpm run dev:fast` 会启动开发模式，但不会重复构建 screenshots workspace。
+- 初次 clone 后或 `vendor/screenshots` 有变更时，先执行一次 `pnpm run build:screenshots`。
+- 执行 `pnpm run build` 会生成前端与 electron 相关产物。
+- `pnpm run pack:dir` 会生成 `dist-electron/linux-unpacked/`，适合快速验证打包运行效果。
+- `pnpm run pack:linux:fast` 会更快地产出 Linux AppImage，用于半成品打包验证。
 - 如需完整发行构建（包含可选 `.deb` 打包），建议直接运行 `bash build.sh`。
 - `.deb` 包由 `build.sh` 产出并放在 `dist/`，同时会复制一份到 `dist-electron/`。
 - Linux 打包说明见 [DEB_BUILD.md](DEB_BUILD.md)。
@@ -139,7 +168,7 @@ OCR 窗口快捷键：
 
 ## 故障排除
 
-- 应用无法启动：确认 Node.js >= 16，必要时删除 `node_modules` 后重新安装。
+- 应用无法启动：确认 Node.js >= 20，然后执行 `git submodule update --init --recursive && pnpm install` 重新安装依赖。
 - 截图功能异常：Linux 安装 `libxss1`、`libgconf-2-4`；macOS 授予屏幕录制权限。
 - 数据库损坏：删除配置目录，会自动重建 `config.json` 与历史数据库。
 - AI 请求失败：检查 API Key、模型地址是否正确，本地服务需保持运行可访问。

@@ -18,27 +18,35 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            dist_cmd: npm run dist:linux
+            dist_cmd: pnpm exec electron-builder --linux
             artifact_name: linux
           - os: macos-latest
-            dist_cmd: npm run dist:mac
+            dist_cmd: pnpm exec electron-builder --mac
             artifact_name: macos
           - os: windows-latest
-            dist_cmd: npm run dist:win
+            dist_cmd: pnpm exec electron-builder --win
             artifact_name: windows
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Use Node.js 18
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "npm"
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Ensure 512px icon exists (cross-platform, uses sharp)
         shell: bash
@@ -60,13 +68,11 @@ jobs:
               sips -Z 512 "$ICON_SRC" --out "$ICON_DST"
             else
               echo "sips not found, falling back to sharp"
-              npm i --no-save sharp
               node -e "require('sharp')(process.env.ICON_SRC).resize(512,512).toFile(process.env.ICON_DST).then(()=>console.log('created')).catch(err=>{console.error(err); process.exit(1)})" \
                 ICON_SRC="$ICON_SRC" ICON_DST="$ICON_DST"
             fi
           else
             echo "Using sharp to generate 512 icon"
-            npm i --no-save sharp
             node -e "require('sharp')(process.env.ICON_SRC).resize(512,512).toFile(process.env.ICON_DST).then(()=>console.log('created')).catch(err=>{console.error(err); process.exit(1)})" \
               ICON_SRC="$ICON_SRC" ICON_DST="$ICON_DST"
           fi
@@ -107,7 +113,7 @@ jobs:
           echo "Generated $ICON_OUT"
 
       - name: Build renderer (vite)
-        run: npm run build
+        run: pnpm run build
 
       - name: Build Electron app
         run: ${{ matrix.dist_cmd }}

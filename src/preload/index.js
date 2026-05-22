@@ -33,11 +33,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('open-settings', listener);
     return () => ipcRenderer.removeListener('open-settings', listener);
   },
-  onTakeScreenshot: (callback) => {
-    const listener = (...args) => callback(...args);
-    ipcRenderer.on('take-screenshot', listener);
-    return () => ipcRenderer.removeListener('take-screenshot', listener);
-  },
   onGlobalShortcut: (callback) => {
     const listener = (...args) => callback(...args);
     ipcRenderer.on('global-shortcut', listener);

@@ -1,0 +1,3 @@
+[submodule "vendor/screenshots"]
+	path = vendor/screenshots
+	url = https://github.com/474420502/screenshots.git

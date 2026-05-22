@@ -84,8 +84,8 @@ Example: Local server (e.g. Ollama)
 
 ### Prerequisites
 
-- Node.js >= 16
-- npm >= 8
+- Node.js >= 20
+- pnpm >= 10
 - Linux (X11) users: install `xdotool` for paste automation. Wayland is not supported.
 
 ### Install from Source
@@ -93,15 +93,40 @@ Example: Local server (e.g. Ollama)
 ```bash
 git clone https://github.com/474420502/clipboard-god.git
 cd clipboard-god
-npm install
-npm run dev
+git submodule update --init --recursive
+pnpm install
+pnpm run dev
 ```
+
+### Fast Debug Workflow
+
+For day-to-day debugging, avoid `bash build.sh` unless you actually need release artifacts.
+
+```bash
+# First time after clone, or after changing vendor/screenshots
+pnpm run build:screenshots
+
+# Fastest edit/run loop for renderer, preload, and most main-process changes
+pnpm run dev:fast
+
+# Run Electron directly with screenshot debug logs
+pnpm run start:debug
+
+# Build an unpacked app for packaging validation without installing a .deb
+pnpm run pack:dir
+./dist-electron/linux-unpacked/clipboard-god
+```
+
+- `pnpm run dev` is still the safe bootstrap command because it rebuilds the screenshots workspace first.
+- `pnpm run dev:fast` skips that rebuild and is the recommended default once dependencies are already prepared.
+- `pnpm run pack:dir` is much faster than `bash build.sh` for packaged-app checks because it skips `.deb` creation and system installation.
+- Keep `bash build.sh` for final release verification only.
 
 ### Production Build
 
 ```bash
-npm run build
-npm start
+pnpm run build
+pnpm start
 ```
 
 ### Pre-built Releases
@@ -137,7 +162,11 @@ OCR window shortcuts:
 ## Build & Packaging
 
 - Uses Vite for renderer builds and electron-builder for packaging.
-- `npm run build` produces renderer + electron bundles.
+- `pnpm run dev:fast` starts the development loop without rebuilding the screenshots workspace.
+- Run `pnpm run build:screenshots` once after cloning or whenever `vendor/screenshots` changes.
+- `pnpm run build` produces renderer + electron bundles.
+- `pnpm run pack:dir` creates `dist-electron/linux-unpacked/` for quick packaged-app validation.
+- `pnpm run pack:linux:fast` builds a Linux AppImage faster than the full release flow by skipping native rebuilds during packaging.
 - For a full distribution build (including optional `.deb` packaging), use `bash build.sh`.
 - Debian packages (`.deb`) are produced by `build.sh` and staged under `dist/` (a copy is also placed into `dist-electron/`).
 - See [DEB_BUILD.md](DEB_BUILD.md) for Linux packaging notes.
@@ -145,7 +174,7 @@ OCR window shortcuts:
 
 ## Troubleshooting & Support
 
-- App fails to start: verify Node.js >= 16, reinstall dependencies (`rm -rf node_modules && npm install`).
+- App fails to start: verify Node.js >= 20, then reinstall dependencies with `git submodule update --init --recursive && pnpm install`.
 - Screenshots on Linux: install `libxss1` and `libgconf-2-4`; on macOS ensure Screen Recording permission.
 - Database corruption: remove the config directory to recreate `config.json` and history database.
 - AI requests failing: double-check API keys, base URLs, and that local servers are reachable.

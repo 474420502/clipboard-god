@@ -32,10 +32,26 @@ mkdir -p "$STAMP_DIR"
 
 PKG_HASH=""
 LOCK_HASH=""
+PKG_MANAGER="npm"
+LOCK_FILE="package-lock.json"
+INSTALL_CMD=(npm install)
+BUILD_CMD=(npm run build)
+
+if [ -f pnpm-workspace.yaml ]; then
+	PKG_MANAGER="pnpm"
+	LOCK_FILE="pnpm-lock.yaml"
+	INSTALL_CMD=(pnpm install)
+	BUILD_CMD=(pnpm run build)
+	if ! command -v pnpm >/dev/null 2>&1; then
+		echo "ERROR: pnpm is required for this workspace. Install pnpm first." >&2
+		exit 1
+	fi
+fi
+
 if command -v sha256sum >/dev/null 2>&1; then
 	PKG_HASH=$(sha256sum package.json 2>/dev/null | awk '{print $1}')
-	if [ -f package-lock.json ]; then
-		LOCK_HASH=$(sha256sum package-lock.json 2>/dev/null | awk '{print $1}')
+	if [ -f "$LOCK_FILE" ]; then
+		LOCK_HASH=$(sha256sum "$LOCK_FILE" 2>/dev/null | awk '{print $1}')
 	fi
 fi
 
@@ -44,7 +60,7 @@ if [ -f node_modules/electron/package.json ]; then
 	ELECTRON_VERSION=$(node -p "require('./node_modules/electron/package.json').version" 2>/dev/null || echo "")
 fi
 
-STAMP_CONTENT="pkg=${PKG_HASH} lock=${LOCK_HASH} electron=${ELECTRON_VERSION} platform=$(uname -s) arch=$(uname -m)"
+STAMP_CONTENT="manager=${PKG_MANAGER} pkg=${PKG_HASH} lockFile=${LOCK_FILE} lock=${LOCK_HASH} electron=${ELECTRON_VERSION} platform=$(uname -s) arch=$(uname -m)"
 
 SKIP_NATIVE_REBUILD=0
 if [ -d node_modules ] && [ -f "$STAMP_FILE" ] && grep -qxF "$STAMP_CONTENT" "$STAMP_FILE"; then
@@ -129,21 +145,24 @@ rm -rf dist dist-electron dist-deb-*
 
 # Install dependencies (only when needed)
 if [ "$SKIP_NATIVE_REBUILD" = "1" ]; then
-	echo "📦 Dependencies unchanged; skipping npm install"
+	echo "📦 Dependencies unchanged; skipping ${PKG_MANAGER} install"
 else
 	echo "📦 Installing dependencies..."
-	npm install
+	"${INSTALL_CMD[@]}"
+	if command -v sha256sum >/dev/null 2>&1 && [ -f "$LOCK_FILE" ]; then
+		LOCK_HASH=$(sha256sum "$LOCK_FILE" 2>/dev/null | awk '{print $1}')
+	fi
 	# refresh electron version after install and update stamp
 	if [ -f node_modules/electron/package.json ]; then
 		ELECTRON_VERSION=$(node -p "require('./node_modules/electron/package.json').version" 2>/dev/null || echo "")
 	fi
-	STAMP_CONTENT="pkg=${PKG_HASH} lock=${LOCK_HASH} electron=${ELECTRON_VERSION} platform=$(uname -s) arch=$(uname -m)"
+	STAMP_CONTENT="manager=${PKG_MANAGER} pkg=${PKG_HASH} lockFile=${LOCK_FILE} lock=${LOCK_HASH} electron=${ELECTRON_VERSION} platform=$(uname -s) arch=$(uname -m)"
 	echo "$STAMP_CONTENT" > "$STAMP_FILE"
 fi
 
 # Build the application
 echo "🔨 Building application..."
-npm run build
+"${BUILD_CMD[@]}"
 
 # Create distributables
 echo "📦 Creating distributables..."

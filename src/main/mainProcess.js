@@ -62,6 +62,7 @@ class MainProcess {
     this.tooltipPayload = null;
     this.tooltipSize = null;
     this.ocrWindow = null;
+    this._ocrTempFiles = new Set();
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
     // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 500
     const maxHistoryConfig = Config.get('maxHistoryItems');
@@ -484,7 +485,7 @@ class MainProcess {
 
           if (trigger === 'image') {
             // Ensure screenshotManager exists
-            if (!this.screenshotManager) this.screenshotManager = new ScreenshotManager(this.mainWindow, this.clipboardManager);
+            this.getOrCreateScreenshotManager();
             safeConsole.log(`[LLM Shortcut] ${name} trigger=image; selectedTextLength=${String(selectedText || '').length}`);
             try {
               const img = await this.screenshotManager.captureImage();
@@ -647,8 +648,22 @@ class MainProcess {
 
   openOcrWindow(payload = {}) {
     try {
-      const imagePath = payload && payload.imagePath ? String(payload.imagePath) : '';
+      const rawImagePath = payload && payload.imagePath ? String(payload.imagePath) : '';
+      const rawImageBuffer = payload && payload.imageBuffer ? payload.imageBuffer : null;
+      const imageBuffer = rawImageBuffer ? Buffer.from(rawImageBuffer) : null;
       const languages = Array.isArray(payload.languages) ? payload.languages : [];
+      let imagePath = rawImagePath;
+
+      if (imageBuffer && imageBuffer.length > 0) {
+        imagePath = this.createOcrTempImage(imageBuffer);
+      } else if (rawImagePath.startsWith('data:image/')) {
+        const dataUrlMatch = rawImagePath.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
+        if (!dataUrlMatch || !dataUrlMatch[1]) {
+          throw new Error('ocr-image-invalid-data-url');
+        }
+        imagePath = this.createOcrTempImage(Buffer.from(dataUrlMatch[1], 'base64'));
+      }
+
       if (!imagePath) throw new Error('ocr-image-missing');
 
       const existingWindow = this.ocrWindow && !this.ocrWindow.isDestroyed() ? this.ocrWindow : null;
@@ -734,6 +749,59 @@ class MainProcess {
     }
   }
 
+  getOcrLanguages() {
+    const languages = Config.get('ocrLanguages');
+    if (Array.isArray(languages) && languages.length > 0) {
+      return languages;
+    }
+    return ['chi_sim', 'eng'];
+  }
+
+  createOcrTempImage(buffer) {
+    if (!buffer || buffer.length === 0) {
+      throw new Error('ocr-image-empty');
+    }
+
+    const tempDir = path.join(app.getPath('temp'), 'clipboard-god', 'ocr');
+    fs.mkdirSync(tempDir, { recursive: true });
+    const tempPath = path.join(
+      tempDir,
+      `ocr-${Date.now()}-${Math.random().toString(16).slice(2)}.png`
+    );
+    fs.writeFileSync(tempPath, buffer);
+    this._ocrTempFiles.add(tempPath);
+    return tempPath;
+  }
+
+  cleanupOcrTempFiles() {
+    if (!this._ocrTempFiles || this._ocrTempFiles.size === 0) {
+      return;
+    }
+
+    for (const tempPath of Array.from(this._ocrTempFiles)) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch (_) { }
+      this._ocrTempFiles.delete(tempPath);
+    }
+  }
+
+  getOrCreateScreenshotManager() {
+    if (!this.screenshotManager) {
+      this.screenshotManager = new ScreenshotManager(this.mainWindow, this.clipboardManager, {
+        getOcrLanguages: () => this.getOcrLanguages(),
+        openOcrWindow: async (buffer) => {
+          return this.openOcrWindow({
+            imageBuffer: buffer,
+            languages: this.getOcrLanguages()
+          });
+        }
+      });
+    }
+
+    return this.screenshotManager;
+  }
+
   // 注册截图快捷键
   registerScreenshotShortcut() {
     // 先注销已注册的截图快捷键
@@ -747,10 +815,10 @@ class MainProcess {
 
     const ret = globalShortcut.register(shortcut, () => {
       safeConsole.log(`截图快捷键 ${shortcut} 被触发`);
-      if (this.screenshotManager) {
-        this.screenshotManager.startScreenshot();
-      } else if (this.mainWindow && this.mainWindow.webContents) {
-        this.mainWindow.webContents.send('take-screenshot');
+      try {
+        this.getOrCreateScreenshotManager().startScreenshot();
+      } catch (error) {
+        safeConsole.error('截图快捷键启动截图失败:', error);
       }
     });
 
@@ -1455,9 +1523,7 @@ class MainProcess {
     // 截图相关功能
     ipcMain.handle('start-screenshot', async () => {
       try {
-        if (!this.screenshotManager) {
-          this.screenshotManager = new ScreenshotManager(this.mainWindow, this.clipboardManager);
-        }
+        this.getOrCreateScreenshotManager();
         this.screenshotManager.startScreenshot();
         return { success: true };
       } catch (error) {
@@ -1655,6 +1721,7 @@ class MainProcess {
         return { success: false, error: err.message };
       }
     });
+
   }
 
   // 初始化应用
@@ -1737,10 +1804,10 @@ class MainProcess {
               accelerator: screenshotShortcut, // 使用配置中的实际快捷键
               click: () => {
                 safeConsole.log('菜单: 截图 被点击');
-                if (this.screenshotManager) {
-                  this.screenshotManager.startScreenshot();
-                } else if (this.mainWindow && this.mainWindow.webContents) {
-                  this.mainWindow.webContents.send('take-screenshot');
+                try {
+                  this.getOrCreateScreenshotManager().startScreenshot();
+                } catch (error) {
+                  safeConsole.error('菜单启动截图失败:', error);
                 }
               }
             },
@@ -1861,6 +1928,8 @@ class MainProcess {
         try { clearInterval(this._x11MonitorTimer); } catch (_) { }
         this._x11MonitorTimer = null;
       }
+
+      this.cleanupOcrTempFiles();
 
       // 第六步：使用资源管理器清理剩余资源
       if (resourceManager) {

@@ -315,16 +315,8 @@ function App() {
     if (!window.electronAPI) return;
 
     const openSettingsHandler = () => setIsSettingsOpen(true);
-    const takeScreenshotHandler = () => {
-      try {
-        window.electronAPI.startScreenshot();
-      } catch (err) {
-        console.error('菜单触发截图失败:', err);
-      }
-    };
 
     const offOpenSettings = window.electronAPI.onOpenSettings(openSettingsHandler);
-    const offTakeScreenshot = window.electronAPI.onTakeScreenshot(takeScreenshotHandler);
     // hide context menu when main process requests it (e.g., window hidden/closed)
     const hideContextMenuHandler = () => {
       try {
@@ -380,7 +372,6 @@ function App() {
       window.removeEventListener('open-edit-modal', onOpenEditModal);
       window.removeEventListener('local-pin-toggled', onLocalPinToggled);
       try { if (typeof offOpenSettings === 'function') offOpenSettings(); } catch (e) { }
-      try { if (typeof offTakeScreenshot === 'function') offTakeScreenshot(); } catch (e) { }
       try { if (typeof offHideContextMenu === 'function') offHideContextMenu(); } catch (e) { }
     };
   }, []);
