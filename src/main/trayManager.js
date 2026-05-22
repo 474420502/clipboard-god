@@ -135,6 +135,32 @@ class TrayManager {
         }
       },
       {
+        label: '设置',
+        click: () => {
+          try {
+            if (mainProcess && typeof mainProcess.openSettingsWindow === 'function') {
+              mainProcess.openSettingsWindow();
+              return;
+            }
+            if (mainWindow) mainWindow.show();
+          } catch (err) {
+            safeConsole.warn('托盘打开设置失败:', err);
+          }
+        }
+      },
+      {
+        label: '截图',
+        click: () => {
+          try {
+            if (mainProcess && typeof mainProcess.getOrCreateScreenshotManager === 'function') {
+              mainProcess.getOrCreateScreenshotManager().startScreenshot();
+            }
+          } catch (err) {
+            safeConsole.warn('托盘启动截图失败:', err);
+          }
+        }
+      },
+      {
         label: '退出',
         click: () => {
           this.ClickQuit = true;

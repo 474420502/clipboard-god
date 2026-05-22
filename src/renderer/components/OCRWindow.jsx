@@ -39,6 +39,11 @@ const DEFAULT_OCR_TEXT_LAYOUT = {
     splitByGap: true
 };
 
+const isPaddleVlCliSource = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized === 'paddleocr-vl-cli' || normalized === 'paddleocr-vl';
+};
+
 const normalizeLanguages = (languages) => {
     const next = Array.isArray(languages)
         ? languages.map((lang) => String(lang || '').trim()).filter(Boolean)
@@ -87,6 +92,7 @@ function OCRWindow() {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectionRect, setSelectionRect] = useState(null);
     const [selecting, setSelecting] = useState(false);
+    const [runtimeNotice, setRuntimeNotice] = useState('');
     const [ocrPayload, setOcrPayload] = useState(initialPayload);
     const [resolvedImageSrc, setResolvedImageSrc] = useState(() => buildImageSrcFromPath(initialPayload.imagePath));
     const [selectedLanguages, setSelectedLanguages] = useState(initialPayload.languages);
@@ -129,6 +135,27 @@ function OCRWindow() {
         showToast._timer = window.setTimeout(() => setToast(''), 1200);
     }, []);
 
+    const formatOcrError = useCallback((errorCode, errorDetails = '') => {
+        const detailText = errorDetails ? `\n${errorDetails}` : '';
+
+        switch (errorCode) {
+            case 'ocr-main-process-unavailable':
+                return `${t('history.ocrErrorMainProcessUnavailable') || 'Main-process OCR bridge is unavailable.'}${detailText}`;
+            case 'paddleocr-vl-cli-not-found':
+                return `${t('history.ocrErrorPaddleVlCliNotFound') || 'PaddleOCR CLI was not found. Install paddleocr[doc-parser] or configure the OCR CLI command in Settings.'}${detailText}`;
+            case 'paddleocr-vl-cli-missing-paddlepaddle':
+                return `${t('history.ocrErrorPaddleVlCliMissingPaddle') || 'The selected PaddleOCR-VL environment is missing PaddlePaddle. Install paddlepaddle in that environment or let the app auto-detect a complete local venv.'}${detailText}`;
+            case 'paddleocr-vl-cli-timeout':
+                return `${t('history.ocrErrorPaddleVlCliTimeout') || 'PaddleOCR-VL CLI timed out. The first run may need model downloads.'}${detailText}`;
+            case 'paddleocr-vl-cli-no-output':
+                return `${t('history.ocrErrorPaddleVlCliNoOutput') || 'PaddleOCR-VL did not produce any Markdown or JSON output.'}${detailText}`;
+            case 'paddleocr-vl-cli-failed':
+                return `${t('history.ocrErrorPaddleVlCliFailed') || 'PaddleOCR-VL CLI failed. Check the command path and extra args.'}${detailText}`;
+            default:
+                return errorCode || (t('history.ocrFailed') || 'OCR failed');
+        }
+    }, [t]);
+
     const getConfidenceLevel = useCallback((value) => {
         if (value === null || typeof value !== 'number' || Number.isNaN(value)) return null;
         if (value >= 90) return { level: t('history.ocrConfidenceHigh') || 'High' };
@@ -149,14 +176,56 @@ function OCRWindow() {
         setSelectionMode(false);
         setSelectionRect(null);
         setSelecting(false);
+        setRuntimeNotice('');
         setImageSize({ width: 1, height: 1 });
         didAutoFitRef.current = false;
     }, []);
 
+    const applyRuntimeNotice = useCallback((res, source) => {
+        if (!isPaddleVlCliSource(source)) {
+            setRuntimeNotice('');
+            return;
+        }
+
+        const resolvedCommand = String(res?.resolvedCommand || '').trim();
+        if (res?.autoConfigured && resolvedCommand) {
+            setRuntimeNotice(
+                t('history.ocrRuntimeNoticeAutoConfigured', { command: resolvedCommand }) ||
+                `Auto-switched to local PaddleOCR-VL environment: ${resolvedCommand}`
+            );
+            return;
+        }
+
+        if (resolvedCommand) {
+            setRuntimeNotice(
+                t('history.ocrRuntimeNoticeUsingCli', { command: resolvedCommand }) ||
+                `Using local PaddleOCR-VL command: ${resolvedCommand}`
+            );
+            return;
+        }
+
+        setRuntimeNotice(
+            t('history.ocrRuntimeNoticePaddleVl') ||
+            'PaddleOCR-VL may auto-download models to ~/.paddlex/official_models on first run, which can take several minutes.'
+        );
+    }, [t]);
+
     const runOcr = useCallback(async (input) => {
         try {
             setLoading(true);
-            setLoadingMessage(t('history.ocrDetecting') || 'Recognizing text...');
+            if (isPaddleVlCliSource(ocrModelSource)) {
+                setLoadingMessage(
+                    t('history.ocrDetectingPaddleVl') ||
+                    'Running PaddleOCR-VL. The first run may auto-download models and take longer...'
+                );
+                setRuntimeNotice(
+                    t('history.ocrRuntimeNoticePaddleVl') ||
+                    'PaddleOCR-VL may auto-download models to ~/.paddlex/official_models on first run, which can take several minutes.'
+                );
+            } else {
+                setLoadingMessage(t('history.ocrDetecting') || 'Recognizing text...');
+                setRuntimeNotice('');
+            }
             setError('');
             const res = await recognizeWithPaddle(input, {
                 languages: selectedLanguages,
@@ -174,7 +243,7 @@ function OCRWindow() {
                 }
             } catch (_) { }
             if (res && res.error) {
-                setError(res.error || (t('history.ocrFailed') || 'OCR failed'));
+                setError(formatOcrError(res.error, res.errorDetails));
                 setBlocks([]);
                 setFullText('');
                 setConfidence(null);
@@ -183,6 +252,7 @@ function OCRWindow() {
                 setLoading(false);
                 return;
             }
+            applyRuntimeNotice(res, ocrModelSource);
             setBlocks(Array.isArray(res?.blocks) ? res.blocks : []);
             setFullText(res?.text || '');
             setConfidence(typeof res?.confidence === 'number' ? res.confidence : null);
@@ -193,7 +263,7 @@ function OCRWindow() {
             }
             setLoading(false);
         } catch (err) {
-            setError(t('history.ocrFailed') || 'OCR failed');
+            setError(formatOcrError(err && err.message ? err.message : 'ocr-failed'));
             setBlocks([]);
             setFullText('');
             setConfidence(null);
@@ -201,7 +271,7 @@ function OCRWindow() {
             setUpscaleScale(1);
             setLoading(false);
         }
-    }, [selectedLanguages, ocrTextLayout, ocrModelSource, ocrModelLanguage, ocrPreprocessModels, t, showToast]);
+    }, [selectedLanguages, ocrTextLayout, ocrModelSource, ocrModelLanguage, ocrPreprocessModels, applyRuntimeNotice, formatOcrError, t, showToast]);
 
     const applyIncomingPayload = useCallback((payload) => {
         const next = normalizeOcrPayload(payload);
@@ -234,6 +304,38 @@ function OCRWindow() {
 
     const hasPendingSettings = appliedSettingsKey !== draftSettingsKey;
 
+    const syncOcrSettingsFromConfig = useCallback((cfg = {}) => {
+        const nextLanguages = normalizeLanguages(cfg.ocrLanguages || initialPayload.languages);
+        const nextTextLayout = cfg.ocrTextLayout && typeof cfg.ocrTextLayout === 'object'
+            ? { ...DEFAULT_OCR_TEXT_LAYOUT, ...cfg.ocrTextLayout }
+            : { ...DEFAULT_OCR_TEXT_LAYOUT };
+        const nextModelSource = cfg.ocrModelSource || 'builtin';
+        const nextModelLanguage = cfg.ocrModelLanguage || 'chinese';
+        const nextPreprocessModels = cfg.ocrPreprocessModels && typeof cfg.ocrPreprocessModels === 'object'
+            ? {
+                docOrientation: true,
+                docUnwarp: false,
+                textlineOrientation: true,
+                ...cfg.ocrPreprocessModels
+            }
+            : {
+                docOrientation: true,
+                docUnwarp: false,
+                textlineOrientation: true
+            };
+
+        setSelectedLanguages(nextLanguages);
+        setDraftLanguages(nextLanguages);
+        setOcrTextLayout(nextTextLayout);
+        setDraftOcrTextLayout(nextTextLayout);
+        setOcrModelSource(nextModelSource);
+        setDraftOcrModelSource(nextModelSource);
+        setOcrModelLanguage(nextModelLanguage);
+        setDraftOcrModelLanguage(nextModelLanguage);
+        setOcrPreprocessModels(nextPreprocessModels);
+        setDraftOcrPreprocessModels(nextPreprocessModels);
+    }, [initialPayload.languages]);
+
     useEffect(() => {
         try {
             const enabled = getBoolParam('debug') || getBoolParam('ocrDebug');
@@ -253,35 +355,7 @@ function OCRWindow() {
         window.electronAPI.getSettings()
             .then((cfg) => {
                 if (cancelled || !cfg || typeof cfg !== 'object') return;
-                const nextLanguages = normalizeLanguages(cfg.ocrLanguages || initialPayload.languages);
-                const nextTextLayout = cfg.ocrTextLayout && typeof cfg.ocrTextLayout === 'object'
-                    ? { ...DEFAULT_OCR_TEXT_LAYOUT, ...cfg.ocrTextLayout }
-                    : { ...DEFAULT_OCR_TEXT_LAYOUT };
-                const nextModelSource = cfg.ocrModelSource || 'builtin';
-                const nextModelLanguage = cfg.ocrModelLanguage || 'chinese';
-                const nextPreprocessModels = cfg.ocrPreprocessModels && typeof cfg.ocrPreprocessModels === 'object'
-                    ? {
-                        docOrientation: true,
-                        docUnwarp: false,
-                        textlineOrientation: true,
-                        ...cfg.ocrPreprocessModels
-                    }
-                    : {
-                        docOrientation: true,
-                        docUnwarp: false,
-                        textlineOrientation: true
-                    };
-
-                setSelectedLanguages(nextLanguages);
-                setDraftLanguages(nextLanguages);
-                setOcrTextLayout(nextTextLayout);
-                setDraftOcrTextLayout(nextTextLayout);
-                setOcrModelSource(nextModelSource);
-                setDraftOcrModelSource(nextModelSource);
-                setOcrModelLanguage(nextModelLanguage);
-                setDraftOcrModelLanguage(nextModelLanguage);
-                setOcrPreprocessModels(nextPreprocessModels);
-                setDraftOcrPreprocessModels(nextPreprocessModels);
+                syncOcrSettingsFromConfig(cfg);
             })
             .catch(() => { })
             .finally(() => {
@@ -290,7 +364,25 @@ function OCRWindow() {
                 }
             });
         return () => { cancelled = true; };
-    }, [initialPayload.languages]);
+    }, [syncOcrSettingsFromConfig]);
+
+    useEffect(() => {
+        if (!window.electronAPI || typeof window.electronAPI.onSettingsUpdated !== 'function') {
+            return undefined;
+        }
+
+        const unsubscribe = window.electronAPI.onSettingsUpdated((payload) => {
+            const cfg = payload && typeof payload === 'object' ? (payload.config || payload) : null;
+            if (!cfg || typeof cfg !== 'object') return;
+            syncOcrSettingsFromConfig(cfg);
+        });
+
+        return () => {
+            if (typeof unsubscribe === 'function') {
+                unsubscribe();
+            }
+        };
+    }, [syncOcrSettingsFromConfig]);
 
     useEffect(() => {
         settingsReadyRef.current = settingsReady;
@@ -633,7 +725,19 @@ function OCRWindow() {
 
         try {
             setLoading(true);
-            setLoadingMessage(t('history.ocrDetecting') || 'Recognizing text...');
+            if (isPaddleVlCliSource(ocrModelSource)) {
+                setLoadingMessage(
+                    t('history.ocrDetectingPaddleVl') ||
+                    'Running PaddleOCR-VL. The first run may auto-download models and take longer...'
+                );
+                setRuntimeNotice(
+                    t('history.ocrRuntimeNoticePaddleVl') ||
+                    'PaddleOCR-VL may auto-download models to ~/.paddlex/official_models on first run, which can take several minutes.'
+                );
+            } else {
+                setLoadingMessage(t('history.ocrDetecting') || 'Recognizing text...');
+                setRuntimeNotice('');
+            }
             setError('');
             const dataUrl = canvas.toDataURL('image/png');
             const res = await recognizeWithPaddle(dataUrl, {
@@ -644,12 +748,13 @@ function OCRWindow() {
                 preprocessModels: ocrPreprocessModels
             });
             if (res && res.error) {
-                setError(res.error || (t('history.ocrFailed') || 'OCR failed'));
+                setError(formatOcrError(res.error, res.errorDetails));
                 setConfidence(null);
                 setUpscaled(false);
                 setUpscaleScale(1);
                 return;
             }
+            applyRuntimeNotice(res, ocrModelSource);
             const nextBlocks = (res?.blocks || []).map((block) => {
                 const points = Array.isArray(block.points) ? block.points : [];
                 const offsetPoints = points.map((pt) => {
@@ -668,7 +773,7 @@ function OCRWindow() {
             setUpscaleScale(typeof res?.upscaleScale === 'number' ? res.upscaleScale : 1);
             setSelectionRect(null);
         } catch (err) {
-            setError(t('history.ocrFailed') || 'OCR failed');
+            setError(formatOcrError(err && err.message ? err.message : 'ocr-failed'));
             setConfidence(null);
             setUpscaled(false);
             setUpscaleScale(1);
@@ -756,6 +861,21 @@ function OCRWindow() {
         setDraftOcrPreprocessModels({ ...ocrPreprocessModels });
         showToast(t('history.ocrSettingsReset') || 'OCR settings reset');
     }, [ocrModelLanguage, ocrModelSource, ocrPreprocessModels, ocrTextLayout, selectedLanguages, showToast, t]);
+
+    const openOcrSettingsTool = useCallback(async () => {
+        try {
+            if (!window.electronAPI || typeof window.electronAPI.openOcrSettingsWindow !== 'function') {
+                throw new Error('ocr-settings-window-unavailable');
+            }
+            const res = await window.electronAPI.openOcrSettingsWindow();
+            if (!res || res.success !== true) {
+                throw new Error((res && res.error) || 'open-ocr-settings-window-failed');
+            }
+            setActiveMenu(null);
+        } catch (_) {
+            showToast(t('history.ocrFailed') || 'OCR failed');
+        }
+    }, [showToast, t]);
 
     const langOptions = [
         { code: 'chi_sim', label: t('history.ocrLangChiSim') || 'Chinese (Simplified)' },
@@ -984,7 +1104,8 @@ function OCRWindow() {
                                                     value={draftOcrModelSource || 'builtin'}
                                                     onChange={(e) => updateOcrModelSource(e.target.value)}
                                                 >
-                                                    <option value="builtin">Built-in (PP-OCRv5 mobile)</option>
+                                                    <option value="builtin">{t('settings.ocr.modelSourceBuiltin') || 'Built-in (PP-OCRv5 mobile)'}</option>
+                                                    <option value="paddleocr-vl-cli">{t('settings.ocr.modelSourcePaddleVlCli') || 'PaddleOCR-VL (local CLI)'}</option>
                                                 </select>
                                                 <div className="ocr-setting-help">{t('settings.ocr.modelSourceHelp') || ''}</div>
                                             </div>
@@ -1040,6 +1161,16 @@ function OCRWindow() {
                                                     <span>{t('settings.ocr.textlineOrientation') || 'Textline orientation'}</span>
                                                 </label>
                                                 <div className="ocr-setting-help">{t('settings.ocr.textlineOrientationHelp') || ''}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="ocr-settings-group">
+                                            <div className="ocr-settings-group-title">{t('settings.ocr.toolWindowTitle') || 'OCR Advanced Settings'}</div>
+                                            <div className="ocr-setting-row">
+                                                <button type="button" className="btn ocr-inline-tool-btn" onClick={openOcrSettingsTool}>
+                                                    {t('settings.ocr.openToolWindow') || 'Open advanced OCR tool window'}
+                                                </button>
+                                                <div className="ocr-setting-help">{t('settings.ocr.openToolWindowHelp') || 'Use a detached window to tune PaddleOCR-VL runtime, worker-pool, and text-layout parameters.'}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -1212,6 +1343,10 @@ function OCRWindow() {
                 </div>
 
                 <div className="ocr-text-panel">
+                    {runtimeNotice && !error && (
+                        <div className="ocr-runtime-notice">{runtimeNotice}</div>
+                    )}
+
                     {confidence !== null && !loading && !error && (
                         <div className="ocr-confidence-section">
                             <span className="ocr-confidence-title">{t('history.ocrConfidenceTitle') || 'Recognition Confidence'}:</span>

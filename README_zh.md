@@ -39,6 +39,13 @@ Clipboard God 是一个基于 Electron 和 React 的跨平台剪贴板管理器�
   - 文本排版
   - 模型与预处理
 
+可选的 PaddleOCR-VL 后端：
+
+- 如果你希望获得高于内置 PP-OCRv5 的文档解析能力，可把 **模型来源** 切到 **PaddleOCR-VL（本地 CLI）**。
+- 先安装：`python -m pip install -U "paddleocr[doc-parser]"`。
+- 如果 `paddleocr` 不在系统 `PATH` 里，可在 **设置 > OCR > PaddleOCR CLI 命令** 中填写可执行文件路径。
+- 如需传入运行参数，可在 **设置 > OCR > PaddleOCR CLI 额外参数** 中填写，例如 `--device cpu` 或 `--engine transformers`。
+
 ## AI / LLM 功能
 
 AI 功能完全可选，在设置页面选择 OpenAI 兼容接口或本地服务（如 Ollama）：

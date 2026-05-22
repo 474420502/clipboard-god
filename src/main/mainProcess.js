@@ -8,6 +8,7 @@ const TrayManager = require('./trayManager');
 const PasteHandler = require('./pasteHandler');
 const ScreenshotManager = require('./screenshotManager');
 const Config = require('./config');
+const ocrService = require('./ocrService');
 const resourceManager = require('./core/resourceManager');
 const { extractQRCodes } = require('./qrcodeService');
 
@@ -62,6 +63,7 @@ class MainProcess {
     this.tooltipPayload = null;
     this.tooltipSize = null;
     this.ocrWindow = null;
+    this.ocrSettingsWindow = null;
     this._ocrWindowState = null;
     this._ocrImageTokens = new Map();
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
@@ -173,6 +175,76 @@ class MainProcess {
       }
     } catch (err) {
       safeConsole.warn('隐藏 tooltip 窗口失败:', err);
+    }
+  }
+
+  getOcrSettingsAnchorWindow() {
+    if (this.ocrWindow && !this.ocrWindow.isDestroyed() && this.ocrWindow.isVisible()) {
+      return this.ocrWindow;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
+      return this.mainWindow;
+    }
+    if (this.ocrWindow && !this.ocrWindow.isDestroyed()) {
+      return this.ocrWindow;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      return this.mainWindow;
+    }
+    return null;
+  }
+
+  hideOcrSettingsWindow() {
+    try {
+      if (this.ocrSettingsWindow && !this.ocrSettingsWindow.isDestroyed()) {
+        this.ocrSettingsWindow.hide();
+      }
+    } catch (err) {
+      safeConsole.warn('隐藏 OCR 设置面板失败:', err);
+    }
+  }
+
+  repositionOcrSettingsWindow() {
+    try {
+      if (!this.ocrSettingsWindow || this.ocrSettingsWindow.isDestroyed()) return false;
+
+      const anchorWindow = this.getOcrSettingsAnchorWindow();
+      if (!anchorWindow || anchorWindow.isDestroyed()) return false;
+
+      const anchorBounds = anchorWindow.getBounds();
+      const display = screen.getDisplayMatching(anchorBounds);
+      const workArea = display ? display.workArea : screen.getPrimaryDisplay().workArea;
+      const gap = 12;
+      const padding = 12;
+      const panelWidth = Math.max(440, Math.min(560, workArea.width - padding * 2));
+      const panelHeight = Math.max(560, Math.min(780, workArea.height - padding * 2));
+      const rightSpace = Math.max(0, workArea.x + workArea.width - (anchorBounds.x + anchorBounds.width) - gap - padding);
+      const leftSpace = Math.max(0, anchorBounds.x - workArea.x - gap - padding);
+      const useRight = rightSpace >= panelWidth || rightSpace >= leftSpace;
+
+      let x = useRight
+        ? anchorBounds.x + anchorBounds.width + gap
+        : anchorBounds.x - panelWidth - gap;
+      let y = anchorBounds.y;
+
+      const minX = workArea.x + padding;
+      const maxX = workArea.x + workArea.width - panelWidth - padding;
+      const minY = workArea.y + padding;
+      const maxY = workArea.y + workArea.height - panelHeight - padding;
+
+      x = Math.max(minX, Math.min(x, maxX));
+      y = Math.max(minY, Math.min(y, maxY));
+
+      this.ocrSettingsWindow.setBounds({
+        x: Math.round(x),
+        y: Math.round(y),
+        width: panelWidth,
+        height: panelHeight
+      });
+      return true;
+    } catch (err) {
+      safeConsole.warn('重定位 OCR 设置面板失败:', err);
+      return false;
     }
   }
 
@@ -297,6 +369,8 @@ class MainProcess {
       }
     });
 
+    try { this.mainWindow.setMenu(null); } catch (_) { }
+
     // 注册X11相关资源到资源管理器
     if (resourceManager) {
       resourceManager.registerX11Resource('mainWindow', this.mainWindow);
@@ -340,9 +414,17 @@ class MainProcess {
       try {
         if (this.tooltipWindow && !this.tooltipWindow.isDestroyed()) this.tooltipWindow.destroy();
       } catch (_) { }
+      try {
+        if (this.ocrWindow && !this.ocrWindow.isDestroyed()) this.ocrWindow.destroy();
+      } catch (_) { }
+      try {
+        if (this.ocrSettingsWindow && !this.ocrSettingsWindow.isDestroyed()) this.ocrSettingsWindow.destroy();
+      } catch (_) { }
       this.tooltipWindow = null;
       this.tooltipPayload = null;
       this.tooltipSize = null;
+      this.ocrWindow = null;
+      this.ocrSettingsWindow = null;
     });
 
     // 当主窗口失去焦点时（例如用户点击了其他应用），隐藏主窗口以及 tooltip
@@ -770,6 +852,119 @@ class MainProcess {
     }
   }
 
+  openSettingsWindow(options = {}) {
+    try {
+      const requestedTab = ['general', 'appearance', 'shortcuts', 'ocr', 'llm'].includes(String(options.tab || '').trim())
+        ? String(options.tab || '').trim()
+        : 'general';
+      const routeWindow = options.legacyRoute ? 'ocr-settings' : 'settings';
+      const existingWindow = this.ocrSettingsWindow && !this.ocrSettingsWindow.isDestroyed()
+        ? this.ocrSettingsWindow
+        : null;
+      const settingsWin = existingWindow || new BrowserWindow({
+        width: 1080,
+        height: 920,
+        minWidth: 860,
+        minHeight: 700,
+        show: false,
+        fullscreenable: false,
+        hasShadow: true,
+        backgroundColor: '#f5f7fb',
+        title: 'Settings',
+        autoHideMenuBar: true,
+        webPreferences: {
+          contextIsolation: true,
+          preload: path.join(__dirname, '../preload/index.js')
+        }
+      });
+
+      if (!existingWindow) {
+        this.ocrSettingsWindow = settingsWin;
+        if (resourceManager) {
+          resourceManager.registerX11Resource('ocrSettingsWindow', settingsWin);
+        }
+        try { settingsWin.setMenu(null); } catch (_) { }
+        try { settingsWin.setMenuBarVisibility(false); } catch (_) { }
+
+        try {
+          settingsWin.webContents.on('before-input-event', (event, input) => {
+            try {
+              const key = String(input?.key || '').toLowerCase();
+              const ctrlOrCmd = !!(input?.control || input?.meta);
+              const shift = !!input?.shift;
+              const isToggle = (ctrlOrCmd && shift && key === 'i') || key === 'f12';
+              if (!isToggle) return;
+              event.preventDefault();
+              if (settingsWin && !settingsWin.isDestroyed()) {
+                try {
+                  if (settingsWin.webContents.isDevToolsOpened && settingsWin.webContents.isDevToolsOpened()) {
+                    settingsWin.webContents.closeDevTools();
+                  } else {
+                    settingsWin.webContents.openDevTools({ mode: 'detach' });
+                  }
+                } catch (e) {
+                  try { settingsWin.webContents.toggleDevTools(); } catch (_) { }
+                }
+              }
+            } catch (_) { }
+          });
+        } catch (_) { }
+
+        settingsWin.on('closed', () => {
+          this.ocrSettingsWindow = null;
+          if (resourceManager) {
+            try { resourceManager.unregisterResource('ocrSettingsWindow'); } catch (_) { }
+          }
+        });
+
+        settingsWin.once('ready-to-show', () => {
+          try {
+            if (settingsWin.isDestroyed()) return;
+            if (settingsWin.isMinimized && settingsWin.isMinimized()) {
+              settingsWin.restore();
+            }
+            settingsWin.show();
+            settingsWin.focus();
+            settingsWin.webContents.send('settings-window-open-tab', { tab: requestedTab });
+          } catch (_) { }
+        });
+
+        const debugParam = (process.env.OCR_DEBUG === '1' || process.env.OCR_DEBUG === 'true') ? '1' : '';
+        if (process.env.VITE_DEV_SERVER_URL) {
+          const baseUrl = process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '');
+          const url = `${baseUrl}/?window=${routeWindow}&tab=${encodeURIComponent(requestedTab)}${debugParam ? `&debug=${debugParam}` : ''}`;
+          settingsWin.loadURL(url);
+        } else {
+          const filePath = path.join(__dirname, '../../dist/index.html');
+          settingsWin.loadFile(filePath, {
+            query: {
+              window: routeWindow,
+              tab: requestedTab,
+              ...(debugParam ? { debug: debugParam } : {})
+            }
+          });
+        }
+      }
+
+      try {
+        if (settingsWin.isMinimized && settingsWin.isMinimized()) {
+          settingsWin.restore();
+        }
+      } catch (_) { }
+      try { settingsWin.show(); } catch (_) { }
+      try { settingsWin.focus(); } catch (_) { }
+      try { settingsWin.webContents.send('settings-window-open-tab', { tab: requestedTab }); } catch (_) { }
+      return settingsWin;
+    } catch (err) {
+      safeConsole.error('openSettingsWindow error:', err);
+      throw err;
+    }
+  }
+
+  openOcrSettingsWindow() {
+    return this.openSettingsWindow({ tab: 'ocr', legacyRoute: true });
+  }
+
   getOcrLanguages() {
     const languages = Config.get('ocrLanguages');
     if (Array.isArray(languages) && languages.length > 0) {
@@ -820,6 +1015,23 @@ class MainProcess {
 
     if (prevToken && prevToken !== nextToken) {
       this.releaseOcrImageToken(prevToken);
+    }
+  }
+
+  broadcastSettingsUpdated(payload) {
+    const targets = [this.mainWindow, this.ocrWindow, this.ocrSettingsWindow];
+    const sentIds = new Set();
+
+    for (const win of targets) {
+      try {
+        if (!win || win.isDestroyed() || !win.webContents) continue;
+        const webContentsId = Number(win.webContents.id || 0);
+        if (webContentsId > 0 && sentIds.has(webContentsId)) continue;
+        if (webContentsId > 0) sentIds.add(webContentsId);
+        win.webContents.send('settings-updated', payload);
+      } catch (err) {
+        safeConsole.warn('Failed to send settings-updated to renderer:', err);
+      }
     }
   }
 
@@ -1335,18 +1547,12 @@ class MainProcess {
       }
 
       // 将变更集与新配置一并发送到渲染进程，若保存失败则包含 error
-      try {
-        if (this.mainWindow && this.mainWindow.webContents) {
-          this.mainWindow.webContents.send('settings-updated', {
-            success: !!result.success,
-            changedKeys,
-            config: newConfig,
-            error: result.error || null
-          });
-        }
-      } catch (err) {
-        safeConsole.warn('Failed to send settings-updated to renderer:', err);
-      }
+      this.broadcastSettingsUpdated({
+        success: !!result.success,
+        changedKeys,
+        config: newConfig,
+        error: result.error || null
+      });
 
       safeConsole.log('设置保存结果:', result.success, '变更键:', changedKeys, '新配置:', newConfig);
       return result; // { success, config }
@@ -1711,6 +1917,52 @@ class MainProcess {
       }
     });
 
+    ipcMain.handle('recognize-ocr-text', async (_event, payload) => {
+      try {
+        return await ocrService.recognizeText(payload || {});
+      } catch (err) {
+        safeConsole.error('recognize-ocr-text error:', err);
+        return {
+          success: false,
+          text: '',
+          error: err && err.message ? err.message : 'ocr-main-process-failed'
+        };
+      }
+    });
+
+    ipcMain.handle('detect-ocr-runtime', async (_event, options) => {
+      try {
+        return await ocrService.detectRuntimeEnvironment(options || {});
+      } catch (err) {
+        safeConsole.error('detect-ocr-runtime error:', err);
+        return {
+          success: false,
+          error: err && err.message ? err.message : 'ocr-runtime-detect-failed'
+        };
+      }
+    });
+
+    ipcMain.handle('redetect-ocr-runtime', async (_event, options) => {
+      try {
+        const result = await ocrService.redetectRuntimeEnvironment(options || {});
+        if (result && result.config && Array.isArray(result.changedKeys) && result.changedKeys.length) {
+          this.broadcastSettingsUpdated({
+            success: !!result.success,
+            changedKeys: result.changedKeys,
+            config: result.config,
+            error: result.error || null
+          });
+        }
+        return result;
+      } catch (err) {
+        safeConsole.error('redetect-ocr-runtime error:', err);
+        return {
+          success: false,
+          error: err && err.message ? err.message : 'ocr-runtime-redetect-failed'
+        };
+      }
+    });
+
     const resolveResourcePath = (input) => {
       if (!input) return '';
       const value = String(input);
@@ -1784,6 +2036,26 @@ class MainProcess {
       }
     });
 
+    ipcMain.handle('open-settings-window', async (_event, payload) => {
+      try {
+        this.openSettingsWindow(payload || {});
+        return { success: true };
+      } catch (err) {
+        safeConsole.error('open-settings-window error:', err);
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle('open-ocr-settings-window', async () => {
+      try {
+        this.openOcrSettingsWindow();
+        return { success: true };
+      } catch (err) {
+        safeConsole.error('open-ocr-settings-window error:', err);
+        return { success: false, error: err.message };
+      }
+    });
+
     ipcMain.handle('get-ocr-window-state', async () => {
       return this.getOcrWindowState();
     });
@@ -1846,6 +2118,17 @@ class MainProcess {
   // 构建应用菜单并挂载行为
   buildAppMenu() {
     try {
+      if (process.platform !== 'darwin') {
+        try { Menu.setApplicationMenu(null); } catch (_) { }
+        try {
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            this.mainWindow.setMenu(null);
+          }
+        } catch (_) { }
+        safeConsole.log('非 macOS 平台已禁用窗口菜单栏');
+        return;
+      }
+
       // 从配置中获取实际的截图快捷键
       const screenshotShortcut = Config.get('screenshotShortcut') || 'CommandOrControl+Shift+S';
 
@@ -1903,9 +2186,7 @@ class MainProcess {
               accelerator: 'CmdOrCtrl+,',
               click: () => {
                 safeConsole.log('菜单: 设置 被点击');
-                if (this.mainWindow && this.mainWindow.webContents) {
-                  this.mainWindow.webContents.send('open-settings');
-                }
+                this.openSettingsWindow();
               }
             },
             {

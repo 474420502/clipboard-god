@@ -53,6 +53,94 @@ const loadImage = (input) => new Promise((resolve, reject) => {
     img.src = src;
 });
 
+const isPaddleVlCliSource = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized === 'paddleocr-vl-cli' || normalized === 'paddleocr-vl';
+};
+
+const canvasToBlob = (canvas, mimeType = 'image/png') => new Promise((resolve, reject) => {
+    if (!canvas || typeof canvas.toBlob !== 'function') {
+        reject(new Error('canvas-to-blob-unavailable'));
+        return;
+    }
+
+    canvas.toBlob((blob) => {
+        if (blob) {
+            resolve(blob);
+            return;
+        }
+        reject(new Error('image-blob-create-failed'));
+    }, mimeType);
+});
+
+const imageInputToBlob = async (input) => {
+    const img = await loadImage(input);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, img.naturalWidth || img.width || 1);
+    canvas.height = Math.max(1, img.naturalHeight || img.height || 1);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        throw new Error('canvas-context-unavailable');
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvasToBlob(canvas, 'image/png');
+};
+
+const recognizeWithPaddleVlCli = async (imageInput, options = {}) => {
+    try {
+        if (typeof window === 'undefined' || !window.electronAPI || typeof window.electronAPI.recognizeOcrText !== 'function') {
+            throw new Error('ocr-main-process-unavailable');
+        }
+
+        const blob = await imageInputToBlob(imageInput);
+        const imageData = new Uint8Array(await blob.arrayBuffer());
+        const res = await window.electronAPI.recognizeOcrText({
+            imageData,
+            mimeType: blob.type || 'image/png',
+            modelSource: options.modelSource || 'paddleocr-vl-cli',
+            modelLanguage: options.modelLanguage || 'chinese',
+            preprocessModels: options.preprocessModels || {}
+        });
+
+        if (!res || res.success !== true) {
+            return {
+                text: '',
+                points: [],
+                blocks: [],
+                error: res && res.error ? res.error : 'ocr-main-process-failed',
+                errorDetails: res && res.details ? res.details : ''
+            };
+        }
+
+        return {
+            text: res.text || '',
+            points: Array.isArray(res.points) ? res.points : [],
+            blocks: Array.isArray(res.blocks) ? res.blocks : [],
+            confidence: typeof res.confidence === 'number' ? res.confidence : null,
+            upscaled: !!res.upscaled,
+            upscaleScale: typeof res.upscaleScale === 'number' ? res.upscaleScale : 1,
+            markdown: typeof res.markdown === 'string' ? res.markdown : '',
+            engine: res.engine || 'paddleocr-vl-cli',
+            raw: res.raw || null,
+            autoConfigured: !!res.autoConfigured,
+            resolvedCommand: typeof res.resolvedCommand === 'string' ? res.resolvedCommand : '',
+            hadNonZeroExit: !!res.hadNonZeroExit,
+            warningDetails: typeof res.warningDetails === 'string' ? res.warningDetails : ''
+        };
+    } catch (err) {
+        try { console.error('PaddleOCR-VL CLI recognize failed:', err); } catch (_) { }
+        return {
+            text: '',
+            points: [],
+            blocks: [],
+            error: err && err.message ? err.message : 'ocr-main-process-failed'
+        };
+    }
+};
+
 const resolveEngine = (options = {}) => {
     if (options.engine) return options.engine;
     if (typeof ocrEngine === 'string' && ocrEngine) return ocrEngine;
@@ -64,6 +152,10 @@ const resolveEngine = (options = {}) => {
 
 const recognizeWithPaddle = async (imageInput, options = {}) => {
     try {
+        if (isPaddleVlCliSource(options.modelSource)) {
+            return await recognizeWithPaddleVlCli(imageInput, options);
+        }
+
         const engine = resolveEngine(options);
         if (engine === 'v5' || engine === 'paddle-v5' || engine === 'paddleocr-v5') {
             const { engine: _engine, ...rest } = options || {};

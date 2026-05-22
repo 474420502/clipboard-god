@@ -1,5 +1,6 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const MainProcess = require('./src/main/mainProcess.js');
 const resourceManager = require('./src/main/core/resourceManager');
@@ -18,6 +19,7 @@ if (process.platform === 'linux' && process.env.APPIMAGE) {
 
 function createWindow() {
     mainProcess.createWindow();
+    setupRendererCaptureProbe();
 
     // 加载文件
     if (process.env.VITE_DEV_SERVER_URL) {
@@ -25,6 +27,82 @@ function createWindow() {
     } else {
         mainProcess.mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
     }
+}
+
+function setupRendererCaptureProbe() {
+    const capturePath = process.env.CLIPBOARD_GOD_CAPTURE_PATH || '';
+    const wantsProbe = process.env.CLIPBOARD_GOD_CAPTURE_PROBE === '1' || !!capturePath;
+    if (!wantsProbe) return;
+
+    const captureWindowTarget = String(process.env.CLIPBOARD_GOD_CAPTURE_WINDOW || 'main').trim().toLowerCase();
+    const targetWindow = captureWindowTarget === 'ocr-settings'
+        ? mainProcess.openOcrSettingsWindow()
+        : mainProcess.mainWindow;
+    if (!targetWindow || targetWindow.isDestroyed() || !targetWindow.webContents) return;
+
+    targetWindow.webContents.once('did-finish-load', () => {
+        setTimeout(async () => {
+            try {
+                try { targetWindow.show(); } catch (_) { }
+                try { targetWindow.focus(); } catch (_) { }
+                try { targetWindow.moveTop(); } catch (_) { }
+
+                await targetWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => setTimeout(resolve, 150));
+                    });
+                })`);
+
+                const probeData = await targetWindow.webContents.executeJavaScript(`(() => {
+                    const root = document.getElementById('root');
+                    const appContainer = document.querySelector('.app-container');
+                    const ocrToolWindow = document.querySelector('.ocr-tool-window');
+                    const ocrToolButtons = Array.from(document.querySelectorAll('.ocr-tool-action-buttons .btn'));
+                    const emptyState = document.querySelector('.empty-state');
+                    const historyItems = Array.from(document.querySelectorAll('.history-item'));
+                    const ocrSections = Array.from(document.querySelectorAll('.ocr-tool-section'));
+                    const rectToObject = (rect) => ({
+                        x: Math.round(rect.x),
+                        y: Math.round(rect.y),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height)
+                    });
+                    return {
+                        title: document.title,
+                        bodyTextLength: document.body ? document.body.innerText.length : 0,
+                        bodyTextPreview: document.body ? document.body.innerText.slice(0, 240) : '',
+                        search: window.location.search || '',
+                        rootChildCount: root ? root.children.length : -1,
+                        appContainerRect: appContainer ? rectToObject(appContainer.getBoundingClientRect()) : null,
+                        ocrToolWindowRect: ocrToolWindow ? rectToObject(ocrToolWindow.getBoundingClientRect()) : null,
+                        historyItemCount: historyItems.length,
+                        ocrSectionCount: ocrSections.length,
+                        ocrToolButtonCount: ocrToolButtons.length,
+                        ocrToolButtonTexts: ocrToolButtons.map((button) => ({
+                            text: (button.innerText || '').trim(),
+                            disabled: !!button.disabled,
+                            rect: rectToObject(button.getBoundingClientRect())
+                        })),
+                        firstHistoryText: historyItems.slice(0, 3).map((item) => item.innerText.slice(0, 120)),
+                        firstOcrSectionText: ocrSections.slice(0, 3).map((item) => item.innerText.slice(0, 120)),
+                        emptyStateText: emptyState ? emptyState.innerText : '',
+                        background: document.body ? getComputedStyle(document.body).backgroundColor : '',
+                        visible: document.visibilityState,
+                        focused: document.hasFocus()
+                    };
+                })()`);
+                console.log('CLIPBOARD_GOD_CAPTURE_PROBE', JSON.stringify(probeData));
+
+                if (capturePath) {
+                    const image = await targetWindow.webContents.capturePage();
+                    fs.writeFileSync(capturePath, image.toPNG());
+                    console.log('CLIPBOARD_GOD_CAPTURE_WRITTEN', capturePath);
+                }
+            } catch (error) {
+                console.error('CLIPBOARD_GOD_CAPTURE_FAILED', error && error.stack ? error.stack : error);
+            }
+        }, 800);
+    });
 }
 
 // 改进的优雅关闭处理函数 - 优先处理X11连接
@@ -106,6 +184,7 @@ app.whenReady().then(() => {
     setupSignalHandlers();
 
     mainProcess.initialize();
+    setupRendererCaptureProbe();
 
     // 加载文件
     if (process.env.VITE_DEV_SERVER_URL) {

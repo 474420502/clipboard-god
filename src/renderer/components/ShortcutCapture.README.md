@@ -68,4 +68,4 @@ function MyComponent() {
 
 ## 示例
 
-查看 `SettingsModal.jsx` 中的实际使用示例。
+查看 `SettingsToolWindow.jsx` 中的实际使用示例。

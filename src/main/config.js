@@ -2,6 +2,20 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const DEFAULT_OCR_VL_CPU_THREADS = Math.max(
+  1,
+  Math.min(
+    8,
+    typeof os.availableParallelism === 'function'
+      ? os.availableParallelism()
+      : ((os.cpus() || []).length || 4)
+  )
+);
+const DEFAULT_OCR_VL_MAX_CONCURRENT_JOBS = Math.max(
+  1,
+  Math.min(2, Math.floor(DEFAULT_OCR_VL_CPU_THREADS / 4) || 1)
+);
+
 // 默认配置
 const DEFAULT_CONFIG = {
   // 最大历史条目数
@@ -50,6 +64,12 @@ const DEFAULT_CONFIG = {
   // OCR 模型与预处理
   ocrModelSource: 'builtin',
   ocrModelLanguage: 'chinese',
+  ocrVlCliCommand: 'paddleocr',
+  ocrVlDevice: '',
+  ocrVlCpuThreads: DEFAULT_OCR_VL_CPU_THREADS,
+  ocrVlMaxConcurrentJobs: DEFAULT_OCR_VL_MAX_CONCURRENT_JOBS,
+  ocrVlEnableMkldnn: true,
+  ocrVlCliArgs: '',
   ocrPreprocessModels: {
     docOrientation: true,
     docUnwarp: false,

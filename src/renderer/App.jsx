@@ -16,7 +16,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import HistoryList from './components/HistoryList';
 import SearchBar from './components/SearchBar';
-import SettingsModal from './components/SettingsModal';
 import useNumberShortcuts from './hooks/useNumberShortcuts';
 import EditModal from './components/EditModal';
 import QRCodeSelectorDialog from './components/QRCodeSelectorDialog';
@@ -49,6 +48,15 @@ function normalizeSearchOptions(nextOptions = {}) {
   return normalized;
 }
 
+const DEFAULT_OCR_VL_CPU_THREADS = Math.max(
+  1,
+  Math.min(8, typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4)
+);
+const DEFAULT_OCR_VL_MAX_CONCURRENT_JOBS = Math.max(
+  1,
+  Math.min(2, Math.floor(DEFAULT_OCR_VL_CPU_THREADS / 4) || 1)
+);
+
 function App() {
   const { t } = useTranslation();
   const [history, setHistory] = useState([]);
@@ -59,7 +67,6 @@ function App() {
   const toastTimerRef = useRef(null);
   const [searchVisible, setSearchVisible] = useState(false); // hidden by default
   const [selectedIndex, setSelectedIndex] = useState(0); // selected item index for keyboard navigation - start with first item
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [suppressMouseHover, setSuppressMouseHover] = useState(false);
   const [editModalState, setEditModalState] = useState({ open: false, item: null });
   const [qrDialogState, setQrDialogState] = useState({ open: false, qrcodes: [], selectedId: null, loading: false });
@@ -86,6 +93,12 @@ function App() {
     },
     ocrModelSource: 'builtin',
     ocrModelLanguage: 'chinese',
+    ocrVlCliCommand: 'paddleocr',
+    ocrVlDevice: '',
+    ocrVlCpuThreads: DEFAULT_OCR_VL_CPU_THREADS,
+    ocrVlMaxConcurrentJobs: DEFAULT_OCR_VL_MAX_CONCURRENT_JOBS,
+    ocrVlEnableMkldnn: true,
+    ocrVlCliArgs: '',
     ocrPreprocessModels: {
       docOrientation: true,
       docUnwarp: false,
@@ -94,7 +107,6 @@ function App() {
   });
 
   // Refs for global key handler to avoid re-registering listeners
-  const isSettingsOpenRef = useRef(isSettingsOpen);
   const searchVisibleRef = useRef(searchVisible);
   const selectedIndexRef = useRef(selectedIndex);
   const filteredHistoryRef = useRef([]);
@@ -165,6 +177,12 @@ function App() {
           if (typeof cfg.ocrTextLayout !== 'undefined') mapped.ocrTextLayout = cfg.ocrTextLayout;
           if (typeof cfg.ocrModelSource !== 'undefined') mapped.ocrModelSource = cfg.ocrModelSource;
           if (typeof cfg.ocrModelLanguage !== 'undefined') mapped.ocrModelLanguage = cfg.ocrModelLanguage;
+          if (typeof cfg.ocrVlCliCommand !== 'undefined') mapped.ocrVlCliCommand = cfg.ocrVlCliCommand;
+          if (typeof cfg.ocrVlDevice !== 'undefined') mapped.ocrVlDevice = cfg.ocrVlDevice;
+          if (typeof cfg.ocrVlCpuThreads !== 'undefined') mapped.ocrVlCpuThreads = cfg.ocrVlCpuThreads;
+          if (typeof cfg.ocrVlMaxConcurrentJobs !== 'undefined') mapped.ocrVlMaxConcurrentJobs = cfg.ocrVlMaxConcurrentJobs;
+          if (typeof cfg.ocrVlEnableMkldnn !== 'undefined') mapped.ocrVlEnableMkldnn = cfg.ocrVlEnableMkldnn;
+          if (typeof cfg.ocrVlCliArgs !== 'undefined') mapped.ocrVlCliArgs = cfg.ocrVlCliArgs;
           if (typeof cfg.ocrPreprocessModels !== 'undefined') mapped.ocrPreprocessModels = cfg.ocrPreprocessModels;
           // include llms map when present so renderer can show entries in settings
           if (typeof cfg.llms !== 'undefined') mapped.llms = cfg.llms;
@@ -313,10 +331,6 @@ function App() {
   // 监听从菜单触发的动作（主进程发送）
   useEffect(() => {
     if (!window.electronAPI) return;
-
-    const openSettingsHandler = () => setIsSettingsOpen(true);
-
-    const offOpenSettings = window.electronAPI.onOpenSettings(openSettingsHandler);
     // hide context menu when main process requests it (e.g., window hidden/closed)
     const hideContextMenuHandler = () => {
       try {
@@ -371,7 +385,6 @@ function App() {
     return () => {
       window.removeEventListener('open-edit-modal', onOpenEditModal);
       window.removeEventListener('local-pin-toggled', onLocalPinToggled);
-      try { if (typeof offOpenSettings === 'function') offOpenSettings(); } catch (e) { }
       try { if (typeof offHideContextMenu === 'function') offHideContextMenu(); } catch (e) { }
     };
   }, []);
@@ -402,23 +415,22 @@ function App() {
         if (typeof updated.ocrLanguages !== 'undefined') mapped.ocrLanguages = updated.ocrLanguages;
         if (typeof updated.ocrLangSelectorExpanded !== 'undefined') mapped.ocrLangSelectorExpanded = updated.ocrLangSelectorExpanded;
         if (typeof updated.ocrSettingsExpanded !== 'undefined') mapped.ocrSettingsExpanded = updated.ocrSettingsExpanded;
-        if (typeof updated.ocrPreprocess !== 'undefined') mapped.ocrPreprocess = updated.ocrPreprocess;
+        if (typeof updated.ocrTextLayout !== 'undefined') mapped.ocrTextLayout = updated.ocrTextLayout;
+        if (typeof updated.ocrModelSource !== 'undefined') mapped.ocrModelSource = updated.ocrModelSource;
+        if (typeof updated.ocrModelLanguage !== 'undefined') mapped.ocrModelLanguage = updated.ocrModelLanguage;
+        if (typeof updated.ocrVlCliCommand !== 'undefined') mapped.ocrVlCliCommand = updated.ocrVlCliCommand;
+        if (typeof updated.ocrVlDevice !== 'undefined') mapped.ocrVlDevice = updated.ocrVlDevice;
+        if (typeof updated.ocrVlCpuThreads !== 'undefined') mapped.ocrVlCpuThreads = updated.ocrVlCpuThreads;
+        if (typeof updated.ocrVlMaxConcurrentJobs !== 'undefined') mapped.ocrVlMaxConcurrentJobs = updated.ocrVlMaxConcurrentJobs;
+        if (typeof updated.ocrVlEnableMkldnn !== 'undefined') mapped.ocrVlEnableMkldnn = updated.ocrVlEnableMkldnn;
+        if (typeof updated.ocrVlCliArgs !== 'undefined') mapped.ocrVlCliArgs = updated.ocrVlCliArgs;
+        if (typeof updated.ocrPreprocessModels !== 'undefined') mapped.ocrPreprocessModels = updated.ocrPreprocessModels;
         // pass through llms when main process provides it
         if (typeof updated.llms !== 'undefined') mapped.llms = updated.llms;
 
         setSettings(prev => ({ ...prev, ...mapped }));
         if (typeof mapped.ocrLanguages !== 'undefined') {
           setOcrLanguages(Array.isArray(mapped.ocrLanguages) ? mapped.ocrLanguages : ['chi_sim', 'eng']);
-        }
-        if (typeof mapped.ocrPreprocess !== 'undefined') {
-          const next = mapped.ocrPreprocess || {};
-          setOcrPreprocess({
-            binarize: !!next.binarize,
-            contrast: !!next.contrast,
-            denoise: !!next.denoise,
-            dpi300: !!next.dpi300,
-            preserveSpaces: !!next.preserveSpaces
-          });
         }
       } catch (err) {
         console.error('Failed to apply settings-updated:', err);
@@ -526,7 +538,6 @@ function App() {
     });
   }, [filteredHistory.length]);
 
-  useEffect(() => { isSettingsOpenRef.current = isSettingsOpen; }, [isSettingsOpen]);
   useEffect(() => { searchVisibleRef.current = searchVisible; }, [searchVisible]);
   useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
   useEffect(() => { filteredHistoryRef.current = filteredHistory; }, [filteredHistory]);
@@ -710,7 +721,7 @@ function App() {
   };
 
   // useNumberShortcuts hook handles number-key paste behavior
-  useNumberShortcuts(filteredHistory, settings.useNumberShortcuts && !isSettingsOpen, (item) => {
+  useNumberShortcuts(filteredHistory, settings.useNumberShortcuts, (item) => {
     try {
       if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
         window.electronAPI.pasteItem(item);
@@ -723,14 +734,12 @@ function App() {
   // Global typing / search show handler
   useEffect(() => {
     const handler = (event) => {
-      const settingsOpen = isSettingsOpenRef.current;
       const editOpen = editModalOpenRef.current;
       const searchVisibleNow = searchVisibleRef.current;
       const isPageUp = event.key === 'PageUp' || event.code === 'PageUp' || event.key === 'Prior' || event.keyCode === 33;
       const isPageDown = event.key === 'PageDown' || event.code === 'PageDown' || event.key === 'Next' || event.keyCode === 34;
 
-      // Disable keyboard interaction when settings modal is open
-      if (settingsOpen || editOpen) {
+      if (editOpen) {
         return;
       }
 
@@ -856,14 +865,6 @@ function App() {
     };
   }, [suppressMouseHover]);
 
-  const handleCloseSettings = () => {
-    setIsSettingsOpen(false);
-  };
-
-  const handleSaveSettings = (newSettings) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
-  };
-
   const handleAdvancedSearch = (options) => {
     setSearchOptions((prev) => normalizeSearchOptions({
       ...prev,
@@ -957,7 +958,15 @@ function App() {
         searchType={searchOptions.type}
         sortBy={searchOptions.sortBy}
         onAdvancedSearch={handleAdvancedSearch}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          try {
+            if (window.electronAPI && typeof window.electronAPI.openSettingsWindow === 'function') {
+              window.electronAPI.openSettingsWindow();
+            }
+          } catch (err) {
+            console.warn('Failed to open detached settings window:', err);
+          }
+        }}
         pinnedOnly={searchOptions.pinnedOnly}
         onPinnedOnlyChange={handlePinnedOnlyChange}
       />
@@ -989,44 +998,6 @@ function App() {
         onCopySelected={handleCopySelectedQr}
         onCopyAll={handleCopyAllQr}
         loading={qrDialogState.loading}
-      />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={handleCloseSettings}
-        onSave={handleSaveSettings}
-        initialSettings={useMemo(() => ({
-          previewLength: settings.previewLength,
-          maxHistoryItems: settings.maxHistoryItems,
-          useNumberShortcuts: settings.useNumberShortcuts,
-          enableTooltips: settings.enableTooltips,
-          globalShortcut: settings.globalShortcut,
-          screenshotShortcut: settings.screenshotShortcut,
-          theme: settings.theme,
-          launchOnStartup: settings.launchOnStartup,
-          locale: settings.locale,
-          llms: settings.llms || {},
-          ocrLanguages: settings.ocrLanguages,
-          ocrTextLayout: settings.ocrTextLayout,
-          ocrModelSource: settings.ocrModelSource,
-          ocrModelLanguage: settings.ocrModelLanguage,
-          ocrPreprocessModels: settings.ocrPreprocessModels
-        }), [
-          settings.previewLength,
-          settings.maxHistoryItems,
-          settings.useNumberShortcuts,
-          settings.enableTooltips,
-          settings.globalShortcut,
-          settings.screenshotShortcut,
-          settings.theme,
-          settings.launchOnStartup,
-          settings.locale,
-          settings.llms,
-          settings.ocrLanguages,
-          settings.ocrTextLayout,
-          settings.ocrModelSource,
-          settings.ocrModelLanguage,
-          settings.ocrPreprocessModels
-        ])}
       />
     </div>
   );

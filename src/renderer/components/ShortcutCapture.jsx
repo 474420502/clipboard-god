@@ -51,6 +51,24 @@ function ShortcutCapture({ value, onChange, placeholder }) {
         return allKeys.map(getKeyDisplayName).join('+');
     };
 
+    const formatShortcutParts = (keys) => {
+        const modifiers = [];
+        const regularKeys = [];
+
+        keys.forEach(key => {
+            if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
+                modifiers.push(key);
+            } else {
+                regularKeys.push(key);
+            }
+        });
+
+        const modifierOrder = ['Control', 'Alt', 'Shift', 'Meta'];
+        modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
+
+        return [...modifiers, ...regularKeys].map(getKeyDisplayName);
+    };
+
     const handleKeyDown = useCallback((e) => {
         if (!isCapturing) return;
 
@@ -206,6 +224,7 @@ function ShortcutCapture({ value, onChange, placeholder }) {
     }, []);
 
     const { t } = useTranslation();
+    const currentShortcutParts = formatShortcutParts(currentKeys);
 
     return (
         <div className="shortcut-capture">
@@ -249,10 +268,17 @@ function ShortcutCapture({ value, onChange, placeholder }) {
 
                         <div className="capture-display">
                             <div className="current-shortcut">
-                                {currentKeys.length > 0 ? (
-                                    <span className="shortcut-text">
-                                        {formatShortcut(currentKeys)}
-                                    </span>
+                                {currentShortcutParts.length > 0 ? (
+                                    <div className="shortcut-chip-row">
+                                        {currentShortcutParts.map((part, index) => (
+                                            <React.Fragment key={`${part}-${index}`}>
+                                                <span className="shortcut-chip">{part}</span>
+                                                {index < currentShortcutParts.length - 1 ? (
+                                                    <span className="shortcut-plus" aria-hidden="true">+</span>
+                                                ) : null}
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
                                 ) : (
                                     <span className="placeholder">{t('shortcutCapture.waiting')}</span>
                                 )}

@@ -28,11 +28,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('history-data', listener);
     return () => ipcRenderer.removeListener('history-data', listener);
   },
-  onOpenSettings: (callback) => {
-    const listener = (...args) => callback(...args);
-    ipcRenderer.on('open-settings', listener);
-    return () => ipcRenderer.removeListener('open-settings', listener);
-  },
   onGlobalShortcut: (callback) => {
     const listener = (...args) => callback(...args);
     ipcRenderer.on('global-shortcut', listener);
@@ -65,7 +60,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   copyQRCodeContent: (content) => ipcRenderer.invoke('copy-qr-content', content),
   // OCR utilities
   copyOCRContent: (content) => ipcRenderer.invoke('copy-ocr-content', content),
+  recognizeOcrText: (payload) => ipcRenderer.invoke('recognize-ocr-text', payload),
+  detectOcrRuntime: (payload) => ipcRenderer.invoke('detect-ocr-runtime', payload),
+  redetectOcrRuntime: (payload) => ipcRenderer.invoke('redetect-ocr-runtime', payload),
   openOcrWindow: (payload) => ipcRenderer.invoke('open-ocr-window', payload),
+  openSettingsWindow: (payload) => ipcRenderer.invoke('open-settings-window', payload),
+  openOcrSettingsWindow: () => ipcRenderer.invoke('open-ocr-settings-window'),
   getOcrWindowState: () => ipcRenderer.invoke('get-ocr-window-state'),
   getOcrImageData: (token) => ipcRenderer.invoke('get-ocr-image-data', token),
   releaseOcrImageToken: (token) => ipcRenderer.invoke('release-ocr-image-token', token),
@@ -73,6 +73,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('ocr-window-payload', listener);
     return () => ipcRenderer.removeListener('ocr-window-payload', listener);
+  },
+  onSettingsWindowTab: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('settings-window-open-tab', listener);
+    return () => ipcRenderer.removeListener('settings-window-open-tab', listener);
   },
   // Read packaged app resources (binary/text) - used as a fallback when fetch(file://...) fails in production
   readAppResourceBinary: (input) => ipcRenderer.invoke('read-app-resource-binary', input),

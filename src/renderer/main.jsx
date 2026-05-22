@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import OCRWindow from './components/OCRWindow';
+import SettingsToolWindow from './components/SettingsToolWindow';
 import './index.css'; // 导入样式
 import i18next from './i18n';
 import { I18nextProvider } from 'react-i18next';
@@ -41,7 +42,11 @@ function AppWrapper() {
 
   return (
     <I18nextProvider i18n={i18next}>
-      {windowType === 'ocr' ? <OCRWindow /> : <App />}
+      {windowType === 'ocr'
+        ? <OCRWindow />
+        : windowType === 'settings' || windowType === 'ocr-settings'
+          ? <SettingsToolWindow defaultTab={windowType === 'ocr-settings' ? 'ocr' : 'general'} />
+          : <App />}
     </I18nextProvider>
   );
 }

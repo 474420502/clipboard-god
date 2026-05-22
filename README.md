@@ -45,6 +45,13 @@ You can extract text from any image entry in the clipboard history.
   - Text layout
   - OCR model & preprocessing
 
+Optional PaddleOCR-VL backend:
+
+- Switch **Model source** to **PaddleOCR-VL (local CLI)** if you want document parsing quality beyond the built-in PP-OCRv5 flow.
+- Install it first with `python -m pip install -U "paddleocr[doc-parser]"`.
+- If `paddleocr` is not on your shell `PATH`, set the executable path in **Settings > OCR > PaddleOCR CLI command**.
+- You can pass extra runtime flags such as `--device cpu` or `--engine transformers` from **Settings > OCR > PaddleOCR CLI extra args**.
+
 ## AI & Automation Tools
 
 All AI features are opt-in and configurable from Settings. Pick OpenAI-compatible endpoints or a local server such as Ollama.
