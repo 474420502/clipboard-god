@@ -66,6 +66,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // OCR utilities
   copyOCRContent: (content) => ipcRenderer.invoke('copy-ocr-content', content),
   openOcrWindow: (payload) => ipcRenderer.invoke('open-ocr-window', payload),
+  getOcrWindowState: () => ipcRenderer.invoke('get-ocr-window-state'),
+  getOcrImageData: (token) => ipcRenderer.invoke('get-ocr-image-data', token),
+  releaseOcrImageToken: (token) => ipcRenderer.invoke('release-ocr-image-token', token),
+  onOcrWindowPayload: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('ocr-window-payload', listener);
+    return () => ipcRenderer.removeListener('ocr-window-payload', listener);
+  },
   // Read packaged app resources (binary/text) - used as a fallback when fetch(file://...) fails in production
   readAppResourceBinary: (input) => ipcRenderer.invoke('read-app-resource-binary', input),
   readAppResourceText: (input) => ipcRenderer.invoke('read-app-resource-text', input),

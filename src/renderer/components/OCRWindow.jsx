@@ -29,23 +29,53 @@ const normalizePoint = (point) => {
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-function OCRWindow() {
-    const { t } = useTranslation();
-    const defaultOcrTextLayout = {
-        lineMergeThresholdRatio: 0.5,
-        lineMergeThresholdPx: 0,
-        spaceGapRatio: 0.2,
-        spaceGapMinPx: 2,
-        insertSpaceByGap: true,
-        splitByGap: true
-    };
+const DEFAULT_LANGS = ['chi_sim', 'eng'];
+const DEFAULT_OCR_TEXT_LAYOUT = {
+    lineMergeThresholdRatio: 0.5,
+    lineMergeThresholdPx: 0,
+    spaceGapRatio: 0.2,
+    spaceGapMinPx: 2,
+    insertSpaceByGap: true,
+    splitByGap: true
+};
+
+const normalizeLanguages = (languages) => {
+    const next = Array.isArray(languages)
+        ? languages.map((lang) => String(lang || '').trim()).filter(Boolean)
+        : [];
+    return next.length ? next : [...DEFAULT_LANGS];
+};
+
+const normalizeOcrPayload = (payload = {}) => ({
+    imagePath: typeof payload.imagePath === 'string' ? payload.imagePath : '',
+    imageToken: typeof payload.imageToken === 'string' ? payload.imageToken : '',
+    languages: normalizeLanguages(payload.languages)
+});
+
+const createInitialOcrPayload = () => {
     const imagePath = getSearchParam('imagePath');
     const initialLangs = getSearchParam('langs');
     const parsedLangs = initialLangs
         ? initialLangs.split(',').map((lang) => String(lang || '').trim()).filter(Boolean)
-        : ['chi_sim', 'eng'];
+        : [];
+    return normalizeOcrPayload({ imagePath, languages: parsedLangs });
+};
+
+const buildImageSrcFromPath = (imagePath) => {
+    if (!imagePath) return '';
+    if (imagePath.startsWith('data:image/')) return imagePath;
+    if (imagePath.startsWith('file://')) return imagePath;
+    return `file://${encodeURI(imagePath)}`;
+};
+
+const serializeOcrSettings = (settings) => JSON.stringify(settings || {});
+
+function OCRWindow() {
+    const { t } = useTranslation();
+    const initialPayload = useMemo(() => createInitialOcrPayload(), []);
 
     const [loading, setLoading] = useState(true);
+    const [loadingPayload, setLoadingPayload] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
     const [blocks, setBlocks] = useState([]);
@@ -57,16 +87,28 @@ function OCRWindow() {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectionRect, setSelectionRect] = useState(null);
     const [selecting, setSelecting] = useState(false);
-    const [selectedLanguages, setSelectedLanguages] = useState(parsedLangs);
+    const [ocrPayload, setOcrPayload] = useState(initialPayload);
+    const [resolvedImageSrc, setResolvedImageSrc] = useState(() => buildImageSrcFromPath(initialPayload.imagePath));
+    const [selectedLanguages, setSelectedLanguages] = useState(initialPayload.languages);
+    const [draftLanguages, setDraftLanguages] = useState(initialPayload.languages);
     const [activeMenu, setActiveMenu] = useState(null); // 'menu' | null
     const [activeMenuSection, setActiveMenuSection] = useState('langs'); // 'langs' | 'layout' | 'settings'
     const [toast, setToast] = useState('');
     const [imageSize, setImageSize] = useState({ width: 1, height: 1 });
     const [scale, setScale] = useState(1);
-    const [ocrTextLayout, setOcrTextLayout] = useState({ ...defaultOcrTextLayout });
+    const [settingsReady, setSettingsReady] = useState(false);
+    const [ocrTextLayout, setOcrTextLayout] = useState({ ...DEFAULT_OCR_TEXT_LAYOUT });
+    const [draftOcrTextLayout, setDraftOcrTextLayout] = useState({ ...DEFAULT_OCR_TEXT_LAYOUT });
     const [ocrModelSource, setOcrModelSource] = useState('builtin');
+    const [draftOcrModelSource, setDraftOcrModelSource] = useState('builtin');
     const [ocrModelLanguage, setOcrModelLanguage] = useState('chinese');
+    const [draftOcrModelLanguage, setDraftOcrModelLanguage] = useState('chinese');
     const [ocrPreprocessModels, setOcrPreprocessModels] = useState({
+        docOrientation: true,
+        docUnwarp: false,
+        textlineOrientation: true
+    });
+    const [draftOcrPreprocessModels, setDraftOcrPreprocessModels] = useState({
         docOrientation: true,
         docUnwarp: false,
         textlineOrientation: true
@@ -77,13 +119,9 @@ function OCRWindow() {
     const stageRef = useRef(null);
     const didAutoFitRef = useRef(false);
     const menuRootRef = useRef(null);
-
-    const imageSrc = useMemo(() => {
-        if (!imagePath) return '';
-        if (imagePath.startsWith('data:image/')) return imagePath;
-        if (imagePath.startsWith('file://')) return imagePath;
-        return `file://${encodeURI(imagePath)}`;
-    }, [imagePath]);
+    const settingsReadyRef = useRef(false);
+    const payloadRequestRef = useRef(0);
+    const objectUrlRef = useRef('');
 
     const showToast = useCallback((message) => {
         setToast(message);
@@ -97,6 +135,23 @@ function OCRWindow() {
         if (value >= 70) return { level: t('history.ocrConfidenceMedium') || 'Medium' };
         return { level: t('history.ocrConfidenceLow') || 'Low' };
     }, [t]);
+
+    const resetDisplayState = useCallback(() => {
+        setLoading(true);
+        setLoadingMessage('');
+        setError('');
+        setBlocks([]);
+        setFullText('');
+        setConfidence(null);
+        setUpscaled(false);
+        setUpscaleScale(1);
+        setActiveBlockId(null);
+        setSelectionMode(false);
+        setSelectionRect(null);
+        setSelecting(false);
+        setImageSize({ width: 1, height: 1 });
+        didAutoFitRef.current = false;
+    }, []);
 
     const runOcr = useCallback(async (input) => {
         try {
@@ -148,6 +203,37 @@ function OCRWindow() {
         }
     }, [selectedLanguages, ocrTextLayout, ocrModelSource, ocrModelLanguage, ocrPreprocessModels, t, showToast]);
 
+    const applyIncomingPayload = useCallback((payload) => {
+        const next = normalizeOcrPayload(payload);
+        if (!next.imagePath && !next.imageToken) {
+            return;
+        }
+        resetDisplayState();
+        setOcrPayload(next);
+        if (!settingsReadyRef.current && next.languages.length) {
+            setSelectedLanguages(next.languages);
+            setDraftLanguages(next.languages);
+        }
+    }, [resetDisplayState]);
+
+    const appliedSettingsKey = useMemo(() => serializeOcrSettings({
+        selectedLanguages,
+        ocrTextLayout,
+        ocrModelSource,
+        ocrModelLanguage,
+        ocrPreprocessModels
+    }), [selectedLanguages, ocrTextLayout, ocrModelSource, ocrModelLanguage, ocrPreprocessModels]);
+
+    const draftSettingsKey = useMemo(() => serializeOcrSettings({
+        draftLanguages,
+        draftOcrTextLayout,
+        draftOcrModelSource,
+        draftOcrModelLanguage,
+        draftOcrPreprocessModels
+    }), [draftLanguages, draftOcrTextLayout, draftOcrModelSource, draftOcrModelLanguage, draftOcrPreprocessModels]);
+
+    const hasPendingSettings = appliedSettingsKey !== draftSettingsKey;
+
     useEffect(() => {
         try {
             const enabled = getBoolParam('debug') || getBoolParam('ocrDebug');
@@ -158,30 +244,87 @@ function OCRWindow() {
     }, []);
 
     useEffect(() => {
-        if (!window.electronAPI || typeof window.electronAPI.getSettings !== 'function') return;
+        let cancelled = false;
+        if (!window.electronAPI || typeof window.electronAPI.getSettings !== 'function') {
+            setSettingsReady(true);
+            return () => { cancelled = true; };
+        }
+
         window.electronAPI.getSettings()
             .then((cfg) => {
-                if (!cfg || typeof cfg !== 'object') return;
-                if (cfg.ocrTextLayout && typeof cfg.ocrTextLayout === 'object') {
-                    setOcrTextLayout({ ...defaultOcrTextLayout, ...cfg.ocrTextLayout });
-                }
-                if (typeof cfg.ocrModelSource !== 'undefined') {
-                    setOcrModelSource(cfg.ocrModelSource || 'builtin');
-                }
-                if (typeof cfg.ocrModelLanguage !== 'undefined') {
-                    setOcrModelLanguage(cfg.ocrModelLanguage || 'chinese');
-                }
-                if (cfg.ocrPreprocessModels && typeof cfg.ocrPreprocessModels === 'object') {
-                    setOcrPreprocessModels({
+                if (cancelled || !cfg || typeof cfg !== 'object') return;
+                const nextLanguages = normalizeLanguages(cfg.ocrLanguages || initialPayload.languages);
+                const nextTextLayout = cfg.ocrTextLayout && typeof cfg.ocrTextLayout === 'object'
+                    ? { ...DEFAULT_OCR_TEXT_LAYOUT, ...cfg.ocrTextLayout }
+                    : { ...DEFAULT_OCR_TEXT_LAYOUT };
+                const nextModelSource = cfg.ocrModelSource || 'builtin';
+                const nextModelLanguage = cfg.ocrModelLanguage || 'chinese';
+                const nextPreprocessModels = cfg.ocrPreprocessModels && typeof cfg.ocrPreprocessModels === 'object'
+                    ? {
                         docOrientation: true,
                         docUnwarp: false,
                         textlineOrientation: true,
                         ...cfg.ocrPreprocessModels
-                    });
-                }
+                    }
+                    : {
+                        docOrientation: true,
+                        docUnwarp: false,
+                        textlineOrientation: true
+                    };
+
+                setSelectedLanguages(nextLanguages);
+                setDraftLanguages(nextLanguages);
+                setOcrTextLayout(nextTextLayout);
+                setDraftOcrTextLayout(nextTextLayout);
+                setOcrModelSource(nextModelSource);
+                setDraftOcrModelSource(nextModelSource);
+                setOcrModelLanguage(nextModelLanguage);
+                setDraftOcrModelLanguage(nextModelLanguage);
+                setOcrPreprocessModels(nextPreprocessModels);
+                setDraftOcrPreprocessModels(nextPreprocessModels);
             })
-            .catch(() => { });
-    }, []);
+            .catch(() => { })
+            .finally(() => {
+                if (!cancelled) {
+                    setSettingsReady(true);
+                }
+            });
+        return () => { cancelled = true; };
+    }, [initialPayload.languages]);
+
+    useEffect(() => {
+        settingsReadyRef.current = settingsReady;
+    }, [settingsReady]);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (window.electronAPI && typeof window.electronAPI.getOcrWindowState === 'function') {
+            window.electronAPI.getOcrWindowState()
+                .then((payload) => {
+                    if (!cancelled) {
+                        applyIncomingPayload(payload);
+                    }
+                })
+                .catch(() => { });
+        }
+
+        if (!window.electronAPI || typeof window.electronAPI.onOcrWindowPayload !== 'function') {
+            return () => { cancelled = true; };
+        }
+
+        const unsubscribe = window.electronAPI.onOcrWindowPayload((payload) => {
+            if (!cancelled) {
+                applyIncomingPayload(payload);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            if (typeof unsubscribe === 'function') {
+                unsubscribe();
+            }
+        };
+    }, [applyIncomingPayload]);
 
     useEffect(() => {
         const onMouseDown = (e) => {
@@ -198,15 +341,102 @@ function OCRWindow() {
     }, [activeMenu]);
 
     useEffect(() => {
-        if (!imagePath) {
-            setError(t('history.ocrInvalidImage') || 'Image not available');
-            setLoading(false);
+        let cancelled = false;
+        const requestId = payloadRequestRef.current + 1;
+        payloadRequestRef.current = requestId;
+
+        const resolveImageSource = async () => {
+            if (!ocrPayload.imagePath && !ocrPayload.imageToken) {
+                setResolvedImageSrc('');
+                setError(t('history.ocrInvalidImage') || 'Image not available');
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            setLoadingMessage(t('history.ocrLoadingImage') || 'Loading image...');
+            setLoadingPayload(true);
+            try {
+                let nextSrc = '';
+                if (ocrPayload.imageToken) {
+                    if (!window.electronAPI || typeof window.electronAPI.getOcrImageData !== 'function') {
+                        throw new Error('ocr-image-token-unavailable');
+                    }
+                    const res = await window.electronAPI.getOcrImageData(ocrPayload.imageToken);
+                    if (!res || !res.success || !res.data) {
+                        throw new Error((res && res.error) || 'ocr-image-read-failed');
+                    }
+                    const bytes = res.data instanceof Uint8Array ? res.data : new Uint8Array(res.data);
+                    const blob = new Blob([bytes], { type: res.mimeType || 'image/png' });
+                    nextSrc = URL.createObjectURL(blob);
+                    if (window.electronAPI && typeof window.electronAPI.releaseOcrImageToken === 'function') {
+                        Promise.resolve(window.electronAPI.releaseOcrImageToken(ocrPayload.imageToken)).catch(() => { });
+                    }
+                } else {
+                    nextSrc = buildImageSrcFromPath(ocrPayload.imagePath);
+                }
+
+                if (cancelled || requestId !== payloadRequestRef.current) {
+                    if (nextSrc.startsWith('blob:')) {
+                        URL.revokeObjectURL(nextSrc);
+                    }
+                    return;
+                }
+
+                if (objectUrlRef.current) {
+                    URL.revokeObjectURL(objectUrlRef.current);
+                    objectUrlRef.current = '';
+                }
+                if (nextSrc.startsWith('blob:')) {
+                    objectUrlRef.current = nextSrc;
+                }
+                setResolvedImageSrc(nextSrc);
+                setError('');
+            } catch (_) {
+                if (!cancelled && requestId === payloadRequestRef.current) {
+                    if (objectUrlRef.current) {
+                        URL.revokeObjectURL(objectUrlRef.current);
+                        objectUrlRef.current = '';
+                    }
+                    setResolvedImageSrc('');
+                    setError(t('history.ocrInvalidImage') || 'Image not available');
+                    setLoading(false);
+                }
+            } finally {
+                if (!cancelled && requestId === payloadRequestRef.current) {
+                    setLoadingPayload(false);
+                }
+            }
+        };
+
+        resolveImageSource();
+        return () => {
+            cancelled = true;
+        };
+    }, [ocrPayload.imagePath, ocrPayload.imageToken, t]);
+
+    useEffect(() => {
+        if (!settingsReady || loadingPayload) return;
+        if (!resolvedImageSrc) {
+            if (!ocrPayload.imagePath && !ocrPayload.imageToken) {
+                setError(t('history.ocrInvalidImage') || 'Image not available');
+                setLoading(false);
+            }
             return;
         }
-        runOcr(imageSrc);
-    }, [imagePath, imageSrc, runOcr, t]);
+        runOcr(resolvedImageSrc);
+    }, [ocrPayload.imagePath, ocrPayload.imageToken, resolvedImageSrc, loadingPayload, settingsReady, runOcr, t]);
 
-    const imageReady = !!imageSrc && !error;
+    useEffect(() => {
+        return () => {
+            if (objectUrlRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
+                objectUrlRef.current = '';
+            }
+        };
+    }, []);
+
+    const imageReady = !!resolvedImageSrc && !error;
 
     const handleCopyAll = useCallback(async () => {
         try {
@@ -237,6 +467,8 @@ function OCRWindow() {
         }
         setSelectionRect(null);
     };
+
+    const isBusy = loading || loadingPayload;
 
     const getFitScale = useCallback(() => {
         const stage = stageRef.current;
@@ -300,7 +532,7 @@ function OCRWindow() {
                 // Cmd/Ctrl+R: retry
                 if (ctrlOrCmd && lower === 'r') {
                     if (!loading && imageReady) {
-                        runOcr(imageSrc);
+                        runOcr(resolvedImageSrc);
                         event.preventDefault();
                     }
                     return;
@@ -336,7 +568,7 @@ function OCRWindow() {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [activeMenu, selectionMode, selecting, fullText, loading, imageReady, runOcr, imageSrc, getFitScale, handleCopyAll]);
+    }, [activeMenu, selectionMode, selecting, fullText, loading, imageReady, runOcr, resolvedImageSrc, getFitScale, handleCopyAll]);
 
     const getImageCoords = (event) => {
         const img = imgRef.current;
@@ -446,16 +678,11 @@ function OCRWindow() {
     };
 
     const handleToggleLanguage = (code) => {
-        const next = selectedLanguages.includes(code)
-            ? selectedLanguages.filter((item) => item !== code)
-            : [...selectedLanguages, code];
-        const cleaned = next.length ? next : ['chi_sim', 'eng'];
-        setSelectedLanguages(cleaned);
-        try {
-            if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-                window.electronAPI.setSettings({ ocrLanguages: cleaned });
-            }
-        } catch (_) { }
+        const next = draftLanguages.includes(code)
+            ? draftLanguages.filter((item) => item !== code)
+            : [...draftLanguages, code];
+        const cleaned = next.length ? next : [...DEFAULT_LANGS];
+        setDraftLanguages(cleaned);
     };
 
     const updateOcrPreprocessModels = (field, value) => {
@@ -463,50 +690,72 @@ function OCRWindow() {
             docOrientation: true,
             docUnwarp: false,
             textlineOrientation: true,
-            ...(ocrPreprocessModels || {}),
+            ...(draftOcrPreprocessModels || {}),
             [field]: value
         };
-        setOcrPreprocessModels(next);
-        try {
-            if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-                window.electronAPI.setSettings({ ocrPreprocessModels: next });
-            }
-        } catch (_) { }
+        setDraftOcrPreprocessModels(next);
     };
 
     const updateOcrModelSource = (value) => {
         const next = value || 'builtin';
-        setOcrModelSource(next);
-        try {
-            if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-                window.electronAPI.setSettings({ ocrModelSource: next });
-            }
-        } catch (_) { }
+        setDraftOcrModelSource(next);
     };
 
     const updateOcrModelLanguage = (value) => {
         const next = value || 'chinese';
-        setOcrModelLanguage(next);
-        try {
-            if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-                window.electronAPI.setSettings({ ocrModelLanguage: next });
-            }
-        } catch (_) { }
+        setDraftOcrModelLanguage(next);
     };
 
     const updateOcrLayout = (field, value) => {
         const next = {
-            ...defaultOcrTextLayout,
-            ...(ocrTextLayout || {}),
+            ...DEFAULT_OCR_TEXT_LAYOUT,
+            ...(draftOcrTextLayout || {}),
             [field]: value
         };
-        setOcrTextLayout(next);
+        setDraftOcrTextLayout(next);
+    };
+
+    const applyDraftSettings = useCallback(async () => {
+        const nextLanguages = normalizeLanguages(draftLanguages);
+        const nextTextLayout = { ...DEFAULT_OCR_TEXT_LAYOUT, ...(draftOcrTextLayout || {}) };
+        const nextModelSource = draftOcrModelSource || 'builtin';
+        const nextModelLanguage = draftOcrModelLanguage || 'chinese';
+        const nextPreprocessModels = {
+            docOrientation: true,
+            docUnwarp: false,
+            textlineOrientation: true,
+            ...(draftOcrPreprocessModels || {})
+        };
+
+        setSelectedLanguages(nextLanguages);
+        setOcrTextLayout(nextTextLayout);
+        setOcrModelSource(nextModelSource);
+        setOcrModelLanguage(nextModelLanguage);
+        setOcrPreprocessModels(nextPreprocessModels);
+
         try {
             if (window.electronAPI && typeof window.electronAPI.setSettings === 'function') {
-                window.electronAPI.setSettings({ ocrTextLayout: next });
+                await window.electronAPI.setSettings({
+                    ocrLanguages: nextLanguages,
+                    ocrTextLayout: nextTextLayout,
+                    ocrModelSource: nextModelSource,
+                    ocrModelLanguage: nextModelLanguage,
+                    ocrPreprocessModels: nextPreprocessModels
+                });
             }
         } catch (_) { }
-    };
+
+        showToast(t('history.ocrSettingsApplied') || 'OCR settings applied');
+    }, [draftLanguages, draftOcrModelLanguage, draftOcrModelSource, draftOcrPreprocessModels, draftOcrTextLayout, showToast, t]);
+
+    const resetDraftSettings = useCallback(() => {
+        setDraftLanguages(selectedLanguages);
+        setDraftOcrTextLayout({ ...ocrTextLayout });
+        setDraftOcrModelSource(ocrModelSource);
+        setDraftOcrModelLanguage(ocrModelLanguage);
+        setDraftOcrPreprocessModels({ ...ocrPreprocessModels });
+        showToast(t('history.ocrSettingsReset') || 'OCR settings reset');
+    }, [ocrModelLanguage, ocrModelSource, ocrPreprocessModels, ocrTextLayout, selectedLanguages, showToast, t]);
 
     const langOptions = [
         { code: 'chi_sim', label: t('history.ocrLangChiSim') || 'Chinese (Simplified)' },
@@ -566,7 +815,7 @@ function OCRWindow() {
                         type="button"
                         className={`btn ocr-menu-btn ${activeMenu ? 'active' : ''}`}
                         onClick={toggleMenu}
-                        disabled={loading}
+                        disabled={isBusy}
                         aria-expanded={!!activeMenu}
                     >
                         <span>{t('history.ocrMenu') || (t('history.ocrSettingsTitle') || 'OCR Menu')}</span>
@@ -583,7 +832,7 @@ function OCRWindow() {
                                     aria-selected={activeMenuSection === 'langs'}
                                     onClick={() => setActiveMenuSection('langs')}
                                 >
-                                    {t('history.ocrLangTitle') || 'Languages'} ({selectedLanguages.length})
+                                    {t('history.ocrLangTitle') || 'Languages'} ({draftLanguages.length})
                                 </button>
                                 <button
                                     type="button"
@@ -617,7 +866,7 @@ function OCRWindow() {
                                                 <label key={lang.code} className="ocr-lang-item">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedLanguages.includes(lang.code)}
+                                                        checked={draftLanguages.includes(lang.code)}
                                                         onChange={() => handleToggleLanguage(lang.code)}
                                                     />
                                                     <span className="ocr-lang-label">{lang.label}</span>
@@ -626,7 +875,7 @@ function OCRWindow() {
                                         </div>
                                     </div>
                                     <div className="ocr-menu-section-footer">
-                                        <span className="ocr-lang-count">{t('history.ocrLangHint') || `Selected: ${selectedLanguages.length} language(s)`}</span>
+                                        <span className="ocr-lang-count">{t('history.ocrLangHint') || `Selected: ${draftLanguages.length} language(s)`}</span>
                                     </div>
                                 </div>
                             )}
@@ -643,7 +892,7 @@ function OCRWindow() {
                                             <label className="ocr-layout-option">
                                                 <input
                                                     type="checkbox"
-                                                    checked={ocrTextLayout.insertSpaceByGap !== false}
+                                                    checked={draftOcrTextLayout.insertSpaceByGap !== false}
                                                     onChange={(e) => updateOcrLayout('insertSpaceByGap', e.target.checked)}
                                                 />
                                                 <span>{t('history.ocrLayoutInsertSpace') || 'Insert space by gap'}</span>
@@ -651,7 +900,7 @@ function OCRWindow() {
                                             <label className="ocr-layout-option">
                                                 <input
                                                     type="checkbox"
-                                                    checked={ocrTextLayout.splitByGap !== false}
+                                                    checked={draftOcrTextLayout.splitByGap !== false}
                                                     onChange={(e) => updateOcrLayout('splitByGap', e.target.checked)}
                                                 />
                                                 <span>{t('history.ocrLayoutSplitByGap') || 'Split by blank gap'}</span>
@@ -667,10 +916,10 @@ function OCRWindow() {
                                                     min="0.2"
                                                     max="1.2"
                                                     step="0.05"
-                                                    value={ocrTextLayout.lineMergeThresholdRatio}
+                                                    value={draftOcrTextLayout.lineMergeThresholdRatio}
                                                     onChange={(e) => updateOcrLayout('lineMergeThresholdRatio', parseFloat(e.target.value))}
                                                 />
-                                                <strong>{ocrTextLayout.lineMergeThresholdRatio.toFixed(2)}</strong>
+                                                <strong>{draftOcrTextLayout.lineMergeThresholdRatio.toFixed(2)}</strong>
                                             </div>
 
                                             <div className="ocr-layout-control">
@@ -680,10 +929,10 @@ function OCRWindow() {
                                                     min="0"
                                                     max="40"
                                                     step="1"
-                                                    value={ocrTextLayout.lineMergeThresholdPx}
+                                                    value={draftOcrTextLayout.lineMergeThresholdPx}
                                                     onChange={(e) => updateOcrLayout('lineMergeThresholdPx', parseInt(e.target.value, 10) || 0)}
                                                 />
-                                                <strong>{ocrTextLayout.lineMergeThresholdPx}px</strong>
+                                                <strong>{draftOcrTextLayout.lineMergeThresholdPx}px</strong>
                                             </div>
                                         </div>
 
@@ -696,10 +945,10 @@ function OCRWindow() {
                                                     min="0.2"
                                                     max="0.8"
                                                     step="0.05"
-                                                    value={ocrTextLayout.spaceGapRatio}
+                                                    value={draftOcrTextLayout.spaceGapRatio}
                                                     onChange={(e) => updateOcrLayout('spaceGapRatio', parseFloat(e.target.value))}
                                                 />
-                                                <strong>{ocrTextLayout.spaceGapRatio.toFixed(2)}</strong>
+                                                <strong>{draftOcrTextLayout.spaceGapRatio.toFixed(2)}</strong>
                                             </div>
 
                                             <div className="ocr-layout-control">
@@ -709,10 +958,10 @@ function OCRWindow() {
                                                     min="0"
                                                     max="30"
                                                     step="1"
-                                                    value={ocrTextLayout.spaceGapMinPx}
+                                                    value={draftOcrTextLayout.spaceGapMinPx}
                                                     onChange={(e) => updateOcrLayout('spaceGapMinPx', parseInt(e.target.value, 10) || 0)}
                                                 />
-                                                <strong>{ocrTextLayout.spaceGapMinPx}px</strong>
+                                                <strong>{draftOcrTextLayout.spaceGapMinPx}px</strong>
                                             </div>
                                         </div>
                                     </div>
@@ -732,7 +981,7 @@ function OCRWindow() {
                                                 <label className="ocr-setting-label">{t('settings.ocr.modelSource') || 'Model source'}</label>
                                                 <select
                                                     className="ocr-setting-select"
-                                                    value={ocrModelSource || 'builtin'}
+                                                    value={draftOcrModelSource || 'builtin'}
                                                     onChange={(e) => updateOcrModelSource(e.target.value)}
                                                 >
                                                     <option value="builtin">Built-in (PP-OCRv5 mobile)</option>
@@ -744,7 +993,7 @@ function OCRWindow() {
                                                 <label className="ocr-setting-label">{t('settings.ocr.modelLanguage') || 'Recognition language'}</label>
                                                 <select
                                                     className="ocr-setting-select"
-                                                    value={ocrModelLanguage || 'chinese'}
+                                                    value={draftOcrModelLanguage || 'chinese'}
                                                     onChange={(e) => updateOcrModelLanguage(e.target.value)}
                                                 >
                                                     {ocrModelLanguageOptions.map((opt) => (
@@ -761,7 +1010,7 @@ function OCRWindow() {
                                                 <label className="ocr-setting-label ocr-setting-checkbox">
                                                     <input
                                                         type="checkbox"
-                                                        checked={ocrPreprocessModels?.docOrientation !== false}
+                                                        checked={draftOcrPreprocessModels?.docOrientation !== false}
                                                         onChange={(e) => updateOcrPreprocessModels('docOrientation', e.target.checked)}
                                                     />
                                                     <span>{t('settings.ocr.docOrientation') || 'Doc orientation'}</span>
@@ -773,7 +1022,7 @@ function OCRWindow() {
                                                 <label className="ocr-setting-label ocr-setting-checkbox">
                                                     <input
                                                         type="checkbox"
-                                                        checked={!!ocrPreprocessModels?.docUnwarp}
+                                                        checked={!!draftOcrPreprocessModels?.docUnwarp}
                                                         onChange={(e) => updateOcrPreprocessModels('docUnwarp', e.target.checked)}
                                                     />
                                                     <span>{t('settings.ocr.docUnwarp') || 'Doc unwarp'}</span>
@@ -785,7 +1034,7 @@ function OCRWindow() {
                                                 <label className="ocr-setting-label ocr-setting-checkbox">
                                                     <input
                                                         type="checkbox"
-                                                        checked={ocrPreprocessModels?.textlineOrientation !== false}
+                                                        checked={draftOcrPreprocessModels?.textlineOrientation !== false}
                                                         onChange={(e) => updateOcrPreprocessModels('textlineOrientation', e.target.checked)}
                                                     />
                                                     <span>{t('settings.ocr.textlineOrientation') || 'Textline orientation'}</span>
@@ -794,11 +1043,24 @@ function OCRWindow() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="ocr-menu-section-footer">
-                                        <span className="ocr-settings-hint">{t('history.ocrSettingsApplyHint') || 'Settings take effect on the next OCR run. Use "Retry" to apply.'}</span>
-                                    </div>
                                 </div>
                             )}
+
+                            <div className="ocr-menu-action-bar">
+                                <span className="ocr-settings-hint">
+                                    {hasPendingSettings
+                                        ? (t('history.ocrSettingsPendingHint') || 'You have unapplied OCR setting changes.')
+                                        : (t('history.ocrSettingsAppliedHint') || 'Applied settings will be reused for the next OCR run.')}
+                                </span>
+                                <div className="ocr-menu-action-buttons">
+                                    <button type="button" className="btn" onClick={resetDraftSettings} disabled={!hasPendingSettings || isBusy}>
+                                        {t('history.reset') || 'Reset'}
+                                    </button>
+                                    <button type="button" className="btn" onClick={applyDraftSettings} disabled={!hasPendingSettings || isBusy}>
+                                        {t('history.apply') || 'Apply'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -838,7 +1100,7 @@ function OCRWindow() {
                         </span>
                         <span>{t('history.zoomReset') || 'Reset'}</span>
                     </button>
-                    <button type="button" className="btn ocr-toolbar-btn" onClick={() => runOcr(imageSrc)} disabled={loading}>
+                    <button type="button" className="btn ocr-toolbar-btn" onClick={() => runOcr(resolvedImageSrc)} disabled={isBusy}>
                         <span className="ocr-btn-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" role="img">
                                 <path d="M4 4v6h6" />
@@ -849,7 +1111,7 @@ function OCRWindow() {
                         </span>
                         <span>{t('history.ocrRetry') || 'Retry'}</span>
                     </button>
-                    <button type="button" className="btn ocr-toolbar-btn" onClick={handleCopyAll} disabled={loading || !fullText.trim()}>
+                    <button type="button" className="btn ocr-toolbar-btn" onClick={handleCopyAll} disabled={isBusy || !fullText.trim()}>
                         <span className="ocr-btn-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" role="img">
                                 <path d="M8 8h10v12H8z" />
@@ -859,7 +1121,7 @@ function OCRWindow() {
                         </span>
                         <span>{t('history.ocrCopy') || 'Copy'}</span>
                     </button>
-                    <button type="button" className="btn ocr-toolbar-btn" onClick={() => setSelectionMode((prev) => !prev)} disabled={loading || !imageReady}>
+                    <button type="button" className="btn ocr-toolbar-btn" onClick={() => setSelectionMode((prev) => !prev)} disabled={isBusy || !imageReady}>
                         <span className="ocr-btn-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" role="img">
                                 <rect x="5" y="5" width="14" height="14" rx="2" ry="2" />
@@ -906,7 +1168,7 @@ function OCRWindow() {
                             >
                                 <img
                                     ref={imgRef}
-                                    src={imageSrc}
+                                    src={resolvedImageSrc}
                                     alt="ocr-source"
                                     onLoad={handleImageLoad}
                                     draggable={false}
@@ -958,16 +1220,16 @@ function OCRWindow() {
                         </div>
                     )}
 
-                    {loading && <div className="ocr-loading">{loadingMessage || (t('history.ocrDetecting') || 'Detecting...')}</div>}
-                    {!loading && error && <div className="ocr-error">{error}</div>}
-                    {!loading && !error && !fullText.trim() && (
+                    {isBusy && <div className="ocr-loading">{loadingMessage || (loadingPayload ? (t('history.ocrLoadingImage') || 'Loading image...') : (t('history.ocrDetecting') || 'Detecting...'))}</div>}
+                    {!isBusy && error && <div className="ocr-error">{error}</div>}
+                    {!isBusy && !error && !fullText.trim() && (
                         <div className="ocr-empty">{t('history.ocrNotFound') || 'No text found'}</div>
                     )}
-                    {!loading && !error && !!fullText.trim() && (
+                    {!isBusy && !error && !!fullText.trim() && (
                         <textarea className="ocr-textarea" readOnly value={fullText} />
                     )}
 
-                    {!loading && !error && imageReady && (
+                    {!isBusy && !error && imageReady && (
                         <div className="ocr-hint-row">
                             {t('history.ocrClickBoxHint') || 'Tip: click a green box (or a block on the right) to copy that text.'}
                         </div>

@@ -62,7 +62,8 @@ class MainProcess {
     this.tooltipPayload = null;
     this.tooltipSize = null;
     this.ocrWindow = null;
-    this._ocrTempFiles = new Set();
+    this._ocrWindowState = null;
+    this._ocrImageTokens = new Map();
     // 支持通过环境变量 CLIPBOARD_GOD_MAX_HISTORY 来覆盖默认的最大历史数
     // 优先从配置文件读取，如果没有则使用环境变量，最后使用默认值 500
     const maxHistoryConfig = Config.get('maxHistoryItems');
@@ -653,18 +654,27 @@ class MainProcess {
       const imageBuffer = rawImageBuffer ? Buffer.from(rawImageBuffer) : null;
       const languages = Array.isArray(payload.languages) ? payload.languages : [];
       let imagePath = rawImagePath;
+      let imageToken = '';
 
       if (imageBuffer && imageBuffer.length > 0) {
-        imagePath = this.createOcrTempImage(imageBuffer);
+        imageToken = this.createOcrImageToken(imageBuffer, 'image/png');
+        imagePath = '';
       } else if (rawImagePath.startsWith('data:image/')) {
-        const dataUrlMatch = rawImagePath.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
-        if (!dataUrlMatch || !dataUrlMatch[1]) {
+        const dataUrlMatch = rawImagePath.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+        if (!dataUrlMatch || !dataUrlMatch[1] || !dataUrlMatch[2]) {
           throw new Error('ocr-image-invalid-data-url');
         }
-        imagePath = this.createOcrTempImage(Buffer.from(dataUrlMatch[1], 'base64'));
+        imageToken = this.createOcrImageToken(Buffer.from(dataUrlMatch[2], 'base64'), dataUrlMatch[1]);
+        imagePath = '';
       }
 
-      if (!imagePath) throw new Error('ocr-image-missing');
+      if (!imagePath && !imageToken) throw new Error('ocr-image-missing');
+
+      this.setOcrWindowState({
+        imagePath,
+        imageToken,
+        languages
+      });
 
       const existingWindow = this.ocrWindow && !this.ocrWindow.isDestroyed() ? this.ocrWindow : null;
       const ocrWin = existingWindow || new BrowserWindow({
@@ -714,29 +724,40 @@ class MainProcess {
         } catch (_) { }
 
         ocrWin.on('closed', () => {
+          this.releaseAllOcrImageTokens();
+          this._ocrWindowState = null;
           this.ocrWindow = null;
           if (resourceManager) {
             try { resourceManager.unregisterResource('ocrWindow'); } catch (_) { }
           }
         });
+
+        ocrWin.webContents.on('did-finish-load', () => {
+          try {
+            if (ocrWin && !ocrWin.isDestroyed()) {
+              ocrWin.webContents.send('ocr-window-payload', this.getOcrWindowState());
+            }
+          } catch (_) { }
+        });
       }
 
-      const langParam = languages.map((lang) => encodeURIComponent(String(lang))).join(',');
       const debugParam = (process.env.OCR_DEBUG === '1' || process.env.OCR_DEBUG === 'true') ? '1' : '';
-      if (process.env.VITE_DEV_SERVER_URL) {
-        const baseUrl = process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '');
-        const url = `${baseUrl}/?window=ocr&imagePath=${encodeURIComponent(imagePath)}&langs=${langParam}${debugParam ? `&debug=${debugParam}` : ''}`;
-        ocrWin.loadURL(url);
+      if (!existingWindow) {
+        if (process.env.VITE_DEV_SERVER_URL) {
+          const baseUrl = process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '');
+          const url = `${baseUrl}/?window=ocr${debugParam ? `&debug=${debugParam}` : ''}`;
+          ocrWin.loadURL(url);
+        } else {
+          const filePath = path.join(__dirname, '../../dist/index.html');
+          ocrWin.loadFile(filePath, {
+            query: {
+              window: 'ocr',
+              ...(debugParam ? { debug: debugParam } : {})
+            }
+          });
+        }
       } else {
-        const filePath = path.join(__dirname, '../../dist/index.html');
-        ocrWin.loadFile(filePath, {
-          query: {
-            window: 'ocr',
-            imagePath,
-            langs: languages.join(','),
-            ...(debugParam ? { debug: debugParam } : {})
-          }
-        });
+        ocrWin.webContents.send('ocr-window-payload', this.getOcrWindowState());
       }
 
       try { ocrWin.show(); } catch (_) { }
@@ -757,33 +778,74 @@ class MainProcess {
     return ['chi_sim', 'eng'];
   }
 
-  createOcrTempImage(buffer) {
+  createOcrImageToken(buffer, mimeType = 'image/png') {
     if (!buffer || buffer.length === 0) {
       throw new Error('ocr-image-empty');
     }
 
-    const tempDir = path.join(app.getPath('temp'), 'clipboard-god', 'ocr');
-    fs.mkdirSync(tempDir, { recursive: true });
-    const tempPath = path.join(
-      tempDir,
-      `ocr-${Date.now()}-${Math.random().toString(16).slice(2)}.png`
-    );
-    fs.writeFileSync(tempPath, buffer);
-    this._ocrTempFiles.add(tempPath);
-    return tempPath;
+    const token = `ocr-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    this._ocrImageTokens.set(token, {
+      buffer: Buffer.from(buffer),
+      mimeType: String(mimeType || 'image/png'),
+      createdAt: Date.now()
+    });
+    return token;
   }
 
-  cleanupOcrTempFiles() {
-    if (!this._ocrTempFiles || this._ocrTempFiles.size === 0) {
-      return;
+  getOcrWindowState() {
+    if (!this._ocrWindowState) {
+      return {
+        imagePath: '',
+        imageToken: '',
+        languages: []
+      };
     }
 
-    for (const tempPath of Array.from(this._ocrTempFiles)) {
-      try {
-        fs.unlinkSync(tempPath);
-      } catch (_) { }
-      this._ocrTempFiles.delete(tempPath);
+    return {
+      imagePath: String(this._ocrWindowState.imagePath || ''),
+      imageToken: String(this._ocrWindowState.imageToken || ''),
+      languages: Array.isArray(this._ocrWindowState.languages) ? [...this._ocrWindowState.languages] : []
+    };
+  }
+
+  setOcrWindowState(nextState = {}) {
+    const prevToken = this._ocrWindowState && this._ocrWindowState.imageToken ? String(this._ocrWindowState.imageToken) : '';
+    const nextToken = nextState && nextState.imageToken ? String(nextState.imageToken) : '';
+
+    this._ocrWindowState = {
+      imagePath: String(nextState.imagePath || ''),
+      imageToken: nextToken,
+      languages: Array.isArray(nextState.languages) ? nextState.languages.map((lang) => String(lang || '').trim()).filter(Boolean) : []
+    };
+
+    if (prevToken && prevToken !== nextToken) {
+      this.releaseOcrImageToken(prevToken);
     }
+  }
+
+  getOcrImageTokenData(token) {
+    const entry = this._ocrImageTokens.get(String(token || ''));
+    if (!entry) {
+      return null;
+    }
+    return {
+      data: new Uint8Array(entry.buffer),
+      mimeType: entry.mimeType
+    };
+  }
+
+  releaseOcrImageToken(token) {
+    if (!token) {
+      return false;
+    }
+    return this._ocrImageTokens.delete(String(token));
+  }
+
+  releaseAllOcrImageTokens() {
+    if (!this._ocrImageTokens || this._ocrImageTokens.size === 0) {
+      return;
+    }
+    this._ocrImageTokens.clear();
   }
 
   getOrCreateScreenshotManager() {
@@ -1722,6 +1784,31 @@ class MainProcess {
       }
     });
 
+    ipcMain.handle('get-ocr-window-state', async () => {
+      return this.getOcrWindowState();
+    });
+
+    ipcMain.handle('get-ocr-image-data', async (_event, token) => {
+      try {
+        const payload = this.getOcrImageTokenData(token);
+        if (!payload) {
+          return { success: false, error: 'ocr-image-token-missing' };
+        }
+        return {
+          success: true,
+          data: payload.data,
+          mimeType: payload.mimeType
+        };
+      } catch (err) {
+        safeConsole.error('get-ocr-image-data error:', err);
+        return { success: false, error: err && err.message ? err.message : 'ocr-image-read-failed' };
+      }
+    });
+
+    ipcMain.handle('release-ocr-image-token', async (_event, token) => {
+      return { success: this.releaseOcrImageToken(token) };
+    });
+
   }
 
   // 初始化应用
@@ -1929,7 +2016,7 @@ class MainProcess {
         this._x11MonitorTimer = null;
       }
 
-      this.cleanupOcrTempFiles();
+      this.releaseAllOcrImageTokens();
 
       // 第六步：使用资源管理器清理剩余资源
       if (resourceManager) {

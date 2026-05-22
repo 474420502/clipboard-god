@@ -1601,6 +1601,29 @@ body.high-contrast-theme .ocr-settings-group-title {
     font-style: italic;
 }
 
+.ocr-menu-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--settings-border);
+    background: #f7f7f7;
+    border-radius: 0 0 11px 11px;
+}
+
+.ocr-menu-action-buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+body.dark-theme .ocr-menu-action-bar,
+body.high-contrast-theme .ocr-menu-action-bar {
+    background: #252525;
+    border-color: #444444;
+}
+
 /* 设置行优化 */
 .ocr-setting-row {
     display: flex;

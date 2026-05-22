@@ -36,6 +36,7 @@ const normalizeImageSrc = (input) => {
     if (!input || typeof input !== 'string') return '';
     if (input.startsWith('data:image/')) return input;
     if (input.startsWith('file://')) return input;
+    if (input.startsWith('blob:')) return input;
     return `file://${encodeURI(input)}`;
 };
 
