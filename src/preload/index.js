@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectOcrRuntime: (payload) => ipcRenderer.invoke('detect-ocr-runtime', payload),
   redetectOcrRuntime: (payload) => ipcRenderer.invoke('redetect-ocr-runtime', payload),
   openOcrWindow: (payload) => ipcRenderer.invoke('open-ocr-window', payload),
+  openVisionChat: (payload) => ipcRenderer.invoke('open-vision-chat', payload),
   openSettingsWindow: (payload) => ipcRenderer.invoke('open-settings-window', payload),
   openOcrSettingsWindow: () => ipcRenderer.invoke('open-ocr-settings-window'),
   getOcrWindowState: () => ipcRenderer.invoke('get-ocr-window-state'),

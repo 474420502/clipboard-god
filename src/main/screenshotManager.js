@@ -30,6 +30,24 @@ const OCR_LANGUAGE_LABELS = {
   pol: 'PL'
 };
 
+const VISION_ACTION_ITEMS = {
+  'vl-ocr': {
+    title: '使用 VL 做 OCR',
+    label: 'VL OCR',
+    fileNamePrefix: 'vl-ocr'
+  },
+  'vl-summary': {
+    title: '总结当前截图',
+    label: '总结',
+    fileNamePrefix: 'vl-summary'
+  },
+  'vl-analyze': {
+    title: '智能分析当前截图',
+    label: '分析',
+    fileNamePrefix: 'vl-analyze'
+  }
+};
+
 class ScreenshotManager {
   constructor(mainWindow, clipboardManager, options = {}) {
     this.mainWindow = mainWindow;
@@ -123,6 +141,48 @@ class ScreenshotManager {
         handler: async (context) => {
           await this._handleOcrOperation(context);
         }
+      },
+      {
+        key: 'vl-ocr',
+        title: VISION_ACTION_ITEMS['vl-ocr'].title,
+        label: VISION_ACTION_ITEMS['vl-ocr'].label,
+        position: { after: 'ocr' },
+        requiresSelection: true,
+        includeImage: true,
+        imageResource: {
+          fileNamePrefix: VISION_ACTION_ITEMS['vl-ocr'].fileNamePrefix
+        },
+        handler: async (context) => {
+          await this._handleVisionOperation('vl-ocr', context);
+        }
+      },
+      {
+        key: 'vl-summary',
+        title: VISION_ACTION_ITEMS['vl-summary'].title,
+        label: VISION_ACTION_ITEMS['vl-summary'].label,
+        position: { after: 'vl-ocr' },
+        requiresSelection: true,
+        includeImage: true,
+        imageResource: {
+          fileNamePrefix: VISION_ACTION_ITEMS['vl-summary'].fileNamePrefix
+        },
+        handler: async (context) => {
+          await this._handleVisionOperation('vl-summary', context);
+        }
+      },
+      {
+        key: 'vl-analyze',
+        title: VISION_ACTION_ITEMS['vl-analyze'].title,
+        label: VISION_ACTION_ITEMS['vl-analyze'].label,
+        position: { after: 'vl-summary' },
+        requiresSelection: true,
+        includeImage: true,
+        imageResource: {
+          fileNamePrefix: VISION_ACTION_ITEMS['vl-analyze'].fileNamePrefix
+        },
+        handler: async (context) => {
+          await this._handleVisionOperation('vl-analyze', context);
+        }
       }
     ];
   }
@@ -172,6 +232,57 @@ class ScreenshotManager {
       if (context && typeof context.update === 'function') {
         await context.update({
           title: this._getOcrWindowTitle(),
+          checked: false,
+          disabled: false
+        }).catch(() => { });
+      }
+      this._emitError(error);
+    }
+  }
+
+  async _handleVisionOperation(actionId, context) {
+    const action = VISION_ACTION_ITEMS[actionId] || VISION_ACTION_ITEMS['vl-analyze'];
+
+    try {
+      if (context && typeof context.update === 'function') {
+        await context.update({
+          title: '打开中...',
+          checked: true,
+          disabled: true
+        });
+      }
+
+      let buffer = context && context.buffer && Buffer.isBuffer(context.buffer)
+        ? context.buffer
+        : null;
+
+      if (!buffer && context && context.imageResource && context.imageResource.filePath) {
+        buffer = fs.readFileSync(context.imageResource.filePath);
+      }
+
+      if (!buffer || !Buffer.isBuffer(buffer)) {
+        throw new Error('vision-image-missing');
+      }
+
+      this._processScreenshotBuffer(buffer, { writeToClipboard: true });
+
+      if (context && typeof context.endCapture === 'function') {
+        await context.endCapture();
+      } else if (this.screenshots && typeof this.screenshots.endCapture === 'function') {
+        await this.screenshots.endCapture();
+      }
+
+      if (this.options && typeof this.options.openVisionChat === 'function') {
+        await Promise.resolve(this.options.openVisionChat({
+          actionId,
+          imageBuffer: buffer,
+          mimeType: (context && context.imageResource && context.imageResource.mimeType) || 'image/png'
+        }));
+      }
+    } catch (error) {
+      if (context && typeof context.update === 'function') {
+        await context.update({
+          title: action.title,
           checked: false,
           disabled: false
         }).catch(() => { });

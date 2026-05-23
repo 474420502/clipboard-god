@@ -39,7 +39,9 @@ const DEFAULT_SETTINGS = {
     theme: 'light',
     enableTooltips: true,
     launchOnStartup: false,
-    locale: 'zh-CN'
+    locale: 'zh-CN',
+    vlVisionModel: 'qwen3.6-vl:4b',
+    vlVisionBaseUrl: 'http://localhost:11434'
 };
 
 const TAB_IDS = ['general', 'appearance', 'shortcuts', 'ocr', 'llm'];
@@ -168,6 +170,12 @@ const normalizeSettings = (cfg = {}, preferredSelectedLlm = '') => {
         enableTooltips: typeof cfg.enableTooltips !== 'undefined' ? !!cfg.enableTooltips : DEFAULT_SETTINGS.enableTooltips,
         launchOnStartup: typeof cfg.launchOnStartup !== 'undefined' ? !!cfg.launchOnStartup : DEFAULT_SETTINGS.launchOnStartup,
         locale: typeof cfg.locale === 'string' ? cfg.locale : DEFAULT_SETTINGS.locale,
+        vlVisionModel: typeof cfg.vlVisionModel === 'string' && String(cfg.vlVisionModel).trim()
+            ? String(cfg.vlVisionModel)
+            : DEFAULT_SETTINGS.vlVisionModel,
+        vlVisionBaseUrl: typeof cfg.vlVisionBaseUrl === 'string' && String(cfg.vlVisionBaseUrl).trim()
+            ? String(cfg.vlVisionBaseUrl)
+            : DEFAULT_SETTINGS.vlVisionBaseUrl,
         llms,
         _selectedLlm: pickSelectedLlm(llms, cfg._selectedLlm || preferredSelectedLlm),
         ocrLanguages: normalizeLanguages(cfg.ocrLanguages),
@@ -202,6 +210,12 @@ const buildPersistedSettings = (settings = {}) => ({
     enableTooltips: !!settings.enableTooltips,
     launchOnStartup: !!settings.launchOnStartup,
     locale: typeof settings.locale === 'string' ? settings.locale : DEFAULT_SETTINGS.locale,
+    vlVisionModel: typeof settings.vlVisionModel === 'string' && String(settings.vlVisionModel).trim()
+        ? String(settings.vlVisionModel).trim()
+        : DEFAULT_SETTINGS.vlVisionModel,
+    vlVisionBaseUrl: typeof settings.vlVisionBaseUrl === 'string' && String(settings.vlVisionBaseUrl).trim()
+        ? String(settings.vlVisionBaseUrl).trim()
+        : DEFAULT_SETTINGS.vlVisionBaseUrl,
     llms: cloneLlmEntries(settings.llms),
     ocrLanguages: normalizeLanguages(settings.ocrLanguages),
     ocrTextLayout: { ...DEFAULT_OCR_TEXT_LAYOUT, ...(settings.ocrTextLayout || {}) },
@@ -951,6 +965,29 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                 ? t('settings.ocr.modelLanguageHelp', 'Choose the language family used by the local PaddleOCR-VL CLI backend.')
                                                 : t('settings.ocr.modelLanguageDisabledHelp', 'This language family is only applied when model source is set to PaddleOCR-VL (local CLI).')}</small>
                                         </label>
+                                    </div>
+                                </section>
+
+                                <section className="ocr-tool-section">
+                                    <div className="ocr-tool-section-title">{t('settings.ocr.visualAssistantSection', 'Vision Assistant')}</div>
+                                    <div className="settings-tool-section-helper">{t('settings.ocr.visualAssistantHelp', 'Screenshot toolbar and OCR window quick actions reuse this visual model to run VL OCR, screenshot summaries, and richer image analysis prompts.')}</div>
+                                    <div className="ocr-tool-grid">
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.ocr.visualAssistantModel', 'Vision model')}</span>
+                                            <input type="text" value={settings.vlVisionModel || DEFAULT_SETTINGS.vlVisionModel} onChange={(e) => updateField('vlVisionModel', e.target.value)} placeholder="qwen3.6-vl:4b" />
+                                            <small>{t('settings.ocr.visualAssistantModelHelp', 'Use your local Ollama visual model name here, for example qwen3.6-vl:4b or qwen3.6-vl:latest.')}</small>
+                                        </label>
+
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.ocr.visualAssistantBaseUrl', 'Vision endpoint')}</span>
+                                            <input type="text" value={settings.vlVisionBaseUrl || DEFAULT_SETTINGS.vlVisionBaseUrl} onChange={(e) => updateField('vlVisionBaseUrl', e.target.value)} placeholder="http://localhost:11434" />
+                                            <small>{t('settings.ocr.visualAssistantBaseUrlHelp', 'The screenshot toolbar and OCR window VL actions send image prompts to this Ollama-compatible endpoint.')}</small>
+                                        </label>
+                                    </div>
+                                    <div className="settings-tool-selected-language-row" aria-label={t('settings.ocr.visualAssistantActionsLabel', 'Built-in vision actions')}>
+                                        <span className="settings-tool-selected-language-chip">VL OCR</span>
+                                        <span className="settings-tool-selected-language-chip">截图总结</span>
+                                        <span className="settings-tool-selected-language-chip">智能分析</span>
                                     </div>
                                 </section>
 

@@ -541,6 +541,54 @@ function OCRWindow() {
         }
     }, [fullText, showToast, t]);
 
+    const buildVisionPayload = useCallback(async () => {
+        if (ocrPayload.imagePath) {
+            return { imagePath: ocrPayload.imagePath };
+        }
+
+        if (resolvedImageSrc) {
+            if (resolvedImageSrc.startsWith('data:image/')) {
+                return { imagePath: resolvedImageSrc };
+            }
+
+            const response = await fetch(resolvedImageSrc);
+            const arrayBuffer = await response.arrayBuffer();
+            return {
+                imageBuffer: new Uint8Array(arrayBuffer),
+                mimeType: response.headers.get('content-type') || 'image/png'
+            };
+        }
+
+        if (ocrPayload.imageToken) {
+            return { imageToken: ocrPayload.imageToken };
+        }
+
+        throw new Error('vision-image-missing');
+    }, [ocrPayload.imagePath, ocrPayload.imageToken, resolvedImageSrc]);
+
+    const handleVisionAction = useCallback(async (actionId) => {
+        try {
+            if (!window.electronAPI || typeof window.electronAPI.openVisionChat !== 'function') {
+                throw new Error('vision-chat-bridge-unavailable');
+            }
+
+            const payload = await buildVisionPayload();
+            const res = await window.electronAPI.openVisionChat({
+                actionId,
+                ...payload
+            });
+
+            if (!res || res.success === false) {
+                throw new Error((res && res.error) || 'open-vision-chat-failed');
+            }
+
+            showToast(t('history.vlOpened') || 'VL assistant opened');
+        } catch (err) {
+            const reason = err && err.message ? String(err.message) : 'open-vision-chat-failed';
+            showToast(`${t('history.vlOpenFailed') || 'Failed to open VL assistant'}: ${reason}`);
+        }
+    }, [buildVisionPayload, showToast, t]);
+
     const handleCopyBlock = useCallback(async (block) => {
         try {
             if (!block || !block.text) return;
@@ -1241,6 +1289,18 @@ function OCRWindow() {
                             </svg>
                         </span>
                         <span>{t('history.ocrRetry') || 'Retry'}</span>
+                    </button>
+                    <button type="button" className="btn ocr-toolbar-btn" onClick={() => handleVisionAction('vl-ocr')} disabled={isBusy || !imageReady}>
+                        <span className="ocr-btn-icon" aria-hidden="true">VL</span>
+                        <span>{t('history.vlOcr') || 'VL OCR'}</span>
+                    </button>
+                    <button type="button" className="btn ocr-toolbar-btn" onClick={() => handleVisionAction('vl-summary')} disabled={isBusy || !imageReady}>
+                        <span className="ocr-btn-icon" aria-hidden="true">AI</span>
+                        <span>{t('history.vlSummary') || 'Summary'}</span>
+                    </button>
+                    <button type="button" className="btn ocr-toolbar-btn" onClick={() => handleVisionAction('vl-analyze')} disabled={isBusy || !imageReady}>
+                        <span className="ocr-btn-icon" aria-hidden="true">AI</span>
+                        <span>{t('history.vlAnalyze') || 'Analyze'}</span>
                     </button>
                     <button type="button" className="btn ocr-toolbar-btn" onClick={handleCopyAll} disabled={isBusy || !fullText.trim()}>
                         <span className="ocr-btn-icon" aria-hidden="true">

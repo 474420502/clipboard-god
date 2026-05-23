@@ -56,6 +56,76 @@ const safeConsole = {
   }
 };
 
+const OCR_LANGUAGE_SHORT_LABELS = {
+  chi_sim: '简体中文',
+  chi_tra: '繁体中文',
+  eng: 'English',
+  jpn: '日本語',
+  kor: '한국어',
+  deu: 'Deutsch',
+  fra: 'Français',
+  spa: 'Español',
+  por: 'Português',
+  ita: 'Italiano',
+  rus: 'Русский',
+  ara: 'العربية',
+  vie: 'Tiếng Việt',
+  tha: 'ไทย',
+  nld: 'Nederlands',
+  pol: 'Polski'
+};
+
+const DEFAULT_VISION_MODEL = 'qwen3.6-vl:4b';
+const DEFAULT_VISION_BASE_URL = 'http://localhost:11434';
+
+const VISION_ACTION_PRESETS = {
+  'vl-ocr': {
+    windowName: 'VL OCR',
+    temperature: 0.1,
+    top_p: 0.9,
+    top_k: 32,
+    buildPrompt: ({ languageHint }) => [
+      '你是一名严格的视觉 OCR 与版面理解助手。',
+      languageHint ? `当前图片里优先留意这些语言：${languageHint}。` : '如果图片里有多语言文本，请按原语言原样保留。',
+      '请完整识别这张图片里所有可见文字，不要做摘要，不要解释。',
+      '要求：',
+      '1. 保留原有段落、列表、表格和标题层级。',
+      '2. 表格尽量转成 Markdown 表格。',
+      '3. 看不清的少量内容用 [unclear] 标记。',
+      '4. 只输出识别结果本身，不要添加前言或结尾说明。'
+    ].filter(Boolean).join('\n')
+  },
+  'vl-summary': {
+    windowName: '截图总结',
+    temperature: 0.3,
+    top_p: 0.92,
+    top_k: 40,
+    buildPrompt: () => [
+      '请总结这张截图/图片的主要内容。',
+      '输出格式：',
+      '1. 这是什么场景或页面。',
+      '2. 3 到 5 条关键信息。',
+      '3. 如果画面里有重要文字、数字、状态或告警，请单独列出。',
+      '4. 用中文输出，简洁但信息完整。'
+    ].join('\n')
+  },
+  'vl-analyze': {
+    windowName: '智能分析',
+    temperature: 0.35,
+    top_p: 0.94,
+    top_k: 48,
+    buildPrompt: () => [
+      '请把这张图片当作当前用户正在处理的截图来做智能解析。',
+      '输出结构：',
+      '1. 画面主体：这是什么内容。',
+      '2. 关键信息：重要文字、数字、状态、按钮或异常。',
+      '3. 用户意图：用户大概率想从这张图里完成什么。',
+      '4. 下一步建议：给出 2 到 4 条最有价值的操作建议。',
+      '如果这是软件界面、文档、聊天记录或网页，请尽量结合上下文理解，而不是只做表面描述。'
+    ].join('\n')
+  }
+};
+
 class MainProcess {
   constructor() {
     this.mainWindow = null;
@@ -729,6 +799,118 @@ class MainProcess {
     }
   }
 
+  getVisionAssistantConfig() {
+    const config = Config.getAll() || {};
+    const model = typeof config.vlVisionModel === 'string' && String(config.vlVisionModel).trim()
+      ? String(config.vlVisionModel).trim()
+      : DEFAULT_VISION_MODEL;
+    const baseUrl = typeof config.vlVisionBaseUrl === 'string' && String(config.vlVisionBaseUrl).trim()
+      ? String(config.vlVisionBaseUrl).trim()
+      : DEFAULT_VISION_BASE_URL;
+
+    return {
+      model,
+      baseUrl,
+      apitype: 'ollama'
+    };
+  }
+
+  getVisionLanguageHint() {
+    const languages = this.getOcrLanguages();
+    if (!Array.isArray(languages) || languages.length === 0) {
+      return '';
+    }
+
+    return languages
+      .slice(0, 4)
+      .map((lang) => OCR_LANGUAGE_SHORT_LABELS[lang] || lang)
+      .join(' / ');
+  }
+
+  guessImageMimeTypeFromPath(filePath = '') {
+    const ext = path.extname(String(filePath || '')).toLowerCase();
+    if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+    if (ext === '.webp') return 'image/webp';
+    if (ext === '.gif') return 'image/gif';
+    if (ext === '.bmp') return 'image/bmp';
+    return 'image/png';
+  }
+
+  createVisionImagePayload(buffer, mimeType = 'image/png') {
+    if (!buffer || buffer.length === 0) {
+      throw new Error('vision-image-empty');
+    }
+
+    const base64Raw = Buffer.from(buffer).toString('base64');
+    const normalizedMime = String(mimeType || 'image/png');
+    return {
+      base64Raw,
+      base64Full: `data:${normalizedMime};base64,${base64Raw}`,
+      mimeType: normalizedMime
+    };
+  }
+
+  resolveVisionImagePayload(payload = {}) {
+    const rawBuffer = payload && payload.imageBuffer ? payload.imageBuffer : null;
+    if (rawBuffer) {
+      return this.createVisionImagePayload(Buffer.from(rawBuffer), payload.mimeType || 'image/png');
+    }
+
+    const rawToken = payload && payload.imageToken ? String(payload.imageToken) : '';
+    if (rawToken) {
+      const tokenPayload = this.getOcrImageTokenData(rawToken);
+      if (!tokenPayload || !tokenPayload.data) {
+        throw new Error('vision-image-token-missing');
+      }
+      return this.createVisionImagePayload(Buffer.from(tokenPayload.data), tokenPayload.mimeType || 'image/png');
+    }
+
+    const rawImagePath = payload && payload.imagePath ? String(payload.imagePath) : '';
+    if (rawImagePath.startsWith('data:image/')) {
+      const match = rawImagePath.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (!match || !match[1] || !match[2]) {
+        throw new Error('vision-image-invalid-data-url');
+      }
+      return {
+        base64Raw: match[2],
+        base64Full: rawImagePath,
+        mimeType: match[1]
+      };
+    }
+
+    if (rawImagePath) {
+      const buffer = fs.readFileSync(rawImagePath);
+      return this.createVisionImagePayload(buffer, this.guessImageMimeTypeFromPath(rawImagePath));
+    }
+
+    throw new Error('vision-image-missing');
+  }
+
+  openVisionChatWindow(payload = {}) {
+    const actionId = String(payload && payload.actionId ? payload.actionId : 'vl-analyze').trim().toLowerCase();
+    const preset = VISION_ACTION_PRESETS[actionId] || VISION_ACTION_PRESETS['vl-analyze'];
+    const imagePayload = this.resolveVisionImagePayload(payload);
+    const assistantConfig = this.getVisionAssistantConfig();
+    const customPrompt = typeof payload.prompt === 'string' ? String(payload.prompt).trim() : '';
+    const prompt = customPrompt || preset.buildPrompt({
+      languageHint: this.getVisionLanguageHint()
+    });
+
+    return this.openLlmChatWindow(preset.windowName, {
+      apitype: assistantConfig.apitype,
+      model: assistantConfig.model,
+      baseurl: assistantConfig.baseUrl,
+      prompt,
+      initialImages: [imagePayload],
+      temperature: preset.temperature,
+      top_p: preset.top_p,
+      top_k: preset.top_k,
+      context_window: 32768,
+      max_tokens: 32768,
+      presence_penalty: 1.0
+    });
+  }
+
   openOcrWindow(payload = {}) {
     try {
       const rawImagePath = payload && payload.imagePath ? String(payload.imagePath) : '';
@@ -1069,6 +1251,9 @@ class MainProcess {
             imageBuffer: buffer,
             languages: this.getOcrLanguages()
           });
+        },
+        openVisionChat: async (payload) => {
+          return this.openVisionChatWindow(payload || {});
         }
       });
     }
@@ -2033,6 +2218,16 @@ class MainProcess {
       } catch (err) {
         safeConsole.error('open-ocr-window error:', err);
         return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle('open-vision-chat', async (_event, payload) => {
+      try {
+        this.openVisionChatWindow(payload || {});
+        return { success: true };
+      } catch (err) {
+        safeConsole.error('open-vision-chat error:', err);
+        return { success: false, error: err && err.message ? err.message : 'open-vision-chat-failed' };
       }
     });
 
