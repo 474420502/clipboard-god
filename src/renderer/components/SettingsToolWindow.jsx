@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import i18next from '../i18n';
 import { useTranslation } from 'react-i18next';
 import ShortcutCapture from './ShortcutCapture';
@@ -30,10 +30,12 @@ const DEFAULT_OCR_VL_MAX_CONCURRENT_JOBS = Math.max(
     Math.min(2, Math.floor(DEFAULT_OCR_VL_CPU_THREADS / 4) || 1)
 );
 
+const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
+
 const DEFAULT_VISION_LLM = {
     apitype: 'ollama',
     model: 'qwen3.6-vl:4b',
-    baseurl: 'http://localhost:11434',
+    baseurl: OLLAMA_DEFAULT_BASE_URL,
     apikey: '',
     temperature: 0.3,
     top_p: 0.92,
@@ -56,6 +58,23 @@ const DEFAULT_SETTINGS = {
     locale: 'zh-CN',
     visionLlm: { ...DEFAULT_VISION_LLM }
 };
+
+const createDefaultLlmEntry = (triggerType = 'text') => ({
+    apitype: 'ollama',
+    model: '',
+    prompt: triggerType === 'text' ? 'Summarize {{text}}' : '',
+    triggerType,
+    baseurl: OLLAMA_DEFAULT_BASE_URL,
+    apikey: '',
+    temperature: 0.7,
+    top_p: 0.95,
+    top_k: 0.9,
+    context_window: 32768,
+    max_tokens: 32768,
+    min_p: 0.05,
+    presence_penalty: 1.1,
+    llmShortcut: ''
+});
 
 const TAB_IDS = ['general', 'appearance', 'shortcuts', 'ocr', 'llm'];
 
@@ -170,6 +189,129 @@ const pickSelectedLlm = (llms, preferred = '') => {
     if (candidate && entries[candidate]) return candidate;
     return names[0] || '';
 };
+
+const normalizeOllamaBaseUrl = (value) => {
+    const trimmed = String(value || '').trim();
+    return (trimmed || OLLAMA_DEFAULT_BASE_URL).replace(/\/+$/, '');
+};
+
+const parseOllamaModelNames = (payload) => {
+    const models = Array.isArray(payload?.models)
+        ? payload.models
+        : (Array.isArray(payload) ? payload : []);
+
+    return Array.from(new Set(models
+        .map((item) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item.name === 'string') return item.name;
+            if (item && typeof item.model === 'string') return item.model;
+            return '';
+        })
+        .map((name) => String(name || '').trim())
+        .filter(Boolean))).sort((left, right) => left.localeCompare(right));
+};
+
+const EXPLICIT_VISION_MODEL_RULES = [
+    { family: 'Qwen VL', pattern: /qwen[\w.-]*(?:vl|vision|omni)|qvq/i },
+    { family: 'LLaVA', pattern: /(?:^|[-_.:])(?:bak)?llava(?:$|[-_.:])/i },
+    { family: 'MiniCPM-V', pattern: /minicpm(?:[-_.:]?v)/i },
+    { family: 'InternVL', pattern: /internvl/i },
+    { family: 'GLM-4V', pattern: /glm(?:[-_.:]?4)?[-_.:]?v/i },
+    { family: 'Moondream', pattern: /moondream/i },
+    { family: 'Pixtral', pattern: /pixtral/i },
+    { family: 'Bunny', pattern: /(?:^|[-_.:])bunny(?:$|[-_.:])/i },
+    { family: 'Phi Vision', pattern: /phi[-_.:]?3(?:\.5)?[-_.:]?vision|phi[-_.:]?4[-_.:]?multimodal/i },
+    { family: 'Llama Vision', pattern: /llama[-_.:]?3\.2[-_.:]?vision|llama[-_.:]?4[-_.:]?(?:scout|maverick)/i },
+    { family: 'Gemma 3', pattern: /gemma[-_.:]?3[-_.:]?(?:vision|it|multimodal)?/i },
+    { family: 'Janus', pattern: /janus/i },
+    { family: 'Granite Vision', pattern: /granite[-_.:]?(?:vision|3\.2[-_.:]?vision)/i },
+    { family: 'Vision', pattern: /(?:^|[-_.:])(vl|vision|4v|multimodal)(?:$|[-_.:])/i }
+];
+
+const POSSIBLE_VISION_MODEL_RULES = [
+    { family: 'Qwen', pattern: /(?:^|[-_.:])qwen(?:$|[-_.:]|\d)/i },
+    { family: 'MiniCPM', pattern: /minicpm/i },
+    { family: 'Gemma 3', pattern: /gemma[-_.:]?3/i },
+    { family: 'Llama 3.2 / 4', pattern: /llama[-_.:]?(?:3\.2|4)/i },
+    { family: 'GLM 4', pattern: /glm[-_.:]?4/i },
+    { family: 'Phi', pattern: /phi[-_.:]?(?:3(?:\.5)?|4)/i },
+    { family: 'Mistral 3.1', pattern: /mistral[-_.:]?(?:small[-_.:]?3\.1|3\.1)/i }
+];
+
+const classifyOllamaModelName = (name = '') => {
+    const normalized = String(name || '').trim();
+
+    if (!normalized) {
+        return {
+            name: '',
+            kind: 'text',
+            family: '',
+            tone: 'default'
+        };
+    }
+
+    const explicitRule = EXPLICIT_VISION_MODEL_RULES.find((rule) => rule.pattern.test(normalized));
+    if (explicitRule) {
+        return {
+            name: normalized,
+            kind: 'vision',
+            family: explicitRule.family,
+            tone: 'default'
+        };
+    }
+
+    const possibleRule = POSSIBLE_VISION_MODEL_RULES.find((rule) => rule.pattern.test(normalized));
+    if (possibleRule) {
+        return {
+            name: normalized,
+            kind: 'candidate',
+            family: possibleRule.family,
+            tone: 'candidate'
+        };
+    }
+
+    return {
+        name: normalized,
+        kind: 'text',
+        family: '',
+        tone: 'default'
+    };
+};
+
+const withFallbackTagTone = (items = []) => items.map((item) => ({
+    ...item,
+    kind: 'candidate',
+    tone: 'candidate',
+    family: item.family || 'Manual check'
+}));
+
+const splitOllamaModelNames = (names = []) => {
+    const all = Array.from(new Set((Array.isArray(names) ? names : []).map((name) => String(name || '').trim()).filter(Boolean)));
+    const items = all.map((name) => classifyOllamaModelName(name));
+    const confirmedVision = items.filter((item) => item.kind === 'vision');
+    const candidateVision = items.filter((item) => item.kind === 'candidate');
+    const textPreferred = items.filter((item) => item.kind !== 'vision');
+    const vision = confirmedVision.length || candidateVision.length
+        ? [...confirmedVision, ...candidateVision]
+        : withFallbackTagTone(items);
+    const text = textPreferred.length
+        ? textPreferred
+        : withFallbackTagTone(items);
+
+    return {
+        all,
+        items,
+        counts: {
+            confirmedVision: confirmedVision.length,
+            candidateVision: candidateVision.length,
+            text: items.filter((item) => item.kind === 'text').length
+        },
+        vision,
+        text
+    };
+};
+
+const getEmptyOllamaCatalogEntry = () => ({ status: 'idle', models: [], error: '' });
 
 const normalizeVisionLlm = (visionLlm = {}, legacyConfig = {}) => {
     const next = visionLlm && typeof visionLlm === 'object' ? visionLlm : {};
@@ -344,6 +486,12 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     const [runtimeLoading, setRuntimeLoading] = useState(false);
     const [runtimeApplying, setRuntimeApplying] = useState(false);
     const [runtimeInfo, setRuntimeInfo] = useState(null);
+    const [ollamaCatalog, setOllamaCatalog] = useState({});
+    const ollamaCatalogRef = useRef({});
+
+    useEffect(() => {
+        ollamaCatalogRef.current = ollamaCatalog;
+    }, [ollamaCatalog]);
 
     const dirty = useMemo(() => serializeSettings(settings) !== savedSettingsKey, [savedSettingsKey, settings]);
 
@@ -473,6 +621,54 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                 ...patch
             }
         }));
+    }, []);
+
+    const loadOllamaModels = useCallback(async (baseUrl, { force = false } = {}) => {
+        const normalizedBaseUrl = normalizeOllamaBaseUrl(baseUrl);
+        const cached = ollamaCatalogRef.current[normalizedBaseUrl] || getEmptyOllamaCatalogEntry();
+
+        if (!force && (cached.status === 'ready' || cached.status === 'loading')) {
+            return cached.models || [];
+        }
+
+        setOllamaCatalog((prev) => ({
+            ...prev,
+            [normalizedBaseUrl]: {
+                ...(prev[normalizedBaseUrl] || getEmptyOllamaCatalogEntry()),
+                status: 'loading',
+                error: ''
+            }
+        }));
+
+        try {
+            const response = await fetch(`${normalizedBaseUrl}/api/tags`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const payload = await response.json();
+            const models = parseOllamaModelNames(payload);
+            setOllamaCatalog((prev) => ({
+                ...prev,
+                [normalizedBaseUrl]: {
+                    status: 'ready',
+                    models,
+                    error: ''
+                }
+            }));
+            return models;
+        } catch (error) {
+            const message = error && error.message ? error.message : 'ollama-model-list-failed';
+            setOllamaCatalog((prev) => ({
+                ...prev,
+                [normalizedBaseUrl]: {
+                    ...(prev[normalizedBaseUrl] || getEmptyOllamaCatalogEntry()),
+                    status: 'error',
+                    error: message
+                }
+            }));
+            return [];
+        }
     }, []);
 
     const handleToggleLanguage = useCallback((code) => {
@@ -613,6 +809,28 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
         });
     }, [loadRuntimeInfo]);
 
+    const currentLlmName = settings._selectedLlm || '';
+    const currentLlmEntry = currentLlmName && settings.llms ? settings.llms[currentLlmName] : null;
+    const visionLlm = normalizeVisionLlm(settings.visionLlm, settings);
+    const visionOllamaBaseUrl = normalizeOllamaBaseUrl(visionLlm.baseurl || DEFAULT_VISION_LLM.baseurl);
+    const currentLlmOllamaBaseUrl = normalizeOllamaBaseUrl(currentLlmEntry?.baseurl || OLLAMA_DEFAULT_BASE_URL);
+
+    useEffect(() => {
+        if (activeTab !== 'llm' || visionLlm.apitype !== 'ollama') {
+            return;
+        }
+
+        loadOllamaModels(visionOllamaBaseUrl).catch(() => { });
+    }, [activeTab, loadOllamaModels, visionLlm.apitype, visionOllamaBaseUrl]);
+
+    useEffect(() => {
+        if (activeTab !== 'llm' || !currentLlmEntry || currentLlmEntry.apitype !== 'ollama') {
+            return;
+        }
+
+        loadOllamaModels(currentLlmOllamaBaseUrl).catch(() => { });
+    }, [activeTab, currentLlmEntry, currentLlmOllamaBaseUrl, loadOllamaModels]);
+
     useEffect(() => {
         if (!window.electronAPI || typeof window.electronAPI.onSettingsUpdated !== 'function') {
             return undefined;
@@ -691,8 +909,6 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
         }
     }, [t]);
 
-    const currentLlmName = settings._selectedLlm || '';
-    const currentLlmEntry = currentLlmName && settings.llms ? settings.llms[currentLlmName] : null;
     const activeTabMeta = tabs.find((tab) => tab.id === activeTab) || tabs[0];
     const themeLabel = (THEME_OPTIONS.find((option) => option.value === settings.theme) || THEME_OPTIONS[0]);
     const selectedLanguagesCount = Array.isArray(settings.ocrLanguages) ? settings.ocrLanguages.length : 0;
@@ -701,8 +917,19 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     const llmEntries = Object.keys(settings.llms || {});
     const localeLabel = settings.locale === 'en' ? 'English' : '简体中文';
     const isExternalOcrModel = settings.ocrModelSource === 'paddleocr-vl-cli';
-    const visionLlm = normalizeVisionLlm(settings.visionLlm, settings);
     const visionApiLabel = visionLlm.apitype === 'openapi' ? 'OpenAPI' : 'Ollama';
+    const visionCatalogEntry = ollamaCatalog[visionOllamaBaseUrl] || getEmptyOllamaCatalogEntry();
+    const visionModelCatalog = splitOllamaModelNames(visionCatalogEntry.models || []);
+    const visionModelTags = visionModelCatalog.vision;
+    const currentLlmCatalogEntry = currentLlmEntry && currentLlmEntry.apitype === 'ollama'
+        ? (ollamaCatalog[currentLlmOllamaBaseUrl] || getEmptyOllamaCatalogEntry())
+        : getEmptyOllamaCatalogEntry();
+    const currentLlmModelCatalog = splitOllamaModelNames(currentLlmCatalogEntry.models || []);
+    const currentLlmModelTags = (currentLlmEntry?.triggerType || 'text') === 'image'
+        ? currentLlmModelCatalog.vision
+        : currentLlmModelCatalog.text;
+    const visionHasCandidateTags = visionModelTags.some((tag) => tag.kind === 'candidate');
+    const currentLlmHasCandidateTags = currentLlmModelTags.some((tag) => tag.kind === 'candidate');
     const runtimeCommandDisplay = getCompactCommandLabel(settings.ocrVlCliCommand || 'paddleocr');
     const currentModelSourceLabel = settings.ocrModelSource === 'paddleocr-vl-cli'
         ? t('settings.ocr.modelSourcePaddleVlCli', 'PaddleOCR-VL (local CLI)')
@@ -765,6 +992,23 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
         }
 
         try { window.close(); } catch (_) { }
+    };
+
+    const getModelTagTitle = (tag) => {
+        if (!tag || !tag.name) {
+            return '';
+        }
+
+        const familyPrefix = tag.family ? `${tag.family} · ` : '';
+        if (tag.kind === 'vision') {
+            return `${tag.name} · ${familyPrefix}${t('settings.llm.modelTagConfirmedTooltip', 'Recognized as a confirmed vision model.')}`;
+        }
+
+        if (tag.kind === 'candidate') {
+            return `${tag.name} · ${familyPrefix}${t('settings.llm.modelTagCandidateTooltip', 'Possible vision family or fallback display item. Verify the exact model tag before using image actions.')}`;
+        }
+
+        return `${tag.name} · ${t('settings.llm.modelTagTextTooltip', 'Regular text model tag.')}`;
     };
 
     return (
@@ -1143,12 +1387,39 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
 
                                         <label className="ocr-tool-field">
                                             <span>{t('settings.llm.modelLabel', 'Model')}</span>
-                                            <input type="text" value={visionLlm.model || DEFAULT_VISION_LLM.model} onChange={(e) => updateVisionLlm({ model: e.target.value })} placeholder="qwen3.6-vl:4b" />
+                                            <div className="settings-tool-inline-row">
+                                                <input
+                                                    type="text"
+                                                    list={visionLlm.apitype === 'ollama' ? 'settings-tool-vision-ollama-models' : undefined}
+                                                    value={visionLlm.model || DEFAULT_VISION_LLM.model}
+                                                    onChange={(e) => updateVisionLlm({ model: e.target.value })}
+                                                    placeholder="qwen3.6-vl:4b"
+                                                />
+                                                {visionLlm.apitype === 'ollama' ? (
+                                                    <button
+                                                        type="button"
+                                                        className="settings-tool-button settings-tool-button-ghost settings-tool-button-compact"
+                                                        onClick={() => loadOllamaModels(visionOllamaBaseUrl, { force: true })}
+                                                    >
+                                                        {t('settings.llm.ollamaRefreshModels', 'Refresh models')}
+                                                    </button>
+                                                ) : null}
+                                            </div>
+                                            {visionLlm.apitype === 'ollama' ? (
+                                                <>
+                                                    <datalist id="settings-tool-vision-ollama-models">
+                                                        {visionModelCatalog.all.map((name) => (
+                                                            <option key={name} value={name} />
+                                                        ))}
+                                                    </datalist>
+                                                    <small>{t('settings.llm.ollamaInputHelp', 'You can pick a detected Ollama model from the list or type one manually.')}</small>
+                                                </>
+                                            ) : null}
                                         </label>
 
                                         <label className="ocr-tool-field">
                                             <span>{t('settings.llm.baseUrlLabel', 'Base URL')}</span>
-                                            <input type="text" value={visionLlm.baseurl || DEFAULT_VISION_LLM.baseurl} placeholder="http://localhost:11434" onChange={(e) => updateVisionLlm({ baseurl: e.target.value })} />
+                                            <input type="text" value={visionLlm.baseurl || DEFAULT_VISION_LLM.baseurl} placeholder={OLLAMA_DEFAULT_BASE_URL} onChange={(e) => updateVisionLlm({ baseurl: e.target.value })} />
                                         </label>
 
                                         <label className="ocr-tool-field">
@@ -1156,6 +1427,44 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                             <input type="password" value={visionLlm.apikey || ''} onChange={(e) => updateVisionLlm({ apikey: e.target.value })} />
                                         </label>
                                     </div>
+                                    {visionLlm.apitype === 'ollama' ? (
+                                        <div className="settings-tool-model-browser">
+                                            <div className="settings-tool-section-header settings-tool-section-header-compact">
+                                                <div className="settings-tool-section-heading">
+                                                    <div className="ocr-tool-section-title">{t('settings.llm.visionTagsSection', 'Vision model tags')}</div>
+                                                    <div className="settings-tool-section-helper">{t('settings.llm.visionTagsHelp', 'These tags only change the built-in image action model above.')}</div>
+                                                </div>
+                                                <div className="settings-tool-selected-hint">
+                                                    {visionCatalogEntry.status === 'loading'
+                                                        ? t('settings.llm.ollamaLoadingModels', 'Loading Ollama models...')
+                                                        : (visionCatalogEntry.error
+                                                            ? t('settings.llm.ollamaModelListError', `Model list unavailable: ${visionCatalogEntry.error}`, { error: visionCatalogEntry.error })
+                                                            : t('settings.llm.ollamaModelCount', `${visionModelCatalog.all.length} models`, { count: visionModelCatalog.all.length }))}
+                                                </div>
+                                            </div>
+                                            {visionHasCandidateTags ? (
+                                                <div className="settings-tool-model-legend" aria-label={t('settings.llm.modelTagLegendAria', 'Model tag legend')}>
+                                                    <span className="settings-tool-model-legend-chip">{t('settings.llm.modelTagLegendConfirmed', 'Confirmed vision')}</span>
+                                                    <span className="settings-tool-model-legend-chip is-candidate">{t('settings.llm.modelTagLegendCandidate', 'Possible vision / verify tag')}</span>
+                                                </div>
+                                            ) : null}
+                                            <div className="settings-tool-model-tag-list" aria-label={t('settings.llm.visionTagsSection', 'Vision model tags')}>
+                                                {visionModelTags.length ? visionModelTags.map((tag) => (
+                                                    <button
+                                                        key={tag.name}
+                                                        type="button"
+                                                        title={getModelTagTitle(tag)}
+                                                        className={`settings-tool-model-tag ${tag.kind === 'candidate' ? 'is-candidate' : ''} ${String(visionLlm.model || DEFAULT_VISION_LLM.model).trim() === tag.name ? 'is-selected' : ''}`}
+                                                        onClick={() => updateVisionLlm({ model: tag.name })}
+                                                    >
+                                                        {tag.name}
+                                                    </button>
+                                                )) : (
+                                                    <span className="settings-tool-model-status">{t('settings.llm.ollamaModelListUnavailable', 'No Ollama model list is available yet. You can still type a model name manually.')}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : null}
                                     <div className="ocr-tool-grid">
                                         <label className="ocr-tool-field">
                                             <span>{t('settings.llm.temperature', 'Temperature')}</span>
@@ -1215,22 +1524,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                         }
                                                         updateField('llms', {
                                                             ...(settings.llms || {}),
-                                                            [name]: {
-                                                                apitype: 'ollama',
-                                                                model: '',
-                                                                prompt: 'Summarize {{text}}',
-                                                                triggerType: 'text',
-                                                                baseurl: 'http://localhost:11434',
-                                                                apikey: '',
-                                                                temperature: 0.7,
-                                                                top_p: 0.95,
-                                                                top_k: 0.9,
-                                                                context_window: 32768,
-                                                                max_tokens: 32768,
-                                                                min_p: 0.05,
-                                                                presence_penalty: 1.1,
-                                                                llmShortcut: ''
-                                                            }
+                                                            [name]: createDefaultLlmEntry('text')
                                                         });
                                                         updateField('_selectedLlm', name);
                                                     }}
@@ -1255,7 +1549,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                         const value = e.target.value;
                                                         const patch = { apitype: value };
                                                         if (value === 'ollama' && (!currentLlmEntry.baseurl || !String(currentLlmEntry.baseurl).trim())) {
-                                                            patch.baseurl = 'http://localhost:11434';
+                                                            patch.baseurl = OLLAMA_DEFAULT_BASE_URL;
                                                         }
                                                         updateLlmEntry(currentLlmName, patch);
                                                     }}
@@ -1289,12 +1583,38 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
 
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.modelLabel', 'Model')}</span>
-                                                <input type="text" value={currentLlmEntry.model || ''} onChange={(e) => updateLlmEntry(currentLlmName, { model: e.target.value })} />
+                                                <div className="settings-tool-inline-row">
+                                                    <input
+                                                        type="text"
+                                                        list={currentLlmEntry.apitype === 'ollama' ? 'settings-tool-current-llm-models' : undefined}
+                                                        value={currentLlmEntry.model || ''}
+                                                        onChange={(e) => updateLlmEntry(currentLlmName, { model: e.target.value })}
+                                                    />
+                                                    {currentLlmEntry.apitype === 'ollama' ? (
+                                                        <button
+                                                            type="button"
+                                                            className="settings-tool-button settings-tool-button-ghost settings-tool-button-compact"
+                                                            onClick={() => loadOllamaModels(currentLlmOllamaBaseUrl, { force: true })}
+                                                        >
+                                                            {t('settings.llm.ollamaRefreshModels', 'Refresh models')}
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                                {currentLlmEntry.apitype === 'ollama' ? (
+                                                    <>
+                                                        <datalist id="settings-tool-current-llm-models">
+                                                            {currentLlmModelCatalog.all.map((name) => (
+                                                                <option key={name} value={name} />
+                                                            ))}
+                                                        </datalist>
+                                                        <small>{t('settings.llm.ollamaInputHelp', 'You can pick a detected Ollama model from the list or type one manually.')}</small>
+                                                    </>
+                                                ) : null}
                                             </label>
 
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.baseUrlLabel', 'Base URL')}</span>
-                                                <input type="text" value={currentLlmEntry.baseurl || ''} placeholder="http://localhost:11434" onChange={(e) => updateLlmEntry(currentLlmName, { baseurl: e.target.value })} />
+                                                <input type="text" value={currentLlmEntry.baseurl || ''} placeholder={OLLAMA_DEFAULT_BASE_URL} onChange={(e) => updateLlmEntry(currentLlmName, { baseurl: e.target.value })} />
                                             </label>
 
                                             <label className="ocr-tool-field">
@@ -1308,6 +1628,51 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                 <small>{t('settings.llm.shortcutHelp', 'Optional shortcut bound to this LLM preset.')}</small>
                                             </label>
                                         </div>
+
+                                        {currentLlmEntry.apitype === 'ollama' ? (
+                                            <div className="settings-tool-model-browser">
+                                                <div className="settings-tool-section-header settings-tool-section-header-compact">
+                                                    <div className="settings-tool-section-heading">
+                                                        <div className="ocr-tool-section-title">{(currentLlmEntry.triggerType || 'text') === 'image'
+                                                            ? t('settings.llm.imageTagsSection', 'Image model tags')
+                                                            : t('settings.llm.textTagsSection', 'Text model tags')}</div>
+                                                        <div className="settings-tool-section-helper">{(currentLlmEntry.triggerType || 'text') === 'image'
+                                                            ? t('settings.llm.imageTagsHelp', 'These tags only change the current image preset model.')
+                                                            : t('settings.llm.textTagsHelp', 'These tags only change the current text preset model.')}</div>
+                                                    </div>
+                                                    <div className="settings-tool-selected-hint">
+                                                        {currentLlmCatalogEntry.status === 'loading'
+                                                            ? t('settings.llm.ollamaLoadingModels', 'Loading Ollama models...')
+                                                            : (currentLlmCatalogEntry.error
+                                                                ? t('settings.llm.ollamaModelListError', `Model list unavailable: ${currentLlmCatalogEntry.error}`, { error: currentLlmCatalogEntry.error })
+                                                                : t('settings.llm.ollamaModelCount', `${currentLlmModelCatalog.all.length} models`, { count: currentLlmModelCatalog.all.length }))}
+                                                    </div>
+                                                </div>
+                                                {currentLlmHasCandidateTags ? (
+                                                    <div className="settings-tool-model-legend" aria-label={t('settings.llm.modelTagLegendAria', 'Model tag legend')}>
+                                                        <span className="settings-tool-model-legend-chip">{t('settings.llm.modelTagLegendConfirmed', 'Confirmed vision')}</span>
+                                                        <span className="settings-tool-model-legend-chip is-candidate">{t('settings.llm.modelTagLegendCandidate', 'Possible vision / verify tag')}</span>
+                                                    </div>
+                                                ) : null}
+                                                <div className="settings-tool-model-tag-list" aria-label={(currentLlmEntry.triggerType || 'text') === 'image'
+                                                    ? t('settings.llm.imageTagsSection', 'Image model tags')
+                                                    : t('settings.llm.textTagsSection', 'Text model tags')}>
+                                                    {currentLlmModelTags.length ? currentLlmModelTags.map((tag) => (
+                                                        <button
+                                                            key={tag.name}
+                                                            type="button"
+                                                            title={getModelTagTitle(tag)}
+                                                            className={`settings-tool-model-tag ${tag.kind === 'candidate' ? 'is-candidate' : ''} ${String(currentLlmEntry.model || '').trim() === tag.name ? 'is-selected' : ''}`}
+                                                            onClick={() => updateLlmEntry(currentLlmName, { model: tag.name })}
+                                                        >
+                                                            {tag.name}
+                                                        </button>
+                                                    )) : (
+                                                        <span className="settings-tool-model-status">{t('settings.llm.ollamaModelListUnavailable', 'No Ollama model list is available yet. You can still type a model name manually.')}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : null}
 
                                         <div className="ocr-tool-grid ocr-tool-grid-single">
                                             <label className="ocr-tool-field">

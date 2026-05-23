@@ -30,25 +30,46 @@ const OCR_LANGUAGE_LABELS = {
   pol: 'PL'
 };
 
+const buildScreenshotsSvgIcon = (body) => `
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+${body}
+</svg>`.trim();
+
 const VISION_ACTION_ITEMS = {
   'vl-describe': {
-    title: '解析当前截图',
-    label: '解析图片',
+    title: '解析图片 / Parse image',
+    iconSvg: buildScreenshotsSvgIcon(`
+<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z" />
+<circle cx="12" cy="12" r="3" />
+`),
     fileNamePrefix: 'vl-describe'
   },
   'vl-ocr': {
-    title: '把图片转成文字',
-    label: '转文字',
+    title: '图片转文字 / Image to text',
+    iconSvg: buildScreenshotsSvgIcon(`
+<path d="M6 5h12v14H6z" />
+<path d="M9 9h6" />
+<path d="M9 13h6" />
+<path d="M9 17h4" />
+`),
     fileNamePrefix: 'vl-ocr'
   },
   'vl-summary': {
-    title: '总结当前图片',
-    label: '总结',
+    title: '总结图片 / Summarize image',
+    iconSvg: buildScreenshotsSvgIcon(`
+<path d="M5 7h14" />
+<path d="M5 12h14" />
+<path d="M5 17h8" />
+`),
     fileNamePrefix: 'vl-summary'
   },
   'vl-analyze': {
-    title: '智能分析当前截图',
-    label: '分析',
+    title: '智能分析 / Analyze image',
+    iconSvg: buildScreenshotsSvgIcon(`
+<path d="M6 18V10" />
+<path d="M12 18V6" />
+<path d="M18 18v-4" />
+`),
     fileNamePrefix: 'vl-analyze'
   }
 };
@@ -150,7 +171,7 @@ class ScreenshotManager {
       {
         key: 'vl-describe',
         title: VISION_ACTION_ITEMS['vl-describe'].title,
-        label: VISION_ACTION_ITEMS['vl-describe'].label,
+        iconSvg: VISION_ACTION_ITEMS['vl-describe'].iconSvg,
         position: { after: 'ocr' },
         requiresSelection: true,
         includeImage: true,
@@ -164,7 +185,7 @@ class ScreenshotManager {
       {
         key: 'vl-ocr',
         title: VISION_ACTION_ITEMS['vl-ocr'].title,
-        label: VISION_ACTION_ITEMS['vl-ocr'].label,
+        iconSvg: VISION_ACTION_ITEMS['vl-ocr'].iconSvg,
         position: { after: 'vl-describe' },
         requiresSelection: true,
         includeImage: true,
@@ -178,7 +199,7 @@ class ScreenshotManager {
       {
         key: 'vl-summary',
         title: VISION_ACTION_ITEMS['vl-summary'].title,
-        label: VISION_ACTION_ITEMS['vl-summary'].label,
+        iconSvg: VISION_ACTION_ITEMS['vl-summary'].iconSvg,
         position: { after: 'vl-ocr' },
         requiresSelection: true,
         includeImage: true,
@@ -192,7 +213,7 @@ class ScreenshotManager {
       {
         key: 'vl-analyze',
         title: VISION_ACTION_ITEMS['vl-analyze'].title,
-        label: VISION_ACTION_ITEMS['vl-analyze'].label,
+        iconSvg: VISION_ACTION_ITEMS['vl-analyze'].iconSvg,
         position: { after: 'vl-summary' },
         requiresSelection: true,
         includeImage: true,
