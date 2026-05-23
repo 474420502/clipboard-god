@@ -7,14 +7,14 @@ Clipboard God is a cross-platform clipboard manager built with Electron and Reac
 
 > Note: The Qt/QML port under qt/ is temporarily deprecated and not maintained as a release target.
 
-## Release v1.2.0
+## Release v1.3.0
 
 Highlights:
 
-- Paste: Linux paste no longer depends on `robotjs`; the current release uses the more predictable `xdotool` path.
-- Paste: VS Code integrated terminals are less likely to receive a literal `^V` because IDE windows now prefer `Ctrl+Shift+V` ahead of `Ctrl+V`.
-- Tooltip: External preview tooltip behavior was restored and refined for larger text previews, original-size-first images, and less intrusive interaction.
-- List: Virtualized history rendering was corrected so the lower area no longer leaves stale blank space.
+- Vision LLM / VLM: Image-capable models now have a dedicated settings area, separate from named text LLM entries.
+- Vision actions: Screenshot and OCR windows now share configurable built-in and custom image actions, including structured extraction and recreate-web helpers.
+- Settings: OCR and vision controls are consolidated inside the detached settings workbench with a cleaner editing flow.
+- Vision results: Image analysis now opens a dedicated result-first page instead of reusing the generic chat transcript layout.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
@@ -27,8 +27,8 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list.
 - Persistent clipboard history for text, screenshots, and pasted images with quick preview.
 - Powerful search with keyboard-first navigation and pinning for favourites.
 - Multi-theme interface, tray integration, and localisation (English and Simplified Chinese).
-- Screenshot capture, download helpers, and quick paste support on Windows, macOS, and Linux.
-- Optional AI actions that send content to local or remote LLMs for summarising, rewriting, or translating.
+- Screenshot capture with customizable toolbar actions, OCR/VLM shortcuts, download helpers, and quick paste support on Windows, macOS, and Linux.
+- Optional named LLM and vision LLM actions that can route text or images to local or remote models for summarising, rewriting, translation, and visual analysis.
 
 ## OCR (Extract Text From Images)
 
@@ -57,8 +57,9 @@ Optional PaddleOCR-VL backend:
 All AI features are opt-in and configurable from Settings. Pick OpenAI-compatible endpoints or a local server such as Ollama.
 
 - **One-click prompts** for summarise, translate, rewrite, and custom actions with per-entry shortcuts.
+- **Vision LLM / VLM actions** for screenshot and OCR flows, with editable built-in prompts plus custom image actions.
 - **Inline image support** so clipboard snapshots or staged uploads are sent together with prompts.
-- **Configurable parameters** (model, API key, temperature, max tokens, context window, penalties).
+- **Configurable parameters** for both text and vision models (model, API key, temperature, max tokens, context window, penalties).
 - **Per-OS paste automation** with xdotool on Linux X11 plus native keystrokes on Windows and macOS (Wayland is not supported).
 
 Example: OpenAI compatible configuration
@@ -148,7 +149,7 @@ Per-user configuration is stored at:
 - Windows: `%APPDATA%\clipboard-god\config.json`
 - macOS: `~/Library/Application Support/clipboard-god/config.json`
 
-Key options include maximum history items, theme, language, global shortcut, and AI entries (prompt, trigger type, model credentials).
+Key options include maximum history items, theme, language, global shortcut, named AI entries, vision actions, and separate text/vision model credentials.
 
 ## Keyboard Shortcuts
 

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## v1.3.0 (2026-05-23)
+
+### Added
+
+- Vision LLM / VLM: Added a dedicated settings workspace for image-capable models, separate from named text-only LLM entries.
+- Vision actions: Added configurable built-in and custom screenshot/image prompts, including structured extraction and recreate-web helpers.
+- Screenshot toolbar: Added SVG-backed screenshot action buttons so OCR and vision flows can be launched directly from capture.
+
+### Changed
+
+- Settings: Expanded the detached settings workbench to cover OCR, vision model defaults, and collapsible vision-action editing.
+- Vision results: Replaced the generic transcript-first image workflow with a dedicated result-first vision page that better separates analysis and output.
+
+### Fixed
+
+- Build: Packaged releases now include shared `src/shared/**/*` runtime modules used by both Electron main and renderer surfaces.
+- Debian packaging: `build.sh` now preserves the tracked Debian dependency template instead of emitting a `.deb` with an incomplete runtime dependency list.
+
 ## v1.2.0 (2026-04-20)
 
 ### Changed

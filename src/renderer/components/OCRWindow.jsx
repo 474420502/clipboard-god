@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { recognizeWithPaddle } from '../ocrPaddle';
+import visionActionsModule from '../../shared/visionActions.js';
+
+const {
+    getDefaultVisionActions,
+    getVisionActionIconBody,
+    normalizeVisionActions
+} = visionActionsModule;
 
 const getSearchParam = (key) => {
     try {
@@ -75,6 +82,14 @@ const buildImageSrcFromPath = (imagePath) => {
 
 const serializeOcrSettings = (settings) => JSON.stringify(settings || {});
 
+const VisionActionIcon = ({ icon }) => (
+    <svg
+        viewBox="0 0 24 24"
+        role="img"
+        dangerouslySetInnerHTML={{ __html: getVisionActionIconBody(icon) }}
+    />
+);
+
 function OCRWindow() {
     const { t } = useTranslation();
     const initialPayload = useMemo(() => createInitialOcrPayload(), []);
@@ -119,6 +134,7 @@ function OCRWindow() {
         docUnwarp: false,
         textlineOrientation: true
     });
+    const [visionActions, setVisionActions] = useState(() => normalizeVisionActions(getDefaultVisionActions()));
 
     const imgRef = useRef(null);
     const canvasRef = useRef(null);
@@ -323,6 +339,7 @@ function OCRWindow() {
                 docUnwarp: false,
                 textlineOrientation: true
             };
+        const nextVisionActions = normalizeVisionActions(cfg.visionActions);
 
         setSelectedLanguages(nextLanguages);
         setDraftLanguages(nextLanguages);
@@ -334,6 +351,7 @@ function OCRWindow() {
         setDraftOcrModelLanguage(nextModelLanguage);
         setOcrPreprocessModels(nextPreprocessModels);
         setDraftOcrPreprocessModels(nextPreprocessModels);
+        setVisionActions(nextVisionActions);
     }, [initialPayload.languages]);
 
     useEffect(() => {
@@ -1290,70 +1308,21 @@ function OCRWindow() {
                         </span>
                         <span>{t('history.ocrRetry') || 'Retry'}</span>
                     </button>
-                    <button
-                        type="button"
-                        className="btn ocr-toolbar-btn ocr-toolbar-btn-icon-only"
-                        title={t('history.vlDescribe') || 'Parse image'}
-                        aria-label={t('history.vlDescribe') || 'Parse image'}
-                        onClick={() => handleVisionAction('vl-describe')}
-                        disabled={isBusy || !imageReady}
-                    >
-                        <span className="ocr-btn-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" role="img">
-                                <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z" />
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                        </span>
-                    </button>
-                    <button
-                        type="button"
-                        className="btn ocr-toolbar-btn ocr-toolbar-btn-icon-only"
-                        title={t('history.vlOcr') || 'Image to text'}
-                        aria-label={t('history.vlOcr') || 'Image to text'}
-                        onClick={() => handleVisionAction('vl-ocr')}
-                        disabled={isBusy || !imageReady}
-                    >
-                        <span className="ocr-btn-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" role="img">
-                                <path d="M6 5h12v14H6z" />
-                                <path d="M9 9h6" />
-                                <path d="M9 13h6" />
-                                <path d="M9 17h4" />
-                            </svg>
-                        </span>
-                    </button>
-                    <button
-                        type="button"
-                        className="btn ocr-toolbar-btn ocr-toolbar-btn-icon-only"
-                        title={t('history.vlSummary') || 'Summarize image'}
-                        aria-label={t('history.vlSummary') || 'Summarize image'}
-                        onClick={() => handleVisionAction('vl-summary')}
-                        disabled={isBusy || !imageReady}
-                    >
-                        <span className="ocr-btn-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" role="img">
-                                <path d="M5 7h14" />
-                                <path d="M5 12h14" />
-                                <path d="M5 17h8" />
-                            </svg>
-                        </span>
-                    </button>
-                    <button
-                        type="button"
-                        className="btn ocr-toolbar-btn ocr-toolbar-btn-icon-only"
-                        title={t('history.vlAnalyze') || 'Analyze'}
-                        aria-label={t('history.vlAnalyze') || 'Analyze'}
-                        onClick={() => handleVisionAction('vl-analyze')}
-                        disabled={isBusy || !imageReady}
-                    >
-                        <span className="ocr-btn-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" role="img">
-                                <path d="M6 18V10" />
-                                <path d="M12 18V6" />
-                                <path d="M18 18v-4" />
-                            </svg>
-                        </span>
-                    </button>
+                    {visionActions.map((action) => (
+                        <button
+                            key={action.id}
+                            type="button"
+                            className="btn ocr-toolbar-btn ocr-toolbar-btn-icon-only"
+                            title={action.label}
+                            aria-label={action.label}
+                            onClick={() => handleVisionAction(action.id)}
+                            disabled={isBusy || !imageReady}
+                        >
+                            <span className="ocr-btn-icon" aria-hidden="true">
+                                <VisionActionIcon icon={action.icon} />
+                            </span>
+                        </button>
+                    ))}
                     <button type="button" className="btn ocr-toolbar-btn" onClick={handleCopyAll} disabled={isBusy || !fullText.trim()}>
                         <span className="ocr-btn-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" role="img">

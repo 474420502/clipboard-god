@@ -2,6 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import i18next from '../i18n';
 import { useTranslation } from 'react-i18next';
 import ShortcutCapture from './ShortcutCapture';
+import visionActionsModule from '../../shared/visionActions.js';
+
+const {
+    createCustomVisionAction,
+    getDefaultVisionActions,
+    normalizeVisionActions,
+    toPersistedVisionActions
+} = visionActionsModule;
 
 const DEFAULT_OCR_TEXT_LAYOUT = {
     lineMergeThresholdRatio: 0.5,
@@ -37,10 +45,10 @@ const DEFAULT_VISION_LLM = {
     model: 'qwen3.6-vl:4b',
     baseurl: OLLAMA_DEFAULT_BASE_URL,
     apikey: '',
-    temperature: 0.3,
-    top_p: 0.92,
-    top_k: 40,
-    context_window: 32768,
+    temperature: 1,
+    top_p: 0.95,
+    top_k: 20,
+    context_window: 131072,
     max_tokens: 32768,
     min_p: 0.05,
     presence_penalty: 1.0
@@ -56,7 +64,8 @@ const DEFAULT_SETTINGS = {
     enableTooltips: true,
     launchOnStartup: false,
     locale: 'zh-CN',
-    visionLlm: { ...DEFAULT_VISION_LLM }
+    visionLlm: { ...DEFAULT_VISION_LLM },
+    visionActions: toPersistedVisionActions(getDefaultVisionActions())
 };
 
 const createDefaultLlmEntry = (triggerType = 'text') => ({
@@ -75,6 +84,12 @@ const createDefaultLlmEntry = (triggerType = 'text') => ({
     presence_penalty: 1.1,
     llmShortcut: ''
 });
+
+const summarizeVisionActionPrompt = (prompt = '') => {
+    const singleLine = String(prompt || '').replace(/\s+/g, ' ').trim();
+    if (!singleLine) return '';
+    return singleLine.length > 96 ? `${singleLine.slice(0, 96)}...` : singleLine;
+};
 
 const TAB_IDS = ['general', 'appearance', 'shortcuts', 'ocr', 'llm'];
 
@@ -367,6 +382,7 @@ const normalizeSettings = (cfg = {}, preferredSelectedLlm = '') => {
         launchOnStartup: typeof cfg.launchOnStartup !== 'undefined' ? !!cfg.launchOnStartup : DEFAULT_SETTINGS.launchOnStartup,
         locale: typeof cfg.locale === 'string' ? cfg.locale : DEFAULT_SETTINGS.locale,
         visionLlm: normalizeVisionLlm(cfg.visionLlm, cfg),
+        visionActions: normalizeVisionActions(cfg.visionActions),
         llms,
         _selectedLlm: pickSelectedLlm(llms, cfg._selectedLlm || preferredSelectedLlm),
         ocrLanguages: normalizeLanguages(cfg.ocrLanguages),
@@ -402,6 +418,7 @@ const buildPersistedSettings = (settings = {}) => ({
     launchOnStartup: !!settings.launchOnStartup,
     locale: typeof settings.locale === 'string' ? settings.locale : DEFAULT_SETTINGS.locale,
     visionLlm: normalizeVisionLlm(settings.visionLlm, settings),
+    visionActions: toPersistedVisionActions(settings.visionActions),
     vlVisionModel: undefined,
     vlVisionBaseUrl: undefined,
     llms: cloneLlmEntries(settings.llms),
@@ -507,6 +524,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     const [runtimeApplying, setRuntimeApplying] = useState(false);
     const [runtimeInfo, setRuntimeInfo] = useState(null);
     const [llmSection, setLlmSection] = useState('vision');
+    const [expandedVisionActions, setExpandedVisionActions] = useState({});
     const [ollamaCatalog, setOllamaCatalog] = useState({});
     const ollamaCatalogRef = useRef({});
 
@@ -643,6 +661,46 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
             }
         }));
     }, []);
+
+    const updateVisionActions = useCallback((updater) => {
+        setSettings((prev) => {
+            const current = normalizeVisionActions(prev.visionActions);
+            const next = typeof updater === 'function' ? updater(current) : updater;
+            return {
+                ...prev,
+                visionActions: normalizeVisionActions(next)
+            };
+        });
+    }, []);
+
+    const updateVisionAction = useCallback((actionId, patch) => {
+        updateVisionActions((prev) => prev.map((action) => (
+            action.id === actionId
+                ? { ...action, ...patch }
+                : action
+        )));
+    }, [updateVisionActions]);
+
+    const addCustomVisionAction = useCallback(() => {
+        const nextAction = createCustomVisionAction();
+        updateVisionActions((prev) => [...prev, nextAction]);
+        setExpandedVisionActions((prev) => ({
+            ...prev,
+            [nextAction.id]: true
+        }));
+    }, [updateVisionActions]);
+
+    const removeCustomVisionAction = useCallback((actionId) => {
+        updateVisionActions((prev) => prev.filter((action) => action.id !== actionId || action.builtin));
+        setExpandedVisionActions((prev) => {
+            if (!Object.prototype.hasOwnProperty.call(prev, actionId)) {
+                return prev;
+            }
+            const next = { ...prev };
+            delete next[actionId];
+            return next;
+        });
+    }, [updateVisionActions]);
 
     const loadOllamaModels = useCallback(async (baseUrl, { force = false } = {}) => {
         const normalizedBaseUrl = normalizeOllamaBaseUrl(baseUrl);
@@ -833,6 +891,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     const currentLlmName = settings._selectedLlm || '';
     const currentLlmEntry = currentLlmName && settings.llms ? settings.llms[currentLlmName] : null;
     const visionLlm = normalizeVisionLlm(settings.visionLlm, settings);
+    const visionActions = useMemo(() => normalizeVisionActions(settings.visionActions), [settings.visionActions]);
     const visionOllamaBaseUrl = normalizeOllamaBaseUrl(visionLlm.baseurl || DEFAULT_VISION_LLM.baseurl);
     const currentLlmOllamaBaseUrl = normalizeOllamaBaseUrl(currentLlmEntry?.baseurl || OLLAMA_DEFAULT_BASE_URL);
 
@@ -1540,13 +1599,108 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                 <input type="number" min="-2" max="2" step="0.1" value={visionLlm.presence_penalty} onChange={(e) => updateVisionLlm({ presence_penalty: parseFloat(e.target.value) || 0 })} />
                                             </label>
                                         </div>
-                                        <div className="settings-tool-selected-language-row" aria-label={t('settings.llm.visionBuiltinActions', 'Built-in vision actions')}>
-                                            <span className="settings-tool-selected-language-chip">{t('history.vlDescribe', '解析图片')}</span>
-                                            <span className="settings-tool-selected-language-chip">{t('history.vlOcr', '图片转文字')}</span>
-                                            <span className="settings-tool-selected-language-chip">{t('history.vlSummary', '总结图片')}</span>
-                                            <span className="settings-tool-selected-language-chip">{t('history.vlAnalyze', '智能分析')}</span>
+                                        <div className="settings-tool-section-header settings-tool-section-header-compact">
+                                            <div className="settings-tool-section-heading">
+                                                <div className="ocr-tool-section-title">{t('settings.llm.visionActionsSection', '视觉动作按钮')}</div>
+                                                <div className="settings-tool-section-helper">{t('settings.llm.visionActionsHelp', 'OCR 工具栏和截图工具栏会共用这里的动作列表。默认动作会直接提供常见视觉任务，自定义动作默认收起，点击后再展开编辑。')}</div>
+                                            </div>
+                                            <div className="settings-tool-inline-actions">
+                                                <button
+                                                    type="button"
+                                                    className="settings-tool-button settings-tool-button-secondary"
+                                                    onClick={addCustomVisionAction}
+                                                >
+                                                    {t('settings.llm.visionActionAdd', '新增自定义按钮')}
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="settings-tool-section-helper">{t('settings.llm.visionActionHint', '这些内置图片动作会直接用上面的视觉模型配置，不需要再单独给 OCR 页配置一套。')}</div>
+                                        <div className="settings-tool-selected-language-row" aria-label={t('settings.llm.visionBuiltinActions', 'Vision action buttons')}>
+                                            {visionActions.map((action) => (
+                                                <span key={action.id} className="settings-tool-selected-language-chip">{action.label}</span>
+                                            ))}
+                                        </div>
+                                        <div className="settings-tool-vision-action-list">
+                                            {visionActions.map((action) => {
+                                                const cardHeader = (
+                                                    <div className="settings-tool-vision-action-header">
+                                                        <div className="settings-tool-vision-action-meta">
+                                                            <strong className="settings-tool-vision-action-title">{action.label}</strong>
+                                                            <span className={`settings-tool-vision-action-kind${action.builtin ? ' is-builtin' : ''}`}>
+                                                                {action.builtin
+                                                                    ? t('settings.llm.visionActionBuiltin', '内置')
+                                                                    : t('settings.llm.visionActionCustom', '自定义')}
+                                                            </span>
+                                                        </div>
+                                                        {!action.builtin ? (
+                                                            <button
+                                                                type="button"
+                                                                className="settings-tool-button settings-tool-button-secondary"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    removeCustomVisionAction(action.id);
+                                                                }}
+                                                            >
+                                                                {t('settings.llm.visionActionRemove', '删除按钮')}
+                                                            </button>
+                                                        ) : null}
+                                                    </div>
+                                                );
+
+                                                const cardEditor = (
+                                                    <>
+                                                        <div className="ocr-tool-grid">
+                                                            <label className="ocr-tool-field">
+                                                                <span>{t('settings.llm.visionActionLabel', '按钮名称')}</span>
+                                                                <input
+                                                                    type="text"
+                                                                    value={action.label}
+                                                                    onChange={(e) => updateVisionAction(action.id, { label: e.target.value })}
+                                                                />
+                                                            </label>
+                                                        </div>
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.visionActionPrompt', '提示词')}</span>
+                                                            <textarea
+                                                                rows={6}
+                                                                value={action.prompt}
+                                                                onChange={(e) => updateVisionAction(action.id, { prompt: e.target.value })}
+                                                            />
+                                                        </label>
+                                                    </>
+                                                );
+
+                                                return (
+                                                    <details
+                                                        key={action.id}
+                                                        className="settings-tool-vision-action-card settings-tool-vision-action-card-collapsible"
+                                                        open={!!expandedVisionActions[action.id]}
+                                                        onToggle={(e) => {
+                                                            const isOpen = !!e.currentTarget.open;
+                                                            setExpandedVisionActions((prev) => {
+                                                                if (!!prev[action.id] === isOpen) {
+                                                                    return prev;
+                                                                }
+                                                                return {
+                                                                    ...prev,
+                                                                    [action.id]: isOpen
+                                                                };
+                                                            });
+                                                        }}
+                                                    >
+                                                        <summary className="settings-tool-vision-action-summary">
+                                                            {cardHeader}
+                                                            <div className="settings-tool-vision-action-preview">{summarizeVisionActionPrompt(action.prompt) || t('settings.llm.visionActionPrompt', '提示词')}</div>
+                                                            <span className="settings-tool-vision-action-caret" aria-hidden="true">▾</span>
+                                                        </summary>
+                                                        <div className="settings-tool-vision-action-body">
+                                                            {cardEditor}
+                                                        </div>
+                                                    </details>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="settings-tool-section-helper">{t('settings.llm.visionActionHint', '这些动作会直接决定 OCR 窗口和截图工具栏里的视觉按钮。现在所有动作默认收起；只有刚新增的自定义动作会自动展开，方便立刻编辑。')}</div>
                                     </section>
                                 )}
 

@@ -95,17 +95,7 @@ if [ "${CONTINUE_BUILD:-0}" = "1" ]; then
 				if [ ! -f "$STAGING_PATH/DEBIAN/control" ]; then
 					echo "Staging is missing DEBIAN/control — creating a minimal control file"
 					mkdir -p "$STAGING_PATH/DEBIAN"
-					cat > "$STAGING_PATH/DEBIAN/control" <<EOF
-Package: $PKG_NAME
-	Version: ${pkg_ver:-$CURRENT_VERSION}
-Section: utils
-Priority: optional
-Architecture: ${pkg_arch:-amd64}
-Depends: libc6 (>= 2.17)
-Maintainer: Clipboard God Packager <packager@example.com>
-Description: A small clipboard manager.
-
-EOF
+					write_debian_control "$STAGING_PATH/DEBIAN/control" "${pkg_ver:-$CURRENT_VERSION}" "${pkg_arch:-amd64}"
 				fi
 				# Copy any maintainer scripts from deb/DEBIAN into the staging DEBIAN
 				if [ -d deb/DEBIAN ]; then
@@ -135,6 +125,62 @@ prune_old_staging_dirs() {
 		rm -rf -- "${stale_dirs[@]}"
 	fi
 	shopt -u nullglob
+}
+
+write_debian_control() {
+	local target="$1"
+	local version="$2"
+	local arch="$3"
+
+	if [ -f deb/DEBIAN/control ]; then
+		awk -v pkg="$PKG_NAME" -v version="$version" -v arch="$arch" '
+			BEGIN {
+				seenPkg = 0
+				seenVersion = 0
+				seenArch = 0
+			}
+			/^#/ { next }
+			/^Package:/ {
+				print "Package: " pkg
+				seenPkg = 1
+				next
+			}
+			/^Version:/ {
+				print "Version: " version
+				seenVersion = 1
+				next
+			}
+			/^Architecture:/ {
+				print "Architecture: " arch
+				seenArch = 1
+				next
+			}
+			{ print }
+			END {
+				if (!seenPkg) {
+					print "Package: " pkg
+				}
+				if (!seenVersion) {
+					print "Version: " version
+				}
+				if (!seenArch) {
+					print "Architecture: " arch
+				}
+			}
+		' deb/DEBIAN/control > "$target"
+	else
+		cat > "$target" <<EOF
+Package: $PKG_NAME
+Version: $version
+Section: utils
+Priority: optional
+Architecture: $arch
+Depends: libc6 (>= 2.17)
+Maintainer: Clipboard God Packager <packager@example.com>
+Description: A powerful clipboard manager built with Electron and React
+ A small clipboard manager.
+EOF
+	fi
 }
 
 prune_old_staging_dirs
@@ -284,17 +330,7 @@ EOF
 	done
 
 	# Build DEBIAN/control
-	cat > "$STAGING/DEBIAN/control" <<EOF
-Package: $PKG_NAME
-Version: $VERSION
-Section: utils
-Priority: optional
-Architecture: $ARCH
-Depends: libc6 (>= 2.17)
-Maintainer: Clipboard God Packager <packager@example.com>
-Description: A powerful clipboard manager built with Electron and React
- A small clipboard manager.
-EOF
+	write_debian_control "$STAGING/DEBIAN/control" "$VERSION" "$ARCH"
 
 	# Copy maintainer scripts if exist
 	if [ -d deb/DEBIAN ]; then

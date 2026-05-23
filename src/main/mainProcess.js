@@ -11,6 +11,10 @@ const Config = require('./config');
 const ocrService = require('./ocrService');
 const resourceManager = require('./core/resourceManager');
 const { extractQRCodes } = require('./qrcodeService');
+const {
+  getDefaultVisionActions,
+  normalizeVisionActions
+} = require('../shared/visionActions.cjs');
 
 // 安全的console包装器，防止EPIPE错误
 // Use DEBUG flag to control verbose logging. Default false in production.
@@ -80,63 +84,12 @@ const DEFAULT_VISION_LLM_CONFIG = {
   model: 'qwen3.6-vl:4b',
   baseurl: 'http://localhost:11434',
   apikey: '',
-  temperature: 0.3,
-  top_p: 0.92,
-  top_k: 40,
-  context_window: 32768,
+  temperature: 1,
+  top_p: 0.95,
+  top_k: 20,
+  context_window: 131072,
   max_tokens: 32768,
   presence_penalty: 1.0
-};
-
-const VISION_ACTION_PRESETS = {
-  'vl-describe': {
-    windowName: '解析图片',
-    buildPrompt: () => [
-      '请解析这张图片的主要内容。',
-      '输出结构：',
-      '1. 这是什么画面、页面或场景。',
-      '2. 3 到 5 条最重要的信息。',
-      '3. 如果图中有明显按钮、状态、错误、数字或关键文字，请单独列出。',
-      '4. 如果适合进一步追问，也给出 2 到 3 个建议方向。',
-      '请直接输出结果，不要写多余寒暄。'
-    ].join('\n')
-  },
-  'vl-ocr': {
-    windowName: '图片转文字',
-    buildPrompt: ({ languageHint }) => [
-      '你是一名严格的视觉 OCR 与版面理解助手。',
-      languageHint ? `当前图片里优先留意这些语言：${languageHint}。` : '如果图片里有多语言文本，请按原语言原样保留。',
-      '请完整识别这张图片里所有可见文字，不要做摘要，不要解释。',
-      '要求：',
-      '1. 保留原有段落、列表、表格和标题层级。',
-      '2. 表格尽量转成 Markdown 表格。',
-      '3. 看不清的少量内容用 [unclear] 标记。',
-      '4. 只输出识别结果本身，不要添加前言或结尾说明。'
-    ].filter(Boolean).join('\n')
-  },
-  'vl-summary': {
-    windowName: '截图总结',
-    buildPrompt: () => [
-      '请总结这张截图/图片的主要内容。',
-      '输出格式：',
-      '1. 这是什么场景或页面。',
-      '2. 3 到 5 条关键信息。',
-      '3. 如果画面里有重要文字、数字、状态或告警，请单独列出。',
-      '4. 用中文输出，简洁但信息完整。'
-    ].join('\n')
-  },
-  'vl-analyze': {
-    windowName: '智能分析',
-    buildPrompt: () => [
-      '请把这张图片当作当前用户正在处理的截图来做智能解析。',
-      '输出结构：',
-      '1. 画面主体：这是什么内容。',
-      '2. 关键信息：重要文字、数字、状态、按钮或异常。',
-      '3. 用户意图：用户大概率想从这张图里完成什么。',
-      '4. 下一步建议：给出 2 到 4 条最有价值的操作建议。',
-      '如果这是软件界面、文档、聊天记录或网页，请尽量结合上下文理解，而不是只做表面描述。'
-    ].join('\n')
-  }
 };
 
 const AI_WINDOW_PAGES = new Set(['chatPage.html', 'visionPage.html']);
@@ -889,6 +842,20 @@ class MainProcess {
     };
   }
 
+  getVisionActions() {
+    const config = Config.getAll() || {};
+    const rawActions = Array.isArray(config.visionActions) && config.visionActions.length
+      ? config.visionActions
+      : getDefaultVisionActions();
+    return normalizeVisionActions(rawActions);
+  }
+
+  getVisionActionById(actionId = '') {
+    const normalizedId = String(actionId || '').trim().toLowerCase();
+    const actions = this.getVisionActions();
+    return actions.find((item) => item.id === normalizedId) || actions[0] || getDefaultVisionActions()[0];
+  }
+
   getVisionLanguageHint() {
     const languages = this.getOcrLanguages();
     if (!Array.isArray(languages) || languages.length === 0) {
@@ -961,18 +928,17 @@ class MainProcess {
   }
 
   openVisionChatWindow(payload = {}) {
-    const actionId = String(payload && payload.actionId ? payload.actionId : 'vl-describe').trim().toLowerCase();
-    const preset = VISION_ACTION_PRESETS[actionId] || VISION_ACTION_PRESETS['vl-describe'];
+    const requestedActionId = String(payload && payload.actionId ? payload.actionId : 'vl-describe').trim().toLowerCase();
+    const action = this.getVisionActionById(requestedActionId);
     const imagePayload = this.resolveVisionImagePayload(payload);
     const assistantConfig = this.getVisionAssistantConfig();
     const customPrompt = typeof payload.prompt === 'string' ? String(payload.prompt).trim() : '';
-    const prompt = customPrompt || preset.buildPrompt({
-      languageHint: this.getVisionLanguageHint()
-    });
+    const prompt = customPrompt
+      || String(action.prompt || '').replace(/\{\{languageHint\}\}/g, this.getVisionLanguageHint());
 
-    return this.openLlmChatWindow(preset.windowName, {
+    return this.openLlmChatWindow(action.label, {
       page: 'visionPage.html',
-      windowTitle: `Clipboard God - ${preset.windowName}`,
+      windowTitle: `Clipboard God - ${action.label}`,
       windowOptions: {
         width: 1240,
         height: 820,
@@ -980,11 +946,11 @@ class MainProcess {
         minHeight: 680,
         backgroundColor: '#0f1722'
       },
-      actionId,
+      actionId: action.id,
       ui: {
         mode: 'vision-result',
         allowFollowUp: true,
-        actionLabel: preset.windowName
+        actionLabel: action.label
       },
       apitype: assistantConfig.apitype,
       model: assistantConfig.model,
@@ -1336,6 +1302,7 @@ class MainProcess {
     if (!this.screenshotManager) {
       this.screenshotManager = new ScreenshotManager(this.mainWindow, this.clipboardManager, {
         getOcrLanguages: () => this.getOcrLanguages(),
+        getVisionActions: () => this.getVisionActions(),
         openOcrWindow: async (buffer) => {
           return this.openOcrWindow({
             imageBuffer: buffer,

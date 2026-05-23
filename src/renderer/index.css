@@ -2686,6 +2686,106 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
     font-weight: 700;
 }
 
+.settings-tool-vision-action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-tool-vision-action-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(37, 99, 235, 0.12);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.settings-tool-vision-action-card-collapsible {
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.settings-tool-vision-action-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    list-style: none;
+    cursor: pointer;
+}
+
+.settings-tool-vision-action-summary::-webkit-details-marker {
+    display: none;
+}
+
+.settings-tool-vision-action-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 16px 16px;
+    border-top: 1px solid rgba(37, 99, 235, 0.1);
+}
+
+.settings-tool-vision-action-preview {
+    color: var(--settings-tool-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.settings-tool-vision-action-caret {
+    align-self: flex-end;
+    color: var(--settings-tool-muted);
+    font-size: 14px;
+    line-height: 1;
+    transition: transform 0.18s ease;
+}
+
+.settings-tool-vision-action-card-collapsible[open] .settings-tool-vision-action-caret {
+    transform: rotate(180deg);
+}
+
+.settings-tool-vision-action-header,
+.settings-tool-vision-action-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.settings-tool-vision-action-meta {
+    justify-content: flex-start;
+}
+
+.settings-tool-vision-action-title {
+    color: var(--settings-tool-ink);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.settings-tool-vision-action-kind {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    color: var(--settings-tool-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.settings-tool-vision-action-kind.is-builtin {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--settings-tool-accent-strong);
+}
+
 .settings-tool-window .ocr-tool-checkbox-row {
     padding: 14px 16px;
     border-radius: 18px;

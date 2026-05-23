@@ -35,6 +35,24 @@
       --accent-strong: rgba(127, 216, 136, 0.3);
     }
 
+    body[data-action="vl-next-step"] {
+      --accent: #7eb9ff;
+      --accent-soft: rgba(126, 185, 255, 0.16);
+      --accent-strong: rgba(126, 185, 255, 0.28);
+    }
+
+    body[data-action="vl-structured-data"] {
+      --accent: #f3b36a;
+      --accent-soft: rgba(243, 179, 106, 0.16);
+      --accent-strong: rgba(243, 179, 106, 0.28);
+    }
+
+    body[data-action="vl-recreate-web"] {
+      --accent: #fb7185;
+      --accent-soft: rgba(251, 113, 133, 0.16);
+      --accent-strong: rgba(251, 113, 133, 0.28);
+    }
+
     body[data-action="vl-summary"] {
       --accent: #f3b36a;
       --accent-soft: rgba(243, 179, 106, 0.16);
@@ -80,25 +98,37 @@
       opacity: 0.54;
     }
 
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     .vision-shell {
       position: relative;
       z-index: 1;
       display: flex;
       flex-direction: column;
       height: 100%;
-      gap: 12px;
-      padding: 12px;
+      gap: 5px;
+      padding: 6px;
     }
 
     .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      min-height: 56px;
-      padding: 10px 16px;
+      gap: 8px;
+      min-height: 42px;
+      padding: 5px 10px;
       border: 1px solid var(--panel-border);
-      border-radius: 18px;
+      border-radius: 14px;
       background: linear-gradient(160deg, rgba(14, 22, 33, 0.94), rgba(11, 18, 27, 0.9));
       box-shadow: var(--shadow);
       backdrop-filter: blur(18px);
@@ -107,7 +137,7 @@
     .topbar-main {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       min-width: 0;
     }
 
@@ -115,14 +145,14 @@
     .meta-pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      min-height: 34px;
-      padding: 0 12px;
+      gap: 5px;
+      min-height: 26px;
+      padding: 0 8px;
       border-radius: 999px;
       border: 1px solid rgba(255, 255, 255, 0.06);
       background: rgba(255, 255, 255, 0.045);
       color: var(--text);
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.02em;
       white-space: nowrap;
@@ -137,7 +167,7 @@
 
     .page-title {
       margin: 0;
-      font-size: clamp(18px, 2.5vw, 24px);
+      font-size: clamp(16px, 2vw, 20px);
       line-height: 1.1;
       font-weight: 700;
       letter-spacing: -0.02em;
@@ -158,8 +188,8 @@
       align-items: center;
       justify-content: flex-end;
       flex-wrap: wrap;
-      gap: 8px;
-      max-width: 50%;
+      gap: 5px;
+      max-width: 54%;
     }
 
     .status-pill.busy {
@@ -176,8 +206,8 @@
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(340px, 0.82fr) minmax(460px, 1.18fr);
-      gap: 12px;
+      grid-template-columns: minmax(250px, 0.58fr) minmax(560px, 1.42fr);
+      gap: 6px;
       min-height: 0;
       flex: 1;
     }
@@ -192,33 +222,33 @@
     }
 
     .panel-label {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--accent);
     }
 
     .panel-caption {
-      margin: 4px 0 0;
+      margin: 2px 0 0;
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
+      font-size: 11px;
+      line-height: 1.4;
     }
 
     .stage-panel {
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      padding: 14px;
+      gap: 6px;
+      padding: 8px;
       overflow: hidden;
     }
 
     .stage-viewport {
       position: relative;
       flex: 1;
-      min-height: 260px;
+      min-height: 240px;
       border: 1px solid rgba(255, 255, 255, 0.05);
       border-radius: 20px;
       background:
@@ -232,13 +262,13 @@
 
     .stage-controls {
       position: absolute;
-      top: 12px;
-      right: 12px;
+      top: 8px;
+      right: 8px;
       z-index: 2;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px;
+      gap: 5px;
+      padding: 5px;
       border-radius: 999px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       background: rgba(8, 12, 18, 0.72);
@@ -255,15 +285,47 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      min-height: 34px;
+      min-height: 36px;
       padding: 0 12px;
       border-radius: 999px;
       border: 1px solid rgba(255, 255, 255, 0.06);
       background: rgba(255, 255, 255, 0.045);
       color: var(--text);
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 650;
       transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+    }
+
+    .btn-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      color: currentColor;
+    }
+
+    .btn-icon svg,
+    .summary-caret svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .summary-caret {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 12px;
+      height: 12px;
+      opacity: 0.82;
+      transition: transform 0.18s ease;
     }
 
     .stage-btn:hover:not(:disabled),
@@ -282,6 +344,20 @@
       padding: 0 10px;
     }
 
+    .icon-btn {
+      width: 44px;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      border-radius: 14px;
+      color: var(--muted);
+    }
+
+    .icon-btn .btn-icon {
+      width: 16px;
+      height: 16px;
+    }
+
     .action-btn.primary,
     .send-btn {
       border-color: var(--accent-strong);
@@ -290,16 +366,46 @@
       font-weight: 700;
     }
 
+    .send-btn {
+      width: 46px;
+      min-width: 46px;
+      min-height: 46px;
+      padding: 0;
+      border-radius: 16px;
+      justify-self: end;
+    }
+
+    .send-btn .btn-icon {
+      width: 17px;
+      height: 17px;
+      transform: translateX(0.5px) translateY(-0.5px);
+    }
+
     .brief-menu {
       position: relative;
     }
 
     .brief-menu > summary {
       list-style: none;
+      padding: 0 14px;
+      border-color: var(--accent-strong);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), var(--accent-soft));
+      color: var(--accent);
+      font-weight: 700;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     }
 
     .brief-menu > summary::-webkit-details-marker {
       display: none;
+    }
+
+    .brief-menu[open] > summary {
+      background: linear-gradient(135deg, var(--accent-soft), rgba(255, 255, 255, 0.06));
+      border-color: var(--accent);
+    }
+
+    .brief-menu[open] .summary-caret {
+      transform: rotate(180deg);
     }
 
     .brief-popover {
@@ -332,7 +438,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 22px;
+      padding: 14px;
     }
 
     .stage-image {
@@ -423,8 +529,8 @@
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 12px;
-      padding: 14px 16px;
+      gap: 10px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--line);
       background: rgba(10, 16, 24, 0.48);
     }
@@ -436,22 +542,23 @@
     .analysis-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      flex-wrap: wrap;
     }
 
     .result-scroll {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      padding: 22px 24px 0;
+      padding: 16px 18px 0;
     }
 
     .result-placeholder {
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 16px;
-      min-height: 220px;
+      gap: 12px;
+      min-height: 180px;
     }
 
     .placeholder-title {
@@ -562,8 +669,9 @@
     }
 
     .markdown-body strong {
-      color: #ffffff;
+      color: #d9ecff;
       font-weight: 700;
+      text-shadow: 0 0 16px rgba(126, 185, 255, 0.08);
     }
 
     .markdown-body code {
@@ -592,6 +700,75 @@
       font-size: 0.92em;
     }
 
+    .code-block {
+      margin: 0 0 1.05em;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 18px;
+      background: rgba(5, 10, 16, 0.9);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    }
+
+    .code-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px 0;
+    }
+
+    .code-lang {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .code-copy-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+
+    .code-copy-btn:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    .code-copy-btn.copied {
+      border-color: var(--accent-strong);
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .markdown-body .code-block pre {
+      margin: 0;
+      padding: 10px 16px 16px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
     .markdown-body blockquote {
       padding: 12px 14px;
       border-left: 3px solid var(--accent);
@@ -606,24 +783,45 @@
     }
 
     .result-text {
-      padding-bottom: 18px;
+      padding-bottom: 12px;
+    }
+
+    .stream-cursor {
+      display: inline-block;
+      min-width: 0.62ch;
+      margin-left: 0.08em;
+      color: var(--accent);
+      font-weight: 700;
+      animation: blink 1s steps(1, end) infinite;
+    }
+
+    @keyframes blink {
+      0%,
+      49% {
+        opacity: 1;
+      }
+
+      50%,
+      100% {
+        opacity: 0.2;
+      }
     }
 
     .thread-section {
-      margin-top: 22px;
-      padding-top: 18px;
+      margin-top: 16px;
+      padding-top: 14px;
       border-top: 1px solid var(--line);
     }
 
     .thread-head {
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .thread-list {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      padding-bottom: 18px;
+      gap: 10px;
+      padding-bottom: 12px;
     }
 
     .thread-turn {
@@ -698,7 +896,7 @@
       border-top: 1px solid var(--line);
       background: rgba(10, 16, 24, 0.56);
       backdrop-filter: blur(16px);
-      padding: 12px 16px 14px;
+      padding: 8px 12px 10px;
     }
 
     .followup-panel.composer-disabled {
@@ -709,20 +907,27 @@
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: end;
-      gap: 10px;
+      gap: 8px;
     }
 
     .followup-input {
-      min-height: 54px;
+      min-height: 48px;
       max-height: 180px;
       resize: none;
+      overflow-y: hidden;
+      scrollbar-width: none;
       border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       background: rgba(255, 255, 255, 0.04);
       color: var(--text);
-      padding: 14px 16px;
-      line-height: 1.58;
+      padding: 11px 14px;
+      line-height: 1.5;
       outline: none;
+    }
+
+    .followup-input::-webkit-scrollbar {
+      width: 0;
+      height: 0;
     }
 
     .followup-input:focus {
@@ -770,11 +975,13 @@
 
     @media (max-width: 760px) {
       .vision-shell {
-        padding: 10px;
+        gap: 4px;
+        padding: 4px;
       }
 
       .topbar {
-        padding: 10px 12px;
+        min-height: 40px;
+        padding: 5px 8px;
       }
 
       .topbar-main {
@@ -803,11 +1010,12 @@
       }
 
       .result-scroll {
-        padding: 18px 18px 0;
+        padding: 14px 14px 0;
       }
 
       .followup-form {
-        grid-template-columns: 1fr;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 8px;
       }
 
       .brief-popover {
@@ -865,13 +1073,44 @@
           </div>
           <div class="analysis-actions">
             <details class="brief-menu" id="brief-card">
-              <summary data-i18n="visionWindow.briefTitle">Task Brief</summary>
+              <summary>
+                <span class="btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16">
+                    <path d="M5 2.75h4.5L13 6.25v6.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z" />
+                    <path d="M9.5 2.75v3.5H13" />
+                    <path d="M6 9h4" />
+                    <path d="M6 11h3.5" />
+                  </svg>
+                </span>
+                <span class="btn-label" data-i18n="visionWindow.briefTitle">Task Brief</span>
+                <span class="summary-caret" aria-hidden="true">
+                  <svg viewBox="0 0 16 16">
+                    <path d="m4 6 4 4 4-4" />
+                  </svg>
+                </span>
+              </summary>
               <div class="brief-popover">
                 <div class="brief-body" id="brief-body"></div>
               </div>
             </details>
-            <button type="button" class="action-btn" id="copy-result-btn" data-i18n="visionWindow.copyResult">Copy Result</button>
-            <button type="button" class="action-btn primary" id="retry-btn" data-i18n="visionWindow.rerun">Re-run</button>
+            <button type="button" class="action-btn" id="copy-result-btn">
+              <span class="btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <rect x="5.25" y="3.25" width="7.5" height="9.5" rx="1.6" />
+                  <path d="M3.25 10.75V5.1A1.85 1.85 0 0 1 5.1 3.25h4.65" />
+                </svg>
+              </span>
+              <span class="btn-label" data-i18n="visionWindow.copyResult">Copy Result</span>
+            </button>
+            <button type="button" class="action-btn primary" id="retry-btn">
+              <span class="btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <path d="M12.25 5.75A4.75 4.75 0 1 0 13 8.25" />
+                  <path d="M12.25 2.75v3H9.25" />
+                </svg>
+              </span>
+              <span class="btn-label" data-i18n="visionWindow.rerun">Re-run</span>
+            </button>
           </div>
         </header>
 
@@ -902,9 +1141,23 @@
           <div class="preview-strip hidden" id="preview-strip"></div>
           <form class="followup-form" id="followup-form">
             <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
-            <button type="button" class="icon-btn" id="attach-btn" data-i18n-title="visionWindow.attachImage" data-i18n-aria-label="visionWindow.attachImage" title="Attach image" aria-label="Attach image">+</button>
+            <button type="button" class="icon-btn" id="attach-btn" data-i18n-title="visionWindow.attachImage" data-i18n-aria-label="visionWindow.attachImage" title="Attach image" aria-label="Attach image">
+              <span class="btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <path d="M5.75 8.75 9.9 4.6a2 2 0 1 1 2.82 2.82l-5.31 5.31a3 3 0 1 1-4.24-4.24l5.3-5.3" />
+                </svg>
+              </span>
+              <span class="sr-only" data-i18n="visionWindow.attachImage">Attach image</span>
+            </button>
             <textarea class="followup-input" id="followup-input" rows="1" data-i18n-placeholder="visionWindow.followupPlaceholder" placeholder="Ask a focused follow-up..."></textarea>
-            <button type="submit" class="send-btn" id="send-btn" data-i18n="visionWindow.followupSend">Send Follow-up</button>
+            <button type="submit" class="send-btn" id="send-btn" data-i18n-title="visionWindow.followupSend" data-i18n-aria-label="visionWindow.followupSend" title="Send Follow-up" aria-label="Send Follow-up">
+              <span class="btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <path d="M2.75 13.25 13.25 8 2.75 2.75l2 4.25L9.5 8l-4.75 1 .2.4 1.8 3.85Z" />
+                </svg>
+              </span>
+              <span class="sr-only" data-i18n="visionWindow.followupSend">Send Follow-up</span>
+            </button>
           </form>
         </section>
       </section>
@@ -926,10 +1179,10 @@
       initialPrompt: '',
       initialImages: [],
       llmParams: {
-        temperature: 0.7,
+        temperature: 1,
         top_p: 0.95,
-        top_k: 0.9,
-        context_window: 32768,
+        top_k: 20,
+        context_window: 131072,
         max_tokens: 32768,
         presence_penalty: 1.0
       },
@@ -939,6 +1192,9 @@
     const ACTION_LABEL_KEYS = {
       'vl-describe': 'visionWindow.actions.describe',
       'vl-ocr': 'visionWindow.actions.ocr',
+      'vl-next-step': 'visionWindow.actions.solve',
+      'vl-structured-data': 'visionWindow.actions.structured',
+      'vl-recreate-web': 'visionWindow.actions.recreateWeb',
       'vl-summary': 'visionWindow.actions.summary',
       'vl-analyze': 'visionWindow.actions.analyze'
     };
@@ -946,6 +1202,9 @@
     const ACTION_LABEL_FALLBACKS = {
       'vl-describe': 'Analyze Image',
       'vl-ocr': 'Image to Text',
+      'vl-next-step': 'Solve from Image',
+      'vl-structured-data': 'Structured Extraction',
+      'vl-recreate-web': 'Recreate Web Component',
       'vl-summary': 'Screenshot Summary',
       'vl-analyze': 'Smart Analysis'
     };
@@ -1070,7 +1329,11 @@
       const flushCode = () => {
         if (codeFence === null) return;
         const langAttr = codeFence ? ` data-lang="${escapeHtml(codeFence)}"` : '';
-        html.push(`<pre class="md-code"><code${langAttr}>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        const codeLabel = escapeHtml(codeFence || translate('visionWindow.codeBlock', 'Code'));
+        const copyLabel = escapeHtml(translate('visionWindow.copyCode', 'Copy code'));
+        html.push(
+          `<div class="code-block"><div class="code-toolbar"><span class="code-lang">${codeLabel}</span><button type="button" class="code-copy-btn" data-action="copy-code" title="${copyLabel}" aria-label="${copyLabel}">${copyLabel}</button></div><pre class="md-code"><code${langAttr}>${escapeHtml(codeLines.join('\n'))}</code></pre></div>`
+        );
         codeFence = null;
         codeLines = [];
       };
@@ -1163,8 +1426,15 @@
       return html.join('');
     }
 
-    function renderMarkdownInto(element, text) {
+    function renderMarkdownInto(element, text, options = {}) {
       element.innerHTML = renderMarkdown(text || '');
+      if (options.withCursor) {
+        const cursor = document.createElement('span');
+        cursor.className = 'stream-cursor';
+        cursor.textContent = '▊';
+        cursor.setAttribute('aria-hidden', 'true');
+        element.appendChild(cursor);
+      }
     }
 
     function extractMimeTypeFromDataUrl(dataUrl) {
@@ -1286,8 +1556,11 @@
     }
 
     function autoResizeTextarea() {
+      const maxHeight = 180;
       followupInputEl.style.height = 'auto';
-      followupInputEl.style.height = `${Math.min(followupInputEl.scrollHeight, 180)}px`;
+      const nextHeight = Math.min(Math.max(followupInputEl.scrollHeight, 54), maxHeight);
+      followupInputEl.style.height = `${nextHeight}px`;
+      followupInputEl.style.overflowY = followupInputEl.scrollHeight > maxHeight ? 'auto' : 'hidden';
     }
 
     function renderStageImage() {
@@ -1317,8 +1590,8 @@
 
     function fitStageImage() {
       if (!stageImageEl.naturalWidth || !stageImageEl.naturalHeight) return;
-      const availableWidth = Math.max(stageViewportEl.clientWidth - 44, 120);
-      const availableHeight = Math.max(stageViewportEl.clientHeight - 44, 120);
+      const availableWidth = Math.max(stageViewportEl.clientWidth - 30, 120);
+      const availableHeight = Math.max(stageViewportEl.clientHeight - 30, 120);
       const nextScale = Math.min(availableWidth / stageImageEl.naturalWidth, availableHeight / stageImageEl.naturalHeight, 1);
       state.imageScale = Number.isFinite(nextScale) && nextScale > 0 ? nextScale : 1;
       state.fitToViewport = true;
@@ -1525,6 +1798,39 @@
         setStatus(translate('visionWindow.copySuccess', 'Result copied.'));
       } catch (_error) {
         setStatus(`${translate('error.prefix', 'Error: ')}${translate('visionWindow.copyFailed', 'Copy failed.')}`, true);
+      }
+    }
+
+    async function copyCodeBlock(button) {
+      const codeEl = button && typeof button.closest === 'function'
+        ? button.closest('.code-block')?.querySelector('code')
+        : null;
+      const codeText = codeEl ? String(codeEl.textContent || '') : '';
+      if (!codeText.trim()) return;
+
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(codeText);
+        } else {
+          fallbackCopyText(codeText);
+        }
+        button.classList.add('copied');
+        window.clearTimeout(button.__copiedTimer);
+        button.__copiedTimer = window.setTimeout(() => {
+          button.classList.remove('copied');
+        }, 1200);
+        setStatus(translate('visionWindow.copyCodeSuccess', 'Code copied.'));
+      } catch (_error) {
+        setStatus(`${translate('error.prefix', 'Error: ')}${translate('visionWindow.copyCodeFailed', 'Code copy failed.')}`, true);
+      }
+    }
+
+    function handleResultScrollClick(event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') return;
+      const copyButton = target.closest('[data-action="copy-code"]');
+      if (copyButton) {
+        copyCodeBlock(copyButton);
       }
     }
 
@@ -1841,7 +2147,7 @@
           resultTextEl.classList.remove('hidden');
           placeholderEl.classList.add('hidden');
           resultCardEl.classList.add('generating');
-          renderMarkdownInto(resultTextEl, fullText);
+          renderMarkdownInto(resultTextEl, fullText, { withCursor: true });
         },
         onSuccess: (fullText) => {
           showPrimaryResult(fullText || translate('visionWindow.emptyResult', 'The model returned an empty response.'));
@@ -1885,7 +2191,7 @@
         rollbackUserOnError: true,
         onChunk: (_chunk, fullText) => {
           assistantEntry.entry.classList.remove('error');
-          renderMarkdownInto(assistantEntry.bodyEl, fullText);
+          renderMarkdownInto(assistantEntry.bodyEl, fullText, { withCursor: true });
           assistantEntry.entry.scrollIntoView({ block: 'end', behavior: 'smooth' });
         },
         onSuccess: (fullText) => {
@@ -1938,6 +2244,7 @@
       imageInputEl.addEventListener('change', handleImageSelection);
       copyResultBtn.addEventListener('click', copyPrimaryResult);
       retryBtn.addEventListener('click', runPrimaryAnalysis);
+      resultScrollEl.addEventListener('click', handleResultScrollClick);
       zoomInBtn.addEventListener('click', () => zoomBy(0.2));
       zoomOutBtn.addEventListener('click', () => zoomBy(-0.2));
       fitBtn.addEventListener('click', fitStageImage);

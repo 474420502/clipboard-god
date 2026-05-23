@@ -1,6 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const {
+  getDefaultVisionActions,
+  toPersistedVisionActions
+} = require('../shared/visionActions.cjs');
 
 const DEFAULT_OCR_VL_CPU_THREADS = Math.max(
   1,
@@ -69,14 +73,15 @@ const DEFAULT_CONFIG = {
     model: 'qwen3.6-vl:4b',
     baseurl: 'http://localhost:11434',
     apikey: '',
-    temperature: 0.3,
-    top_p: 0.92,
-    top_k: 40,
-    context_window: 32768,
+    temperature: 1,
+    top_p: 0.95,
+    top_k: 20,
+    context_window: 131072,
     max_tokens: 32768,
     min_p: 0.05,
     presence_penalty: 1.0
   },
+  visionActions: toPersistedVisionActions(getDefaultVisionActions()),
   ocrVlCliCommand: 'paddleocr',
   ocrVlDevice: '',
   ocrVlCpuThreads: DEFAULT_OCR_VL_CPU_THREADS,

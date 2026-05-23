@@ -1,5 +1,10 @@
 const fs = require('fs');
 const { clipboard, nativeImage, desktopCapturer } = require('electron');
+const {
+  getDefaultVisionActions,
+  getVisionActionIconBody,
+  normalizeVisionActions
+} = require('../shared/visionActions.cjs');
 let Screenshots;
 try {
   const screenshotsModule = require('@474420502/electron-screenshots');
@@ -34,45 +39,6 @@ const buildScreenshotsSvgIcon = (body) => `
 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 ${body}
 </svg>`.trim();
-
-const VISION_ACTION_ITEMS = {
-  'vl-describe': {
-    title: '解析图片 / Parse image',
-    iconSvg: buildScreenshotsSvgIcon(`
-<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z" />
-<circle cx="12" cy="12" r="3" />
-`),
-    fileNamePrefix: 'vl-describe'
-  },
-  'vl-ocr': {
-    title: '图片转文字 / Image to text',
-    iconSvg: buildScreenshotsSvgIcon(`
-<path d="M6 5h12v14H6z" />
-<path d="M9 9h6" />
-<path d="M9 13h6" />
-<path d="M9 17h4" />
-`),
-    fileNamePrefix: 'vl-ocr'
-  },
-  'vl-summary': {
-    title: '总结图片 / Summarize image',
-    iconSvg: buildScreenshotsSvgIcon(`
-<path d="M5 7h14" />
-<path d="M5 12h14" />
-<path d="M5 17h8" />
-`),
-    fileNamePrefix: 'vl-summary'
-  },
-  'vl-analyze': {
-    title: '智能分析 / Analyze image',
-    iconSvg: buildScreenshotsSvgIcon(`
-<path d="M6 18V10" />
-<path d="M12 18V6" />
-<path d="M18 18v-4" />
-`),
-    fileNamePrefix: 'vl-analyze'
-  }
-};
 
 class ScreenshotManager {
   constructor(mainWindow, clipboardManager, options = {}) {
@@ -152,8 +118,16 @@ class ScreenshotManager {
     return summary ? `打开 OCR 窗口 (${summary})` : '打开 OCR 窗口';
   }
 
-  _buildDefaultOperationItems() {
-    return [
+  _getVisionActions() {
+    if (!this.options || typeof this.options.getVisionActions !== 'function') {
+      return getDefaultVisionActions();
+    }
+
+    return normalizeVisionActions(this.options.getVisionActions());
+  }
+
+  _buildOperationItems() {
+    const items = [
       {
         key: 'ocr',
         title: this._getOcrWindowTitle(),
@@ -167,64 +141,29 @@ class ScreenshotManager {
         handler: async (context) => {
           await this._handleOcrOperation(context);
         }
-      },
-      {
-        key: 'vl-describe',
-        title: VISION_ACTION_ITEMS['vl-describe'].title,
-        iconSvg: VISION_ACTION_ITEMS['vl-describe'].iconSvg,
-        position: { after: 'ocr' },
-        requiresSelection: true,
-        includeImage: true,
-        imageResource: {
-          fileNamePrefix: VISION_ACTION_ITEMS['vl-describe'].fileNamePrefix
-        },
-        handler: async (context) => {
-          await this._handleVisionOperation('vl-describe', context);
-        }
-      },
-      {
-        key: 'vl-ocr',
-        title: VISION_ACTION_ITEMS['vl-ocr'].title,
-        iconSvg: VISION_ACTION_ITEMS['vl-ocr'].iconSvg,
-        position: { after: 'vl-describe' },
-        requiresSelection: true,
-        includeImage: true,
-        imageResource: {
-          fileNamePrefix: VISION_ACTION_ITEMS['vl-ocr'].fileNamePrefix
-        },
-        handler: async (context) => {
-          await this._handleVisionOperation('vl-ocr', context);
-        }
-      },
-      {
-        key: 'vl-summary',
-        title: VISION_ACTION_ITEMS['vl-summary'].title,
-        iconSvg: VISION_ACTION_ITEMS['vl-summary'].iconSvg,
-        position: { after: 'vl-ocr' },
-        requiresSelection: true,
-        includeImage: true,
-        imageResource: {
-          fileNamePrefix: VISION_ACTION_ITEMS['vl-summary'].fileNamePrefix
-        },
-        handler: async (context) => {
-          await this._handleVisionOperation('vl-summary', context);
-        }
-      },
-      {
-        key: 'vl-analyze',
-        title: VISION_ACTION_ITEMS['vl-analyze'].title,
-        iconSvg: VISION_ACTION_ITEMS['vl-analyze'].iconSvg,
-        position: { after: 'vl-summary' },
-        requiresSelection: true,
-        includeImage: true,
-        imageResource: {
-          fileNamePrefix: VISION_ACTION_ITEMS['vl-analyze'].fileNamePrefix
-        },
-        handler: async (context) => {
-          await this._handleVisionOperation('vl-analyze', context);
-        }
       }
     ];
+
+    let previousKey = 'ocr';
+    this._getVisionActions().forEach((action) => {
+      items.push({
+        key: action.id,
+        title: action.title || action.label,
+        iconSvg: buildScreenshotsSvgIcon(getVisionActionIconBody(action.icon)),
+        position: { after: previousKey },
+        requiresSelection: true,
+        includeImage: true,
+        imageResource: {
+          fileNamePrefix: action.fileNamePrefix || action.id
+        },
+        handler: async (context) => {
+          await this._handleVisionOperation(action.id, context);
+        }
+      });
+      previousKey = action.id;
+    });
+
+    return items;
   }
 
   async _setOperationItems(items) {
@@ -281,7 +220,9 @@ class ScreenshotManager {
   }
 
   async _handleVisionOperation(actionId, context) {
-    const action = VISION_ACTION_ITEMS[actionId] || VISION_ACTION_ITEMS['vl-describe'];
+    const action = this._getVisionActions().find((item) => item.id === actionId)
+      || this._getVisionActions()[0]
+      || getDefaultVisionActions()[0];
 
     try {
       if (context && typeof context.update === 'function') {
@@ -342,7 +283,7 @@ class ScreenshotManager {
 
     this.screenshots = new Screenshots({
       forwardEvents: ['error'],
-      operationItems: this._buildDefaultOperationItems(),
+      operationItems: this._buildOperationItems(),
       lang: {
         magnifier_position_label: '位置',
         operation_ok_title: '完成',
@@ -434,7 +375,7 @@ class ScreenshotManager {
       return;
     }
 
-    Promise.resolve(this._setOperationItems(this._buildDefaultOperationItems()))
+    Promise.resolve(this._setOperationItems(this._buildOperationItems()))
       .catch((error) => this._emitError(error))
       .finally(() => {
         Promise.resolve(this.screenshots.startCapture())
