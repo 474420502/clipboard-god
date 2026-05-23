@@ -2631,12 +2631,45 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
     flex-wrap: wrap;
 }
 
+.settings-tool-section-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
 .settings-tool-section-header-compact {
     margin-bottom: 2px;
 }
 
 .settings-tool-window .settings-tool-section-header .ocr-tool-section-title {
     margin: 0;
+}
+
+.settings-tool-section-helper {
+    max-width: 72ch;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--settings-tool-muted);
+}
+
+.settings-tool-selected-language-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.settings-tool-selected-language-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.14);
+    color: var(--settings-tool-accent-strong);
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .settings-tool-window .ocr-tool-checkbox-row {
@@ -2653,28 +2686,7 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
 
 .settings-tool-language-picker {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    max-height: min(34vh, 280px);
-    overflow-y: auto;
-    overflow-x: hidden;
     align-content: start;
-    padding-right: 8px;
-    scrollbar-gutter: stable;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(37, 99, 235, 0.44) rgba(37, 99, 235, 0.08);
-}
-
-.settings-tool-language-picker::-webkit-scrollbar {
-    width: 10px;
-}
-
-.settings-tool-language-picker::-webkit-scrollbar-track {
-    background: rgba(37, 99, 235, 0.08);
-    border-radius: 999px;
-}
-
-.settings-tool-language-picker::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(37, 99, 235, 0.7), rgba(29, 78, 216, 0.82));
-    border-radius: 999px;
 }
 
 .settings-tool-language-tag {
@@ -2723,7 +2735,7 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
 
 .settings-tool-language-tag-state {
     flex-shrink: 0;
-    min-width: 34px;
+    min-width: 74px;
     height: 28px;
     display: inline-flex;
     align-items: center;
@@ -2733,9 +2745,10 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid rgba(148, 163, 184, 0.24);
     color: var(--settings-tool-muted);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .settings-tool-language-tag.is-selected {
@@ -2748,12 +2761,6 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
     background: linear-gradient(135deg, var(--settings-tool-accent), var(--settings-tool-accent-strong));
     border-color: transparent;
     color: #eff6ff;
-}
-
-.settings-tool-scroll-hint {
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--settings-tool-muted);
 }
 
 .settings-tool-window .ocr-tool-note {
@@ -2850,11 +2857,34 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
     backdrop-filter: blur(18px);
 }
 
+.settings-tool-footer-copy {
+    flex: 1 1 320px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-tool-footer-copy strong {
+    color: var(--settings-tool-ink);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.settings-tool-footer-copy span {
+    color: var(--settings-tool-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
 .settings-tool-window .settings-tool-action-buttons {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
-    width: 100%;
+    width: auto;
+    margin-left: auto;
 }
 
 .settings-tool-window .ocr-tool-status {
@@ -3013,7 +3043,6 @@ body.high-contrast-theme .settings-tool-window .settings-tool-button-ghost {
 
     .settings-tool-language-picker {
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        max-height: min(38vh, 300px);
     }
 
     .settings-tool-overview-grid {
@@ -3030,7 +3059,8 @@ body.high-contrast-theme .settings-tool-window .settings-tool-button-ghost {
 
     .settings-tool-window .settings-tool-action-buttons {
         justify-content: stretch;
-        flex-wrap: wrap;
+        width: 100%;
+        margin-left: 0;
     }
 
     .settings-tool-window .settings-tool-action-buttons .settings-tool-button {
@@ -3045,8 +3075,6 @@ body.high-contrast-theme .settings-tool-window .settings-tool-button-ghost {
 
     .settings-tool-language-picker {
         grid-template-columns: 1fr;
-        max-height: none;
-        padding-right: 0;
     }
 
     .settings-tool-tab {

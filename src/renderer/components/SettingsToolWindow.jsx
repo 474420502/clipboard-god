@@ -122,6 +122,32 @@ const normalizeLanguages = (languages) => {
     return next.length ? next : [...DEFAULT_OCR_LANGUAGES];
 };
 
+const getLanguageLabel = (code, translate) => {
+    const option = OCR_LANGUAGE_OPTIONS.find((item) => item.code === code);
+    return option ? translate(option.labelKey, option.fallback) : String(code || '').trim();
+};
+
+const summarizeLanguageLabels = (labels, limit = 2) => {
+    const list = Array.isArray(labels) ? labels.filter(Boolean) : [];
+    if (!list.length) return '';
+    if (list.length <= limit) return list.join(', ');
+    return `${list.slice(0, limit).join(', ')} +${list.length - limit}`;
+};
+
+const getCompactCommandLabel = (command) => {
+    const trimmed = String(command || '').trim();
+    if (!trimmed) return 'paddleocr';
+
+    if (/\s+-m\s+paddleocr\b/.test(trimmed)) {
+        const pythonCommand = trimmed.split(/\s+-m\s+paddleocr\b/)[0].trim();
+        const pythonName = pythonCommand.split(/[\\/]/).pop() || pythonCommand;
+        return `${pythonName} -m paddleocr`;
+    }
+
+    const commandToken = trimmed.split(/\s+/)[0];
+    return commandToken.split(/[\\/]/).pop() || commandToken;
+};
+
 const pickSelectedLlm = (llms, preferred = '') => {
     const entries = llms && typeof llms === 'object' ? llms : {};
     const names = Object.keys(entries);
@@ -484,7 +510,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
             const normalized = normalizeSettings(res.config || payload, settings._selectedLlm || '');
             setSettings(normalized);
             setSavedSettingsKey(serializeSettings(normalized));
-            setStatus(t('settings.ocr.toolWindowSaved', 'Settings saved and synced.'));
+            setStatus(t('settings.ocr.toolWindowSaved', 'Settings saved and applied to global config.'));
 
             const newLocale = payload.locale;
             if (newLocale && window.localeAPI && typeof window.localeAPI.setLocale === 'function') {
@@ -530,7 +556,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
             const cfg = payload && typeof payload === 'object' ? (payload.config || payload) : null;
             if (!cfg || typeof cfg !== 'object') return;
             applyIncomingSettings(cfg);
-            setStatus(t('settings.ocr.toolWindowSaved', 'Settings saved and synced.'));
+            setStatus(t('settings.ocr.toolWindowSaved', 'Settings saved and applied to global config.'));
         });
 
         return () => {
@@ -560,13 +586,22 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     }, []);
 
     useEffect(() => {
+        const handleClose = () => {
+            if (dirty) {
+                const confirmed = window.confirm(t('settings.ocr.closeDiscardConfirm', 'There are unapplied changes in this window. Close and discard them?'));
+                if (!confirmed) return;
+            }
+
+            try { window.close(); } catch (_) { }
+        };
+
         const handleKeyDown = (event) => {
             if (!event) return;
             const key = String(event.key || '').toLowerCase();
             const ctrlOrCmd = !!(event.ctrlKey || event.metaKey);
 
             if (event.key === 'Escape') {
-                try { window.close(); } catch (_) { }
+                handleClose();
                 return;
             }
 
@@ -580,7 +615,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleSave, saving]);
+    }, [dirty, handleSave, saving, t]);
 
     useEffect(() => {
         try {
@@ -595,15 +630,22 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     const activeTabMeta = tabs.find((tab) => tab.id === activeTab) || tabs[0];
     const themeLabel = (THEME_OPTIONS.find((option) => option.value === settings.theme) || THEME_OPTIONS[0]);
     const selectedLanguagesCount = Array.isArray(settings.ocrLanguages) ? settings.ocrLanguages.length : 0;
+    const selectedLanguageLabels = (Array.isArray(settings.ocrLanguages) ? settings.ocrLanguages : []).map((code) => getLanguageLabel(code, t));
+    const selectedLanguageSummary = summarizeLanguageLabels(selectedLanguageLabels);
     const llmEntries = Object.keys(settings.llms || {});
     const localeLabel = settings.locale === 'en' ? 'English' : '简体中文';
+    const isExternalOcrModel = settings.ocrModelSource === 'paddleocr-vl-cli';
+    const runtimeCommandDisplay = getCompactCommandLabel(settings.ocrVlCliCommand || 'paddleocr');
     const currentModelSourceLabel = settings.ocrModelSource === 'paddleocr-vl-cli'
         ? t('settings.ocr.modelSourcePaddleVlCli', 'PaddleOCR-VL (local CLI)')
         : t('settings.ocr.modelSourceBuiltin', 'Built-in (PP-OCRv5 mobile)');
     const currentModelLanguageLabel = (OCR_MODEL_LANGUAGE_OPTIONS.find((lang) => lang.value === (settings.ocrModelLanguage || 'chinese')) || OCR_MODEL_LANGUAGE_OPTIONS[0]).label;
+    const statusTitle = dirty
+        ? t('settings.ocr.toolWindowPendingTitle', 'Current window has unapplied changes')
+        : t('settings.ocr.toolWindowAppliedTitle', 'Current config has been applied globally');
     const statusText = status || (dirty
-        ? t('settings.ocr.toolWindowDirty', 'You have unapplied setting changes in this window.')
-        : t('settings.ocr.toolWindowHint', 'Changes are saved to global config and active windows can pick them up immediately.'));
+        ? t('settings.ocr.toolWindowDirty', 'These edits stay local to this window until you save and apply them.')
+        : t('settings.ocr.toolWindowHint', 'You are looking at the version that is already active in the global config.'));
     const overviewCards = (() => {
         if (activeTab === 'general') {
             return [
@@ -628,9 +670,9 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
         }
         if (activeTab === 'ocr') {
             return [
-                { label: 'Engine', value: currentModelSourceLabel, detail: currentModelLanguageLabel },
-                { label: 'Languages', value: `${selectedLanguagesCount}`, detail: '已启用识别语言' },
-                { label: 'Runtime', value: settings.ocrVlDevice || 'Auto', detail: settings.ocrVlCliCommand || 'paddleocr' }
+                { label: 'Engine', value: currentModelSourceLabel, detail: isExternalOcrModel ? t('settings.ocr.modelLanguageActiveOverview', 'External CLI language family is active') : t('settings.ocr.modelLanguageInactiveOverview', 'Using built-in OCR pipeline') },
+                { label: 'OCR Tags', value: `${selectedLanguagesCount}`, detail: selectedLanguageSummary || t('settings.ocr.languageTagEmpty', 'Keep at least one language selected'), detailTitle: selectedLanguageLabels.join(', ') },
+                { label: 'Runtime', value: settings.ocrVlDevice || 'Auto', detail: runtimeCommandDisplay, detailTitle: settings.ocrVlCliCommand || 'paddleocr' }
             ];
         }
         return [
@@ -648,6 +690,15 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
         );
     }
 
+    const handleClose = () => {
+        if (dirty) {
+            const confirmed = window.confirm(t('settings.ocr.closeDiscardConfirm', 'There are unapplied changes in this window. Close and discard them?'));
+            if (!confirmed) return;
+        }
+
+        try { window.close(); } catch (_) { }
+    };
+
     return (
         <div className="ocr-tool-window settings-tool-window">
             <div className="settings-tool-shell">
@@ -655,14 +706,14 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                     <div className="settings-tool-brand">
                         <span className="settings-tool-brand-kicker">CONTROL CENTER</span>
                         <h1>{t('settings.title', '设置')}</h1>
-                        <p>{t('settings.ocr.toolWindowHint', '这里的修改会写入全局配置，已打开的 OCR 窗口可立即生效。')}</p>
+                        <p>{t('settings.ocr.toolWindowHint', '这里的修改会先保留在当前窗口，点击“保存并应用”后才会写入全局配置。')}</p>
                     </div>
 
                     <div className="settings-tool-status-card">
                         <span className={`settings-tool-status-pill ${dirty ? 'dirty' : 'synced'}`}>
-                            {dirty ? 'Pending changes' : 'Live sync'}
+                            {dirty ? t('settings.ocr.toolWindowDraftBadge', 'Draft') : t('settings.ocr.toolWindowAppliedBadge', 'Applied')}
                         </span>
-                        <strong>{dirty ? '当前窗口有未保存改动' : '当前设置已与全局配置同步'}</strong>
+                        <strong>{statusTitle}</strong>
                         <span>{statusText}</span>
                     </div>
 
@@ -687,7 +738,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                     </div>
 
                     <div className="settings-tool-sidebar-footer">
-                        <span>{dirty ? '保存后会广播到主窗口和 OCR 窗口。' : '你现在看到的是独立设置工作台。'}</span>
+                        <span>{dirty ? t('settings.ocr.toolWindowDraftFooter', '保存并应用后才会广播到主窗口和 OCR 窗口。') : t('settings.ocr.toolWindowAppliedFooter', '这是统一的独立设置工作台。')}</span>
                     </div>
                 </aside>
 
@@ -699,10 +750,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                             <p>{activeTabMeta.description}</p>
                         </div>
                         <div className="settings-tool-hero-actions">
-                            <span className={`settings-tool-status-pill ${dirty ? 'dirty' : 'synced'}`}>
-                                {dirty ? 'Unsaved' : 'Saved'}
-                            </span>
-                            <button type="button" className="settings-tool-button settings-tool-button-ghost" onClick={() => window.close()}>
+                            <button type="button" className="settings-tool-button settings-tool-button-ghost" onClick={handleClose}>
                                 {t('settings.close', '关闭')}
                             </button>
                         </div>
@@ -710,8 +758,8 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                             {overviewCards.map((card) => (
                                 <div key={`${activeTab}-${card.label}`} className="settings-tool-overview-card">
                                     <span className="settings-tool-overview-label">{card.label}</span>
-                                    <strong>{card.value}</strong>
-                                    <span>{card.detail}</span>
+                                    <strong title={card.valueTitle || card.value}>{card.value}</strong>
+                                    <span title={card.detailTitle || card.detail}>{card.detail}</span>
                                 </div>
                             ))}
                         </div>
@@ -829,7 +877,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                             {runtimeLoading ? t('settings.ocr.toolWindowLoading', 'Loading...') : t('settings.ocr.runtimeDetect', 'Detect runtime')}
                                         </button>
                                         <button type="button" className="settings-tool-button settings-tool-button-primary" onClick={() => loadRuntimeInfo({ persist: true })} disabled={saving || runtimeLoading || runtimeApplying}>
-                                            {runtimeApplying ? t('settings.ocr.toolWindowLoading', 'Loading...') : t('settings.ocr.runtimeRedetect', 'Re-detect and apply')}
+                                            {runtimeApplying ? t('settings.ocr.toolWindowLoading', 'Loading...') : t('settings.ocr.runtimeRedetect', 'Re-detect and update command')}
                                         </button>
                                     </div>
 
@@ -846,8 +894,16 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
 
                                 <section className="ocr-tool-section">
                                     <div className="settings-tool-section-header settings-tool-section-header-compact">
-                                        <div className="ocr-tool-section-title">{t('history.ocrLangTitle', 'Languages')}</div>
-                                        <div className="settings-tool-selected-hint">{t('history.ocrLangHint', `Selected: ${settings.ocrLanguages.length} language(s)`)}</div>
+                                        <div className="settings-tool-section-heading">
+                                            <div className="ocr-tool-section-title">{t('settings.ocr.languageTagSection', 'OCR language tags')}</div>
+                                            <div className="settings-tool-section-helper">{t('settings.ocr.languageTagHelp', 'These tags control regular OCR language selection. The PaddleOCR-VL language family below only applies when the external CLI backend is enabled.')}</div>
+                                        </div>
+                                        <div className="settings-tool-selected-hint">{t('settings.ocr.languageTagSelectedCount', `${settings.ocrLanguages.length} selected`, { count: settings.ocrLanguages.length })}</div>
+                                    </div>
+                                    <div className="settings-tool-selected-language-row" aria-label={t('settings.ocr.languageTagSelectedRow', 'Selected OCR languages')}>
+                                        {selectedLanguageLabels.map((label) => (
+                                            <span key={label} className="settings-tool-selected-language-chip">{label}</span>
+                                        ))}
                                     </div>
                                     <div className="ocr-tool-checkbox-list settings-tool-language-picker" role="group" aria-label={t('history.ocrLangTitle', 'Languages')}>
                                         {OCR_LANGUAGE_OPTIONS.map((lang) => {
@@ -859,16 +915,18 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                         <span className="settings-tool-language-tag-name">{t(lang.labelKey, lang.fallback)}</span>
                                                         <span className="settings-tool-language-tag-code">{lang.code}</span>
                                                     </span>
-                                                    <span className="settings-tool-language-tag-state" aria-hidden="true">{checked ? 'ON' : '+'}</span>
+                                                    <span className="settings-tool-language-tag-state" aria-hidden="true">{checked ? t('settings.ocr.languageTagSelectedState', 'Selected') : t('settings.ocr.languageTagIdleState', 'Available')}</span>
                                                 </label>
                                             );
                                         })}
                                     </div>
-                                    <div className="settings-tool-scroll-hint">{t('settings.ocr.languageScrollHint', 'Scroll inside this list to see all language tags.')}</div>
                                 </section>
 
                                 <section className="ocr-tool-section">
                                     <div className="ocr-tool-section-title">{t('settings.ocr.modelSection', 'Model Configuration')}</div>
+                                    <div className="settings-tool-section-helper">{isExternalOcrModel
+                                        ? t('settings.ocr.modelSectionActiveHelp', 'You are configuring the external PaddleOCR-VL CLI backend. Save and apply to write both the model source and language family together.')
+                                        : t('settings.ocr.modelSectionInactiveHelp', 'You are currently using the built-in OCR engine. The PaddleOCR-VL language family below only matters after switching to the external CLI backend.')}</div>
                                     <div className="ocr-tool-grid">
                                         <label className="ocr-tool-field">
                                             <span>{t('settings.ocr.modelSource', 'Model source')}</span>
@@ -883,13 +941,15 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                         </label>
 
                                         <label className="ocr-tool-field">
-                                            <span>{t('settings.ocr.modelLanguage', 'Recognition language')}</span>
-                                            <select value={settings.ocrModelLanguage || 'chinese'} onChange={(e) => updateField('ocrModelLanguage', e.target.value)}>
+                                            <span>{t('settings.ocr.modelLanguage', 'PaddleOCR-VL language family')}</span>
+                                            <select value={settings.ocrModelLanguage || 'chinese'} onChange={(e) => updateField('ocrModelLanguage', e.target.value)} disabled={!isExternalOcrModel}>
                                                 {OCR_MODEL_LANGUAGE_OPTIONS.map((opt) => (
                                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                                                 ))}
                                             </select>
-                                            <small>{t('settings.ocr.modelLanguageHelp', 'Choose the language family used by the local PaddleOCR-VL CLI backend.')}</small>
+                                            <small>{isExternalOcrModel
+                                                ? t('settings.ocr.modelLanguageHelp', 'Choose the language family used by the local PaddleOCR-VL CLI backend.')
+                                                : t('settings.ocr.modelLanguageDisabledHelp', 'This language family is only applied when model source is set to PaddleOCR-VL (local CLI).')}</small>
                                         </label>
                                     </div>
                                 </section>
@@ -1193,13 +1253,16 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                     </div>
 
                     <div className="ocr-tool-actions settings-tool-footer">
-                        <div className="ocr-tool-status">{statusText}</div>
+                        <div className="settings-tool-footer-copy">
+                            <strong>{statusTitle}</strong>
+                            <span>{statusText}</span>
+                        </div>
                         <div className="ocr-tool-action-buttons settings-tool-action-buttons">
                             <button type="button" className="settings-tool-button settings-tool-button-secondary" onClick={() => Promise.allSettled([loadSettings(), loadRuntimeInfo()])} disabled={saving || runtimeLoading || runtimeApplying}>
-                                {t('settings.ocr.toolWindowReload', 'Reload')}
+                                {dirty ? t('settings.ocr.toolWindowDiscard', 'Discard changes') : t('settings.ocr.toolWindowReload', 'Reload')}
                             </button>
                             <button type="button" className="settings-tool-button settings-tool-button-primary" onClick={handleSave} disabled={loading || saving || !dirty}>
-                                {saving ? t('settings.ocr.toolWindowSaving', 'Saving...') : t('settings.ocr.toolWindowApply', 'Apply')}
+                                {saving ? t('settings.ocr.toolWindowSaving', 'Saving...') : t('settings.ocr.toolWindowApply', 'Save and apply')}
                             </button>
                         </div>
                     </div>
