@@ -88,6 +88,17 @@
         "llm": {
             "title": "LLM 集成",
             "description": "配置 AI 工具使用的命名 LLM 条目。",
+            "sectionSwitcherTitle": "LLM 功能区",
+            "sectionSwitcherHelp": "使用下面的标签在独立的 VLM 图片动作配置区和命名 LLM 预设区之间切换。",
+            "sectionSwitcherAria": "LLM 功能区切换",
+            "sectionTabs": {
+                "vision": "视觉 LLM / VLM",
+                "entries": "命名 LLM 条目"
+            },
+            "sectionDescriptions": {
+                "vision": "管理截图工具栏、OCR 窗口和内置图片动作共用的视觉模型配置。",
+                "entries": "管理独立的文本/图片 LLM 预设条目，它们不会和内置 VLM 动作共用配置。"
+            },
             "visionSection": "视觉 LLM / VLM",
             "visionHelp": "OCR 窗口和截图工具栏里的图片动作会统一复用这组视觉模型配置，不再混在 OCR 引擎参数里。",
             "visionTagsSection": "视觉模型标签",

@@ -140,6 +140,11 @@ const TAB_KICKERS = {
     llm: 'MODELS'
 };
 
+const LLM_SECTION_KICKERS = {
+    vision: 'IMAGE',
+    entries: 'PRESETS'
+};
+
 const cloneLlmEntries = (llms = {}) => {
     if (!llms || typeof llms !== 'object') return {};
     return Object.fromEntries(
@@ -475,6 +480,21 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
         }
     ]), [t]);
 
+    const llmSections = useMemo(() => ([
+        {
+            id: 'vision',
+            label: t('settings.llm.sectionTabs.vision', 'Vision LLM / VLM'),
+            kicker: LLM_SECTION_KICKERS.vision,
+            description: t('settings.llm.sectionDescriptions.vision', 'Built-in image actions, screenshot toolbar, and OCR window vision workflows.')
+        },
+        {
+            id: 'entries',
+            label: t('settings.llm.sectionTabs.entries', 'Named LLM entries'),
+            kicker: LLM_SECTION_KICKERS.entries,
+            description: t('settings.llm.sectionDescriptions.entries', 'Reusable text/image presets managed independently from the built-in VLM actions.')
+        }
+    ]), [t]);
+
     const [activeTab, setActiveTab] = useState(() => getInitialTab(defaultTab));
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -486,6 +506,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     const [runtimeLoading, setRuntimeLoading] = useState(false);
     const [runtimeApplying, setRuntimeApplying] = useState(false);
     const [runtimeInfo, setRuntimeInfo] = useState(null);
+    const [llmSection, setLlmSection] = useState('vision');
     const [ollamaCatalog, setOllamaCatalog] = useState({});
     const ollamaCatalogRef = useRef({});
 
@@ -930,6 +951,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
         : currentLlmModelCatalog.text;
     const visionHasCandidateTags = visionModelTags.some((tag) => tag.kind === 'candidate');
     const currentLlmHasCandidateTags = currentLlmModelTags.some((tag) => tag.kind === 'candidate');
+    const activeLlmSectionMeta = llmSections.find((section) => section.id === llmSection) || llmSections[0];
     const runtimeCommandDisplay = getCompactCommandLabel(settings.ocrVlCliCommand || 'paddleocr');
     const currentModelSourceLabel = settings.ocrModelSource === 'paddleocr-vl-cli'
         ? t('settings.ocr.modelSourcePaddleVlCli', 'PaddleOCR-VL (local CLI)')
@@ -1373,212 +1395,43 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
 
                         {activeTab === 'llm' && (
                             <>
-                                <section className="ocr-tool-section">
-                                    <div className="ocr-tool-section-title">{t('settings.llm.visionSection', 'Vision LLM / VLM')}</div>
-                                    <div className="settings-tool-section-helper">{t('settings.llm.visionHelp', 'OCR 窗口和截图工具栏里的图片动作会统一复用这组视觉模型配置，不再混在 OCR 引擎参数里。')}</div>
-                                    <div className="ocr-tool-grid">
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.apiTypeLabel', 'API type')}</span>
-                                            <select value={visionLlm.apitype || 'ollama'} onChange={(e) => updateVisionLlm({ apitype: e.target.value })}>
-                                                <option value="ollama">{t('settings.llm.apiTypeOptions.ollama', 'Ollama')}</option>
-                                                <option value="openapi">{t('settings.llm.apiTypeOptions.openapi', 'OpenAPI')}</option>
-                                            </select>
-                                        </label>
-
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.modelLabel', 'Model')}</span>
-                                            <div className="settings-tool-inline-row">
-                                                <input
-                                                    type="text"
-                                                    list={visionLlm.apitype === 'ollama' ? 'settings-tool-vision-ollama-models' : undefined}
-                                                    value={visionLlm.model || DEFAULT_VISION_LLM.model}
-                                                    onChange={(e) => updateVisionLlm({ model: e.target.value })}
-                                                    placeholder="qwen3.6-vl:4b"
-                                                />
-                                                {visionLlm.apitype === 'ollama' ? (
-                                                    <button
-                                                        type="button"
-                                                        className="settings-tool-button settings-tool-button-ghost settings-tool-button-compact"
-                                                        onClick={() => loadOllamaModels(visionOllamaBaseUrl, { force: true })}
-                                                    >
-                                                        {t('settings.llm.ollamaRefreshModels', 'Refresh models')}
-                                                    </button>
-                                                ) : null}
-                                            </div>
-                                            {visionLlm.apitype === 'ollama' ? (
-                                                <>
-                                                    <datalist id="settings-tool-vision-ollama-models">
-                                                        {visionModelCatalog.all.map((name) => (
-                                                            <option key={name} value={name} />
-                                                        ))}
-                                                    </datalist>
-                                                    <small>{t('settings.llm.ollamaInputHelp', 'You can pick a detected Ollama model from the list or type one manually.')}</small>
-                                                </>
-                                            ) : null}
-                                        </label>
-
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.baseUrlLabel', 'Base URL')}</span>
-                                            <input type="text" value={visionLlm.baseurl || DEFAULT_VISION_LLM.baseurl} placeholder={OLLAMA_DEFAULT_BASE_URL} onChange={(e) => updateVisionLlm({ baseurl: e.target.value })} />
-                                        </label>
-
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.apiKeyLabel', 'API Key')}</span>
-                                            <input type="password" value={visionLlm.apikey || ''} onChange={(e) => updateVisionLlm({ apikey: e.target.value })} />
-                                        </label>
-                                    </div>
-                                    {visionLlm.apitype === 'ollama' ? (
-                                        <div className="settings-tool-model-browser">
-                                            <div className="settings-tool-section-header settings-tool-section-header-compact">
-                                                <div className="settings-tool-section-heading">
-                                                    <div className="ocr-tool-section-title">{t('settings.llm.visionTagsSection', 'Vision model tags')}</div>
-                                                    <div className="settings-tool-section-helper">{t('settings.llm.visionTagsHelp', 'These tags only change the built-in image action model above.')}</div>
-                                                </div>
-                                                <div className="settings-tool-selected-hint">
-                                                    {visionCatalogEntry.status === 'loading'
-                                                        ? t('settings.llm.ollamaLoadingModels', 'Loading Ollama models...')
-                                                        : (visionCatalogEntry.error
-                                                            ? t('settings.llm.ollamaModelListError', `Model list unavailable: ${visionCatalogEntry.error}`, { error: visionCatalogEntry.error })
-                                                            : t('settings.llm.ollamaModelCount', `${visionModelCatalog.all.length} models`, { count: visionModelCatalog.all.length }))}
-                                                </div>
-                                            </div>
-                                            {visionHasCandidateTags ? (
-                                                <div className="settings-tool-model-legend" aria-label={t('settings.llm.modelTagLegendAria', 'Model tag legend')}>
-                                                    <span className="settings-tool-model-legend-chip">{t('settings.llm.modelTagLegendConfirmed', 'Confirmed vision')}</span>
-                                                    <span className="settings-tool-model-legend-chip is-candidate">{t('settings.llm.modelTagLegendCandidate', 'Possible vision / verify tag')}</span>
-                                                </div>
-                                            ) : null}
-                                            <div className="settings-tool-model-tag-list" aria-label={t('settings.llm.visionTagsSection', 'Vision model tags')}>
-                                                {visionModelTags.length ? visionModelTags.map((tag) => (
-                                                    <button
-                                                        key={tag.name}
-                                                        type="button"
-                                                        title={getModelTagTitle(tag)}
-                                                        className={`settings-tool-model-tag ${tag.kind === 'candidate' ? 'is-candidate' : ''} ${String(visionLlm.model || DEFAULT_VISION_LLM.model).trim() === tag.name ? 'is-selected' : ''}`}
-                                                        onClick={() => updateVisionLlm({ model: tag.name })}
-                                                    >
-                                                        {tag.name}
-                                                    </button>
-                                                )) : (
-                                                    <span className="settings-tool-model-status">{t('settings.llm.ollamaModelListUnavailable', 'No Ollama model list is available yet. You can still type a model name manually.')}</span>
-                                                )}
-                                            </div>
+                                <section className="ocr-tool-section settings-tool-subpage-section">
+                                    <div className="settings-tool-section-header">
+                                        <div className="settings-tool-section-heading">
+                                            <div className="ocr-tool-section-title">{t('settings.llm.sectionSwitcherTitle', 'LLM workspaces')}</div>
+                                            <div className="settings-tool-section-helper">{t('settings.llm.sectionSwitcherHelp', 'Use these tags to switch between the dedicated VLM image-action config and the separate named LLM preset area.')}</div>
                                         </div>
-                                    ) : null}
-                                    <div className="ocr-tool-grid">
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.temperature', 'Temperature')}</span>
-                                            <input type="number" min="0" max="2" step="0.01" value={visionLlm.temperature} onChange={(e) => updateVisionLlm({ temperature: parseFloat(e.target.value) || 0 })} />
-                                        </label>
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.topP', 'Top P')}</span>
-                                            <input type="number" min="0" max="1" step="0.01" value={visionLlm.top_p} onChange={(e) => updateVisionLlm({ top_p: parseFloat(e.target.value) || 0 })} />
-                                        </label>
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.topK', 'Top K')}</span>
-                                            <input type="number" min="0" step="1" value={visionLlm.top_k} onChange={(e) => updateVisionLlm({ top_k: parseFloat(e.target.value) || 0 })} />
-                                        </label>
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.contextWindow', 'Context window')}</span>
-                                            <input type="number" min="0" step="1" value={visionLlm.context_window} onChange={(e) => updateVisionLlm({ context_window: parseInt(e.target.value, 10) || 0 })} />
-                                        </label>
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.maxTokens', 'Max tokens')}</span>
-                                            <input type="number" min="0" step="1" value={visionLlm.max_tokens} onChange={(e) => updateVisionLlm({ max_tokens: parseInt(e.target.value, 10) || 0 })} />
-                                        </label>
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.presencePenalty', 'Presence penalty')}</span>
-                                            <input type="number" min="-2" max="2" step="0.1" value={visionLlm.presence_penalty} onChange={(e) => updateVisionLlm({ presence_penalty: parseFloat(e.target.value) || 0 })} />
-                                        </label>
+                                        <div className="settings-tool-selected-hint">{activeLlmSectionMeta.kicker}</div>
                                     </div>
-                                    <div className="settings-tool-selected-language-row" aria-label={t('settings.llm.visionBuiltinActions', 'Built-in vision actions')}>
-                                        <span className="settings-tool-selected-language-chip">{t('history.vlDescribe', '解析图片')}</span>
-                                        <span className="settings-tool-selected-language-chip">{t('history.vlOcr', '图片转文字')}</span>
-                                        <span className="settings-tool-selected-language-chip">{t('history.vlSummary', '总结图片')}</span>
-                                        <span className="settings-tool-selected-language-chip">{t('history.vlAnalyze', '智能分析')}</span>
+                                    <div className="settings-tool-subtabbar" role="tablist" aria-label={t('settings.llm.sectionSwitcherAria', 'LLM sections')}>
+                                        {llmSections.map((section) => (
+                                            <button
+                                                key={section.id}
+                                                type="button"
+                                                role="tab"
+                                                className={`settings-tool-subtab ${llmSection === section.id ? 'active' : ''}`}
+                                                aria-selected={llmSection === section.id}
+                                                onClick={() => setLlmSection(section.id)}
+                                            >
+                                                <span className="settings-tool-subtab-kicker">{section.kicker}</span>
+                                                <span className="settings-tool-subtab-title">{section.label}</span>
+                                            </button>
+                                        ))}
                                     </div>
-                                    <div className="settings-tool-section-helper">{t('settings.llm.visionActionHint', '这些内置图片动作会直接用上面的视觉模型配置，不需要再单独给 OCR 页配置一套。')}</div>
+                                    <div className="settings-tool-section-helper">{activeLlmSectionMeta.description}</div>
                                 </section>
 
-                                <section className="ocr-tool-section">
-                                    <div className="ocr-tool-section-title">{t('settings.llm.entriesSection', 'Named LLM entries')}</div>
-                                    <div className="ocr-tool-grid ocr-tool-grid-single">
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.llm.entryName.label', 'Entry name')}</span>
-                                            <div className="settings-tool-inline-row">
-                                                <input list="settings-tool-llm-names" value={settings._selectedLlm || ''} onChange={(e) => updateField('_selectedLlm', e.target.value)} placeholder={t('settings.llm.entryName.placeholder', 'Select or type an entry name')} />
-                                                <datalist id="settings-tool-llm-names">
-                                                    {Object.keys(settings.llms || {}).map((name) => (
-                                                        <option key={name} value={name} />
-                                                    ))}
-                                                </datalist>
-                                                <button
-                                                    type="button"
-                                                    className="settings-tool-button settings-tool-button-secondary"
-                                                    onClick={() => {
-                                                        const name = String(settings._selectedLlm || '').trim();
-                                                        if (!name) return;
-                                                        if ((settings.llms || {})[name]) {
-                                                            updateField('_selectedLlm', name);
-                                                            return;
-                                                        }
-                                                        updateField('llms', {
-                                                            ...(settings.llms || {}),
-                                                            [name]: createDefaultLlmEntry('text')
-                                                        });
-                                                        updateField('_selectedLlm', name);
-                                                    }}
-                                                >
-                                                    {t('settings.llm.addButton', 'Add')}
-                                                </button>
-                                            </div>
-                                            <small>{t('settings.llm.entriesHelp', '通用文本/图片 LLM 条目仍然放在这里管理；上面的 VLM 图片按钮不会跟这里混用。')}</small>
-                                        </label>
-                                    </div>
-                                </section>
-
-                                {currentLlmEntry && (
+                                {llmSection === 'vision' && (
                                     <section className="ocr-tool-section">
-                                        <div className="ocr-tool-section-title">{currentLlmName}</div>
+                                        <div className="ocr-tool-section-title">{t('settings.llm.visionSection', 'Vision LLM / VLM')}</div>
+                                        <div className="settings-tool-section-helper">{t('settings.llm.visionHelp', 'OCR 窗口和截图工具栏里的图片动作会统一复用这组视觉模型配置，不再混在 OCR 引擎参数里。')}</div>
                                         <div className="ocr-tool-grid">
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.apiTypeLabel', 'API type')}</span>
-                                                <select
-                                                    value={currentLlmEntry.apitype || 'ollama'}
-                                                    onChange={(e) => {
-                                                        const value = e.target.value;
-                                                        const patch = { apitype: value };
-                                                        if (value === 'ollama' && (!currentLlmEntry.baseurl || !String(currentLlmEntry.baseurl).trim())) {
-                                                            patch.baseurl = OLLAMA_DEFAULT_BASE_URL;
-                                                        }
-                                                        updateLlmEntry(currentLlmName, patch);
-                                                    }}
-                                                >
+                                                <select value={visionLlm.apitype || 'ollama'} onChange={(e) => updateVisionLlm({ apitype: e.target.value })}>
                                                     <option value="ollama">{t('settings.llm.apiTypeOptions.ollama', 'Ollama')}</option>
                                                     <option value="openapi">{t('settings.llm.apiTypeOptions.openapi', 'OpenAPI')}</option>
                                                 </select>
-                                            </label>
-
-                                            <label className="ocr-tool-field">
-                                                <span>{t('settings.llm.triggerTypeLabel', 'Trigger type')}</span>
-                                                <select
-                                                    value={currentLlmEntry.triggerType || 'text'}
-                                                    onChange={(e) => {
-                                                        const value = e.target.value;
-                                                        const patch = { triggerType: value };
-                                                        if (value === 'text' && (!currentLlmEntry.prompt || !String(currentLlmEntry.prompt).trim())) {
-                                                            patch.prompt = 'Summarize {{text}}';
-                                                        }
-                                                        if (value === 'image' && currentLlmEntry.prompt === 'Summarize {{text}}') {
-                                                            patch.prompt = '';
-                                                        }
-                                                        updateLlmEntry(currentLlmName, patch);
-                                                    }}
-                                                >
-                                                    <option value="text">{t('settings.llm.triggerTypeOptions.text', 'Text')}</option>
-                                                    <option value="image">{t('settings.llm.triggerTypeOptions.image', 'Image')}</option>
-                                                </select>
-                                                <small>{t('settings.llm.triggerHelp', 'Choose whether this preset is used for text or image flows.')}</small>
                                             </label>
 
                                             <label className="ocr-tool-field">
@@ -1586,24 +1439,25 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                 <div className="settings-tool-inline-row">
                                                     <input
                                                         type="text"
-                                                        list={currentLlmEntry.apitype === 'ollama' ? 'settings-tool-current-llm-models' : undefined}
-                                                        value={currentLlmEntry.model || ''}
-                                                        onChange={(e) => updateLlmEntry(currentLlmName, { model: e.target.value })}
+                                                        list={visionLlm.apitype === 'ollama' ? 'settings-tool-vision-ollama-models' : undefined}
+                                                        value={visionLlm.model || DEFAULT_VISION_LLM.model}
+                                                        onChange={(e) => updateVisionLlm({ model: e.target.value })}
+                                                        placeholder="qwen3.6-vl:4b"
                                                     />
-                                                    {currentLlmEntry.apitype === 'ollama' ? (
+                                                    {visionLlm.apitype === 'ollama' ? (
                                                         <button
                                                             type="button"
                                                             className="settings-tool-button settings-tool-button-ghost settings-tool-button-compact"
-                                                            onClick={() => loadOllamaModels(currentLlmOllamaBaseUrl, { force: true })}
+                                                            onClick={() => loadOllamaModels(visionOllamaBaseUrl, { force: true })}
                                                         >
                                                             {t('settings.llm.ollamaRefreshModels', 'Refresh models')}
                                                         </button>
                                                     ) : null}
                                                 </div>
-                                                {currentLlmEntry.apitype === 'ollama' ? (
+                                                {visionLlm.apitype === 'ollama' ? (
                                                     <>
-                                                        <datalist id="settings-tool-current-llm-models">
-                                                            {currentLlmModelCatalog.all.map((name) => (
+                                                        <datalist id="settings-tool-vision-ollama-models">
+                                                            {visionModelCatalog.all.map((name) => (
                                                                 <option key={name} value={name} />
                                                             ))}
                                                         </datalist>
@@ -1614,56 +1468,43 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
 
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.baseUrlLabel', 'Base URL')}</span>
-                                                <input type="text" value={currentLlmEntry.baseurl || ''} placeholder={OLLAMA_DEFAULT_BASE_URL} onChange={(e) => updateLlmEntry(currentLlmName, { baseurl: e.target.value })} />
+                                                <input type="text" value={visionLlm.baseurl || DEFAULT_VISION_LLM.baseurl} placeholder={OLLAMA_DEFAULT_BASE_URL} onChange={(e) => updateVisionLlm({ baseurl: e.target.value })} />
                                             </label>
 
                                             <label className="ocr-tool-field">
-                                                <span>{t('settings.llm.apiKeyLabel', 'API key')}</span>
-                                                <input type="password" value={currentLlmEntry.apikey || ''} onChange={(e) => updateLlmEntry(currentLlmName, { apikey: e.target.value })} />
-                                            </label>
-
-                                            <label className="ocr-tool-field">
-                                                <span>{t('settings.llm.entryShortcutLabel', 'Entry shortcut')}</span>
-                                                <ShortcutCapture value={currentLlmEntry.llmShortcut || ''} onChange={(value) => updateLlmEntry(currentLlmName, { llmShortcut: value })} placeholder={t('settings.llm.shortcutPlaceholder', 'Press a shortcut')} />
-                                                <small>{t('settings.llm.shortcutHelp', 'Optional shortcut bound to this LLM preset.')}</small>
+                                                <span>{t('settings.llm.apiKeyLabel', 'API Key')}</span>
+                                                <input type="password" value={visionLlm.apikey || ''} onChange={(e) => updateVisionLlm({ apikey: e.target.value })} />
                                             </label>
                                         </div>
-
-                                        {currentLlmEntry.apitype === 'ollama' ? (
+                                        {visionLlm.apitype === 'ollama' ? (
                                             <div className="settings-tool-model-browser">
                                                 <div className="settings-tool-section-header settings-tool-section-header-compact">
                                                     <div className="settings-tool-section-heading">
-                                                        <div className="ocr-tool-section-title">{(currentLlmEntry.triggerType || 'text') === 'image'
-                                                            ? t('settings.llm.imageTagsSection', 'Image model tags')
-                                                            : t('settings.llm.textTagsSection', 'Text model tags')}</div>
-                                                        <div className="settings-tool-section-helper">{(currentLlmEntry.triggerType || 'text') === 'image'
-                                                            ? t('settings.llm.imageTagsHelp', 'These tags only change the current image preset model.')
-                                                            : t('settings.llm.textTagsHelp', 'These tags only change the current text preset model.')}</div>
+                                                        <div className="ocr-tool-section-title">{t('settings.llm.visionTagsSection', 'Vision model tags')}</div>
+                                                        <div className="settings-tool-section-helper">{t('settings.llm.visionTagsHelp', 'These tags only change the built-in image action model above.')}</div>
                                                     </div>
                                                     <div className="settings-tool-selected-hint">
-                                                        {currentLlmCatalogEntry.status === 'loading'
+                                                        {visionCatalogEntry.status === 'loading'
                                                             ? t('settings.llm.ollamaLoadingModels', 'Loading Ollama models...')
-                                                            : (currentLlmCatalogEntry.error
-                                                                ? t('settings.llm.ollamaModelListError', `Model list unavailable: ${currentLlmCatalogEntry.error}`, { error: currentLlmCatalogEntry.error })
-                                                                : t('settings.llm.ollamaModelCount', `${currentLlmModelCatalog.all.length} models`, { count: currentLlmModelCatalog.all.length }))}
+                                                            : (visionCatalogEntry.error
+                                                                ? t('settings.llm.ollamaModelListError', `Model list unavailable: ${visionCatalogEntry.error}`, { error: visionCatalogEntry.error })
+                                                                : t('settings.llm.ollamaModelCount', `${visionModelCatalog.all.length} models`, { count: visionModelCatalog.all.length }))}
                                                     </div>
                                                 </div>
-                                                {currentLlmHasCandidateTags ? (
+                                                {visionHasCandidateTags ? (
                                                     <div className="settings-tool-model-legend" aria-label={t('settings.llm.modelTagLegendAria', 'Model tag legend')}>
                                                         <span className="settings-tool-model-legend-chip">{t('settings.llm.modelTagLegendConfirmed', 'Confirmed vision')}</span>
                                                         <span className="settings-tool-model-legend-chip is-candidate">{t('settings.llm.modelTagLegendCandidate', 'Possible vision / verify tag')}</span>
                                                     </div>
                                                 ) : null}
-                                                <div className="settings-tool-model-tag-list" aria-label={(currentLlmEntry.triggerType || 'text') === 'image'
-                                                    ? t('settings.llm.imageTagsSection', 'Image model tags')
-                                                    : t('settings.llm.textTagsSection', 'Text model tags')}>
-                                                    {currentLlmModelTags.length ? currentLlmModelTags.map((tag) => (
+                                                <div className="settings-tool-model-tag-list" aria-label={t('settings.llm.visionTagsSection', 'Vision model tags')}>
+                                                    {visionModelTags.length ? visionModelTags.map((tag) => (
                                                         <button
                                                             key={tag.name}
                                                             type="button"
                                                             title={getModelTagTitle(tag)}
-                                                            className={`settings-tool-model-tag ${tag.kind === 'candidate' ? 'is-candidate' : ''} ${String(currentLlmEntry.model || '').trim() === tag.name ? 'is-selected' : ''}`}
-                                                            onClick={() => updateLlmEntry(currentLlmName, { model: tag.name })}
+                                                            className={`settings-tool-model-tag ${tag.kind === 'candidate' ? 'is-candidate' : ''} ${String(visionLlm.model || DEFAULT_VISION_LLM.model).trim() === tag.name ? 'is-selected' : ''}`}
+                                                            onClick={() => updateVisionLlm({ model: tag.name })}
                                                         >
                                                             {tag.name}
                                                         </button>
@@ -1673,75 +1514,290 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                 </div>
                                             </div>
                                         ) : null}
-
-                                        <div className="ocr-tool-grid ocr-tool-grid-single">
+                                        <div className="ocr-tool-grid">
                                             <label className="ocr-tool-field">
-                                                <span>{t('settings.llm.promptLabel', 'Prompt')}</span>
-                                                <textarea rows={4} value={currentLlmEntry.prompt || ''} onChange={(e) => updateLlmEntry(currentLlmName, { prompt: e.target.value })} placeholder={(currentLlmEntry.triggerType || 'text') === 'text' ? 'Summarize {{text}}' : ''} />
+                                                <span>{t('settings.llm.temperature', 'Temperature')}</span>
+                                                <input type="number" min="0" max="2" step="0.01" value={visionLlm.temperature} onChange={(e) => updateVisionLlm({ temperature: parseFloat(e.target.value) || 0 })} />
+                                            </label>
+                                            <label className="ocr-tool-field">
+                                                <span>{t('settings.llm.topP', 'Top P')}</span>
+                                                <input type="number" min="0" max="1" step="0.01" value={visionLlm.top_p} onChange={(e) => updateVisionLlm({ top_p: parseFloat(e.target.value) || 0 })} />
+                                            </label>
+                                            <label className="ocr-tool-field">
+                                                <span>{t('settings.llm.topK', 'Top K')}</span>
+                                                <input type="number" min="0" step="1" value={visionLlm.top_k} onChange={(e) => updateVisionLlm({ top_k: parseFloat(e.target.value) || 0 })} />
+                                            </label>
+                                            <label className="ocr-tool-field">
+                                                <span>{t('settings.llm.contextWindow', 'Context window')}</span>
+                                                <input type="number" min="0" step="1" value={visionLlm.context_window} onChange={(e) => updateVisionLlm({ context_window: parseInt(e.target.value, 10) || 0 })} />
+                                            </label>
+                                            <label className="ocr-tool-field">
+                                                <span>{t('settings.llm.maxTokens', 'Max tokens')}</span>
+                                                <input type="number" min="0" step="1" value={visionLlm.max_tokens} onChange={(e) => updateVisionLlm({ max_tokens: parseInt(e.target.value, 10) || 0 })} />
+                                            </label>
+                                            <label className="ocr-tool-field">
+                                                <span>{t('settings.llm.presencePenalty', 'Presence penalty')}</span>
+                                                <input type="number" min="-2" max="2" step="0.1" value={visionLlm.presence_penalty} onChange={(e) => updateVisionLlm({ presence_penalty: parseFloat(e.target.value) || 0 })} />
                                             </label>
                                         </div>
-
-                                        <div className="settings-tool-llm-params-header">
-                                            <div className="ocr-tool-section-title settings-tool-llm-params-title">{t('settings.llm.paramsTitle', 'Parameters')}</div>
-                                            <button type="button" className="settings-tool-button settings-tool-button-ghost settings-tool-button-compact" onClick={() => setParamsExpanded((prev) => ({ ...prev, [currentLlmName]: !prev[currentLlmName] }))}>
-                                                {paramsExpanded[currentLlmName] ? t('settings.llm.collapse', 'Collapse') : t('settings.llm.expand', 'Expand')}
-                                            </button>
+                                        <div className="settings-tool-selected-language-row" aria-label={t('settings.llm.visionBuiltinActions', 'Built-in vision actions')}>
+                                            <span className="settings-tool-selected-language-chip">{t('history.vlDescribe', '解析图片')}</span>
+                                            <span className="settings-tool-selected-language-chip">{t('history.vlOcr', '图片转文字')}</span>
+                                            <span className="settings-tool-selected-language-chip">{t('history.vlSummary', '总结图片')}</span>
+                                            <span className="settings-tool-selected-language-chip">{t('history.vlAnalyze', '智能分析')}</span>
                                         </div>
+                                        <div className="settings-tool-section-helper">{t('settings.llm.visionActionHint', '这些内置图片动作会直接用上面的视觉模型配置，不需要再单独给 OCR 页配置一套。')}</div>
+                                    </section>
+                                )}
 
-                                        {paramsExpanded[currentLlmName] ? (
-                                            <div className="ocr-tool-grid">
+                                {llmSection === 'entries' && (
+                                    <>
+                                        <section className="ocr-tool-section">
+                                            <div className="ocr-tool-section-title">{t('settings.llm.entriesSection', 'Named LLM entries')}</div>
+                                            <div className="ocr-tool-grid ocr-tool-grid-single">
                                                 <label className="ocr-tool-field">
-                                                    <span>{t('settings.llm.temperature', 'Temperature')}</span>
-                                                    <input type="number" min="0" max="2" step="0.01" value={typeof currentLlmEntry.temperature !== 'undefined' ? currentLlmEntry.temperature : 0.7} onChange={(e) => updateLlmEntry(currentLlmName, { temperature: parseFloat(e.target.value) || 0 })} />
-                                                </label>
-                                                <label className="ocr-tool-field">
-                                                    <span>{t('settings.llm.topP', 'Top P')}</span>
-                                                    <input type="number" min="0" max="1" step="0.01" value={typeof currentLlmEntry.top_p !== 'undefined' ? currentLlmEntry.top_p : 0.95} onChange={(e) => updateLlmEntry(currentLlmName, { top_p: parseFloat(e.target.value) || 0 })} />
-                                                </label>
-                                                <label className="ocr-tool-field">
-                                                    <span>{t('settings.llm.topK', 'Top K')}</span>
-                                                    <input type="number" min="0" step="1" value={typeof currentLlmEntry.top_k !== 'undefined' ? currentLlmEntry.top_k : 0.9} onChange={(e) => updateLlmEntry(currentLlmName, { top_k: parseFloat(e.target.value) || 0 })} />
-                                                </label>
-                                                <label className="ocr-tool-field">
-                                                    <span>{t('settings.llm.contextWindow', 'Context window')}</span>
-                                                    <input type="number" min="0" step="1" value={typeof currentLlmEntry.context_window !== 'undefined' ? currentLlmEntry.context_window : 32768} onChange={(e) => updateLlmEntry(currentLlmName, { context_window: parseInt(e.target.value, 10) || 0 })} />
-                                                </label>
-                                                <label className="ocr-tool-field">
-                                                    <span>{t('settings.llm.maxTokens', 'Max tokens')}</span>
-                                                    <input type="number" min="0" step="1" value={typeof currentLlmEntry.max_tokens !== 'undefined' ? currentLlmEntry.max_tokens : 32768} onChange={(e) => updateLlmEntry(currentLlmName, { max_tokens: parseInt(e.target.value, 10) || 0 })} />
-                                                </label>
-                                                <label className="ocr-tool-field">
-                                                    <span>{t('settings.llm.minP', 'Min P')}</span>
-                                                    <input type="number" min="0" max="1" step="0.01" value={typeof currentLlmEntry.min_p !== 'undefined' ? currentLlmEntry.min_p : 0.05} onChange={(e) => updateLlmEntry(currentLlmName, { min_p: parseFloat(e.target.value) || 0 })} />
-                                                </label>
-                                                <label className="ocr-tool-field">
-                                                    <span>{t('settings.llm.presencePenalty', 'Presence penalty')}</span>
-                                                    <input type="number" min="-2" max="2" step="0.1" value={typeof currentLlmEntry.presence_penalty !== 'undefined' ? currentLlmEntry.presence_penalty : 1.1} onChange={(e) => updateLlmEntry(currentLlmName, { presence_penalty: parseFloat(e.target.value) || 0 })} />
+                                                    <span>{t('settings.llm.entryName.label', 'Entry name')}</span>
+                                                    <div className="settings-tool-inline-row">
+                                                        <input list="settings-tool-llm-names" value={settings._selectedLlm || ''} onChange={(e) => updateField('_selectedLlm', e.target.value)} placeholder={t('settings.llm.entryName.placeholder', 'Select or type an entry name')} />
+                                                        <datalist id="settings-tool-llm-names">
+                                                            {Object.keys(settings.llms || {}).map((name) => (
+                                                                <option key={name} value={name} />
+                                                            ))}
+                                                        </datalist>
+                                                        <button
+                                                            type="button"
+                                                            className="settings-tool-button settings-tool-button-secondary"
+                                                            onClick={() => {
+                                                                const name = String(settings._selectedLlm || '').trim();
+                                                                if (!name) return;
+                                                                if ((settings.llms || {})[name]) {
+                                                                    setLlmSection('entries');
+                                                                    updateField('_selectedLlm', name);
+                                                                    return;
+                                                                }
+                                                                updateField('llms', {
+                                                                    ...(settings.llms || {}),
+                                                                    [name]: createDefaultLlmEntry('text')
+                                                                });
+                                                                setLlmSection('entries');
+                                                                updateField('_selectedLlm', name);
+                                                            }}
+                                                        >
+                                                            {t('settings.llm.addButton', 'Add')}
+                                                        </button>
+                                                    </div>
+                                                    <small>{t('settings.llm.entriesHelp', '通用文本/图片 LLM 条目仍然放在这里管理；上面的 VLM 图片按钮不会跟这里混用。')}</small>
                                                 </label>
                                             </div>
-                                        ) : (
-                                            <div className="settings-tool-selected-hint">{t('settings.llm.paramsCollapsed', 'Advanced parameters are collapsed.')}</div>
-                                        )}
+                                        </section>
 
-                                        <div className="settings-tool-inline-actions">
-                                            <button
-                                                type="button"
-                                                className="settings-tool-button settings-tool-button-danger"
-                                                onClick={() => {
-                                                    if (!window.confirm(t('settings.llm.deleteConfirm', `Delete ${currentLlmName}?`, { name: currentLlmName }))) {
-                                                        return;
-                                                    }
-                                                    const nextLlms = { ...(settings.llms || {}) };
-                                                    delete nextLlms[currentLlmName];
-                                                    updateField('llms', nextLlms);
-                                                    updateField('_selectedLlm', pickSelectedLlm(nextLlms, ''));
-                                                }}
-                                            >
-                                                {t('settings.llm.delete', 'Delete')}
-                                            </button>
-                                            <span className="settings-tool-selected-hint">{t('settings.llm.saveNote', 'Save to persist your LLM changes.')}</span>
-                                        </div>
-                                    </section>
+                                        {currentLlmEntry && (
+                                            <section className="ocr-tool-section">
+                                                <div className="ocr-tool-section-title">{currentLlmName}</div>
+                                                <div className="ocr-tool-grid">
+                                                    <label className="ocr-tool-field">
+                                                        <span>{t('settings.llm.apiTypeLabel', 'API type')}</span>
+                                                        <select
+                                                            value={currentLlmEntry.apitype || 'ollama'}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value;
+                                                                const patch = { apitype: value };
+                                                                if (value === 'ollama' && (!currentLlmEntry.baseurl || !String(currentLlmEntry.baseurl).trim())) {
+                                                                    patch.baseurl = OLLAMA_DEFAULT_BASE_URL;
+                                                                }
+                                                                updateLlmEntry(currentLlmName, patch);
+                                                            }}
+                                                        >
+                                                            <option value="ollama">{t('settings.llm.apiTypeOptions.ollama', 'Ollama')}</option>
+                                                            <option value="openapi">{t('settings.llm.apiTypeOptions.openapi', 'OpenAPI')}</option>
+                                                        </select>
+                                                    </label>
+
+                                                    <label className="ocr-tool-field">
+                                                        <span>{t('settings.llm.triggerTypeLabel', 'Trigger type')}</span>
+                                                        <select
+                                                            value={currentLlmEntry.triggerType || 'text'}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value;
+                                                                const patch = { triggerType: value };
+                                                                if (value === 'text' && (!currentLlmEntry.prompt || !String(currentLlmEntry.prompt).trim())) {
+                                                                    patch.prompt = 'Summarize {{text}}';
+                                                                }
+                                                                if (value === 'image' && currentLlmEntry.prompt === 'Summarize {{text}}') {
+                                                                    patch.prompt = '';
+                                                                }
+                                                                updateLlmEntry(currentLlmName, patch);
+                                                            }}
+                                                        >
+                                                            <option value="text">{t('settings.llm.triggerTypeOptions.text', 'Text')}</option>
+                                                            <option value="image">{t('settings.llm.triggerTypeOptions.image', 'Image')}</option>
+                                                        </select>
+                                                        <small>{t('settings.llm.triggerHelp', 'Choose whether this preset is used for text or image flows.')}</small>
+                                                    </label>
+
+                                                    <label className="ocr-tool-field">
+                                                        <span>{t('settings.llm.modelLabel', 'Model')}</span>
+                                                        <div className="settings-tool-inline-row">
+                                                            <input
+                                                                type="text"
+                                                                list={currentLlmEntry.apitype === 'ollama' ? 'settings-tool-current-llm-models' : undefined}
+                                                                value={currentLlmEntry.model || ''}
+                                                                onChange={(e) => updateLlmEntry(currentLlmName, { model: e.target.value })}
+                                                            />
+                                                            {currentLlmEntry.apitype === 'ollama' ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="settings-tool-button settings-tool-button-ghost settings-tool-button-compact"
+                                                                    onClick={() => loadOllamaModels(currentLlmOllamaBaseUrl, { force: true })}
+                                                                >
+                                                                    {t('settings.llm.ollamaRefreshModels', 'Refresh models')}
+                                                                </button>
+                                                            ) : null}
+                                                        </div>
+                                                        {currentLlmEntry.apitype === 'ollama' ? (
+                                                            <>
+                                                                <datalist id="settings-tool-current-llm-models">
+                                                                    {currentLlmModelCatalog.all.map((name) => (
+                                                                        <option key={name} value={name} />
+                                                                    ))}
+                                                                </datalist>
+                                                                <small>{t('settings.llm.ollamaInputHelp', 'You can pick a detected Ollama model from the list or type one manually.')}</small>
+                                                            </>
+                                                        ) : null}
+                                                    </label>
+
+                                                    <label className="ocr-tool-field">
+                                                        <span>{t('settings.llm.baseUrlLabel', 'Base URL')}</span>
+                                                        <input type="text" value={currentLlmEntry.baseurl || ''} placeholder={OLLAMA_DEFAULT_BASE_URL} onChange={(e) => updateLlmEntry(currentLlmName, { baseurl: e.target.value })} />
+                                                    </label>
+
+                                                    <label className="ocr-tool-field">
+                                                        <span>{t('settings.llm.apiKeyLabel', 'API key')}</span>
+                                                        <input type="password" value={currentLlmEntry.apikey || ''} onChange={(e) => updateLlmEntry(currentLlmName, { apikey: e.target.value })} />
+                                                    </label>
+
+                                                    <label className="ocr-tool-field">
+                                                        <span>{t('settings.llm.entryShortcutLabel', 'Entry shortcut')}</span>
+                                                        <ShortcutCapture value={currentLlmEntry.llmShortcut || ''} onChange={(value) => updateLlmEntry(currentLlmName, { llmShortcut: value })} placeholder={t('settings.llm.shortcutPlaceholder', 'Press a shortcut')} />
+                                                        <small>{t('settings.llm.shortcutHelp', 'Optional shortcut bound to this LLM preset.')}</small>
+                                                    </label>
+                                                </div>
+
+                                                {currentLlmEntry.apitype === 'ollama' ? (
+                                                    <div className="settings-tool-model-browser">
+                                                        <div className="settings-tool-section-header settings-tool-section-header-compact">
+                                                            <div className="settings-tool-section-heading">
+                                                                <div className="ocr-tool-section-title">{(currentLlmEntry.triggerType || 'text') === 'image'
+                                                                    ? t('settings.llm.imageTagsSection', 'Image model tags')
+                                                                    : t('settings.llm.textTagsSection', 'Text model tags')}</div>
+                                                                <div className="settings-tool-section-helper">{(currentLlmEntry.triggerType || 'text') === 'image'
+                                                                    ? t('settings.llm.imageTagsHelp', 'These tags only change the current image preset model.')
+                                                                    : t('settings.llm.textTagsHelp', 'These tags only change the current text preset model.')}</div>
+                                                            </div>
+                                                            <div className="settings-tool-selected-hint">
+                                                                {currentLlmCatalogEntry.status === 'loading'
+                                                                    ? t('settings.llm.ollamaLoadingModels', 'Loading Ollama models...')
+                                                                    : (currentLlmCatalogEntry.error
+                                                                        ? t('settings.llm.ollamaModelListError', `Model list unavailable: ${currentLlmCatalogEntry.error}`, { error: currentLlmCatalogEntry.error })
+                                                                        : t('settings.llm.ollamaModelCount', `${currentLlmModelCatalog.all.length} models`, { count: currentLlmModelCatalog.all.length }))}
+                                                            </div>
+                                                        </div>
+                                                        {currentLlmHasCandidateTags ? (
+                                                            <div className="settings-tool-model-legend" aria-label={t('settings.llm.modelTagLegendAria', 'Model tag legend')}>
+                                                                <span className="settings-tool-model-legend-chip">{t('settings.llm.modelTagLegendConfirmed', 'Confirmed vision')}</span>
+                                                                <span className="settings-tool-model-legend-chip is-candidate">{t('settings.llm.modelTagLegendCandidate', 'Possible vision / verify tag')}</span>
+                                                            </div>
+                                                        ) : null}
+                                                        <div className="settings-tool-model-tag-list" aria-label={(currentLlmEntry.triggerType || 'text') === 'image'
+                                                            ? t('settings.llm.imageTagsSection', 'Image model tags')
+                                                            : t('settings.llm.textTagsSection', 'Text model tags')}>
+                                                            {currentLlmModelTags.length ? currentLlmModelTags.map((tag) => (
+                                                                <button
+                                                                    key={tag.name}
+                                                                    type="button"
+                                                                    title={getModelTagTitle(tag)}
+                                                                    className={`settings-tool-model-tag ${tag.kind === 'candidate' ? 'is-candidate' : ''} ${String(currentLlmEntry.model || '').trim() === tag.name ? 'is-selected' : ''}`}
+                                                                    onClick={() => updateLlmEntry(currentLlmName, { model: tag.name })}
+                                                                >
+                                                                    {tag.name}
+                                                                </button>
+                                                            )) : (
+                                                                <span className="settings-tool-model-status">{t('settings.llm.ollamaModelListUnavailable', 'No Ollama model list is available yet. You can still type a model name manually.')}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+
+                                                <div className="ocr-tool-grid ocr-tool-grid-single">
+                                                    <label className="ocr-tool-field">
+                                                        <span>{t('settings.llm.promptLabel', 'Prompt')}</span>
+                                                        <textarea rows={4} value={currentLlmEntry.prompt || ''} onChange={(e) => updateLlmEntry(currentLlmName, { prompt: e.target.value })} placeholder={(currentLlmEntry.triggerType || 'text') === 'text' ? 'Summarize {{text}}' : ''} />
+                                                    </label>
+                                                </div>
+
+                                                <div className="settings-tool-llm-params-header">
+                                                    <div className="ocr-tool-section-title settings-tool-llm-params-title">{t('settings.llm.paramsTitle', 'Parameters')}</div>
+                                                    <button type="button" className="settings-tool-button settings-tool-button-ghost settings-tool-button-compact" onClick={() => setParamsExpanded((prev) => ({ ...prev, [currentLlmName]: !prev[currentLlmName] }))}>
+                                                        {paramsExpanded[currentLlmName] ? t('settings.llm.collapse', 'Collapse') : t('settings.llm.expand', 'Expand')}
+                                                    </button>
+                                                </div>
+
+                                                {paramsExpanded[currentLlmName] ? (
+                                                    <div className="ocr-tool-grid">
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.temperature', 'Temperature')}</span>
+                                                            <input type="number" min="0" max="2" step="0.01" value={typeof currentLlmEntry.temperature !== 'undefined' ? currentLlmEntry.temperature : 0.7} onChange={(e) => updateLlmEntry(currentLlmName, { temperature: parseFloat(e.target.value) || 0 })} />
+                                                        </label>
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.topP', 'Top P')}</span>
+                                                            <input type="number" min="0" max="1" step="0.01" value={typeof currentLlmEntry.top_p !== 'undefined' ? currentLlmEntry.top_p : 0.95} onChange={(e) => updateLlmEntry(currentLlmName, { top_p: parseFloat(e.target.value) || 0 })} />
+                                                        </label>
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.topK', 'Top K')}</span>
+                                                            <input type="number" min="0" step="1" value={typeof currentLlmEntry.top_k !== 'undefined' ? currentLlmEntry.top_k : 0.9} onChange={(e) => updateLlmEntry(currentLlmName, { top_k: parseFloat(e.target.value) || 0 })} />
+                                                        </label>
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.contextWindow', 'Context window')}</span>
+                                                            <input type="number" min="0" step="1" value={typeof currentLlmEntry.context_window !== 'undefined' ? currentLlmEntry.context_window : 32768} onChange={(e) => updateLlmEntry(currentLlmName, { context_window: parseInt(e.target.value, 10) || 0 })} />
+                                                        </label>
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.maxTokens', 'Max tokens')}</span>
+                                                            <input type="number" min="0" step="1" value={typeof currentLlmEntry.max_tokens !== 'undefined' ? currentLlmEntry.max_tokens : 32768} onChange={(e) => updateLlmEntry(currentLlmName, { max_tokens: parseInt(e.target.value, 10) || 0 })} />
+                                                        </label>
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.minP', 'Min P')}</span>
+                                                            <input type="number" min="0" max="1" step="0.01" value={typeof currentLlmEntry.min_p !== 'undefined' ? currentLlmEntry.min_p : 0.05} onChange={(e) => updateLlmEntry(currentLlmName, { min_p: parseFloat(e.target.value) || 0 })} />
+                                                        </label>
+                                                        <label className="ocr-tool-field">
+                                                            <span>{t('settings.llm.presencePenalty', 'Presence penalty')}</span>
+                                                            <input type="number" min="-2" max="2" step="0.1" value={typeof currentLlmEntry.presence_penalty !== 'undefined' ? currentLlmEntry.presence_penalty : 1.1} onChange={(e) => updateLlmEntry(currentLlmName, { presence_penalty: parseFloat(e.target.value) || 0 })} />
+                                                        </label>
+                                                    </div>
+                                                ) : (
+                                                    <div className="settings-tool-selected-hint">{t('settings.llm.paramsCollapsed', 'Advanced parameters are collapsed.')}</div>
+                                                )}
+
+                                                <div className="settings-tool-inline-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="settings-tool-button settings-tool-button-danger"
+                                                        onClick={() => {
+                                                            if (!window.confirm(t('settings.llm.deleteConfirm', `Delete ${currentLlmName}?`, { name: currentLlmName }))) {
+                                                                return;
+                                                            }
+                                                            const nextLlms = { ...(settings.llms || {}) };
+                                                            delete nextLlms[currentLlmName];
+                                                            updateField('llms', nextLlms);
+                                                            updateField('_selectedLlm', pickSelectedLlm(nextLlms, ''));
+                                                        }}
+                                                    >
+                                                        {t('settings.llm.delete', 'Delete')}
+                                                    </button>
+                                                    <span className="settings-tool-selected-hint">{t('settings.llm.saveNote', 'Save to persist your LLM changes.')}</span>
+                                                </div>
+                                            </section>
+                                        )}
+                                    </>
                                 )}
                             </>
                         )}

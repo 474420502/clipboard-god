@@ -2799,6 +2799,59 @@ body.high-contrast-theme .ocr-tool-body::-webkit-scrollbar-thumb {
     min-width: 0;
 }
 
+.settings-tool-subpage-section {
+    gap: 14px;
+}
+
+.settings-tool-subtabbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.settings-tool-subtab {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    min-width: min(280px, 100%);
+    min-height: 68px;
+    padding: 14px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(37, 99, 235, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--settings-tool-ink);
+    cursor: pointer;
+    transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.settings-tool-subtab:hover {
+    transform: translateY(-1px);
+    border-color: rgba(37, 99, 235, 0.2);
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.settings-tool-subtab.active {
+    border-color: rgba(37, 99, 235, 0.22);
+    background: linear-gradient(135deg, rgba(219, 234, 254, 0.94), rgba(239, 246, 255, 0.98));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 14px 28px rgba(37, 99, 235, 0.1);
+}
+
+.settings-tool-subtab-kicker {
+    color: rgba(37, 99, 235, 0.72);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.settings-tool-subtab-title {
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
 .settings-tool-model-browser {
     display: flex;
     flex-direction: column;

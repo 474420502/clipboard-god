@@ -88,6 +88,17 @@
         "llm": {
             "title": "LLM Integrations",
             "description": "Configure named LLM entries used by the AI tools.",
+            "sectionSwitcherTitle": "LLM workspaces",
+            "sectionSwitcherHelp": "Use these tags to switch between the dedicated VLM image-action config and the separate named LLM preset area.",
+            "sectionSwitcherAria": "LLM section switcher",
+            "sectionTabs": {
+                "vision": "Vision LLM / VLM",
+                "entries": "Named LLM entries"
+            },
+            "sectionDescriptions": {
+                "vision": "Manage the shared vision model config used by the screenshot toolbar, OCR window, and built-in image actions.",
+                "entries": "Manage independent text/image LLM presets that stay separate from the built-in VLM actions."
+            },
             "visionSection": "Vision LLM / VLM",
             "visionHelp": "Image actions in the OCR window and screenshot toolbar reuse this dedicated vision model config instead of mixing it into OCR engine settings.",
             "visionTagsSection": "Vision model tags",
