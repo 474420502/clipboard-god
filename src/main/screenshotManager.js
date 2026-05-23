@@ -31,13 +31,18 @@ const OCR_LANGUAGE_LABELS = {
 };
 
 const VISION_ACTION_ITEMS = {
+  'vl-describe': {
+    title: '解析当前截图',
+    label: '解析图片',
+    fileNamePrefix: 'vl-describe'
+  },
   'vl-ocr': {
-    title: '使用 VL 做 OCR',
-    label: 'VL OCR',
+    title: '把图片转成文字',
+    label: '转文字',
     fileNamePrefix: 'vl-ocr'
   },
   'vl-summary': {
-    title: '总结当前截图',
+    title: '总结当前图片',
     label: '总结',
     fileNamePrefix: 'vl-summary'
   },
@@ -143,10 +148,24 @@ class ScreenshotManager {
         }
       },
       {
+        key: 'vl-describe',
+        title: VISION_ACTION_ITEMS['vl-describe'].title,
+        label: VISION_ACTION_ITEMS['vl-describe'].label,
+        position: { after: 'ocr' },
+        requiresSelection: true,
+        includeImage: true,
+        imageResource: {
+          fileNamePrefix: VISION_ACTION_ITEMS['vl-describe'].fileNamePrefix
+        },
+        handler: async (context) => {
+          await this._handleVisionOperation('vl-describe', context);
+        }
+      },
+      {
         key: 'vl-ocr',
         title: VISION_ACTION_ITEMS['vl-ocr'].title,
         label: VISION_ACTION_ITEMS['vl-ocr'].label,
-        position: { after: 'ocr' },
+        position: { after: 'vl-describe' },
         requiresSelection: true,
         includeImage: true,
         imageResource: {
@@ -241,7 +260,7 @@ class ScreenshotManager {
   }
 
   async _handleVisionOperation(actionId, context) {
-    const action = VISION_ACTION_ITEMS[actionId] || VISION_ACTION_ITEMS['vl-analyze'];
+    const action = VISION_ACTION_ITEMS[actionId] || VISION_ACTION_ITEMS['vl-describe'];
 
     try {
       if (context && typeof context.update === 'function') {

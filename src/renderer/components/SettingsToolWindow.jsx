@@ -30,6 +30,20 @@ const DEFAULT_OCR_VL_MAX_CONCURRENT_JOBS = Math.max(
     Math.min(2, Math.floor(DEFAULT_OCR_VL_CPU_THREADS / 4) || 1)
 );
 
+const DEFAULT_VISION_LLM = {
+    apitype: 'ollama',
+    model: 'qwen3.6-vl:4b',
+    baseurl: 'http://localhost:11434',
+    apikey: '',
+    temperature: 0.3,
+    top_p: 0.92,
+    top_k: 40,
+    context_window: 32768,
+    max_tokens: 32768,
+    min_p: 0.05,
+    presence_penalty: 1.0
+};
+
 const DEFAULT_SETTINGS = {
     previewLength: 120,
     maxHistoryItems: 500,
@@ -40,8 +54,7 @@ const DEFAULT_SETTINGS = {
     enableTooltips: true,
     launchOnStartup: false,
     locale: 'zh-CN',
-    vlVisionModel: 'qwen3.6-vl:4b',
-    vlVisionBaseUrl: 'http://localhost:11434'
+    visionLlm: { ...DEFAULT_VISION_LLM }
 };
 
 const TAB_IDS = ['general', 'appearance', 'shortcuts', 'ocr', 'llm'];
@@ -97,7 +110,7 @@ const TAB_DESCRIPTIONS = {
     appearance: '主题与整体视觉呈现，决定这个应用的气质。',
     shortcuts: '全局唤起、截图触发以及高频操作的键盘入口。',
     ocr: 'OCR 模型、CLI 环境、语言、预处理与运行时策略。',
-    llm: 'LLM 预设、提示词与高级采样参数的集中配置。'
+    llm: 'VLM 图像动作与通用 LLM 预设的集中配置。'
 };
 
 const TAB_KICKERS = {
@@ -158,6 +171,42 @@ const pickSelectedLlm = (llms, preferred = '') => {
     return names[0] || '';
 };
 
+const normalizeVisionLlm = (visionLlm = {}, legacyConfig = {}) => {
+    const next = visionLlm && typeof visionLlm === 'object' ? visionLlm : {};
+    const legacyModel = typeof legacyConfig.vlVisionModel === 'string' && String(legacyConfig.vlVisionModel).trim()
+        ? String(legacyConfig.vlVisionModel).trim()
+        : '';
+    const legacyBaseUrl = typeof legacyConfig.vlVisionBaseUrl === 'string' && String(legacyConfig.vlVisionBaseUrl).trim()
+        ? String(legacyConfig.vlVisionBaseUrl).trim()
+        : '';
+    const readNumber = (value, fallback) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    return {
+        apitype: String(next.apitype || DEFAULT_VISION_LLM.apitype).trim().toLowerCase() === 'openapi' ? 'openapi' : 'ollama',
+        model: typeof next.model === 'string' && String(next.model).trim()
+            ? String(next.model).trim()
+            : (legacyModel || DEFAULT_VISION_LLM.model),
+        baseurl: typeof next.baseurl === 'string' && String(next.baseurl).trim()
+            ? String(next.baseurl).trim()
+            : (typeof next.baseUrl === 'string' && String(next.baseUrl).trim()
+                ? String(next.baseUrl).trim()
+                : (legacyBaseUrl || DEFAULT_VISION_LLM.baseurl)),
+        apikey: typeof next.apikey === 'string'
+            ? next.apikey
+            : (typeof next.apiKey === 'string' ? next.apiKey : DEFAULT_VISION_LLM.apikey),
+        temperature: readNumber(next.temperature, DEFAULT_VISION_LLM.temperature),
+        top_p: readNumber(next.top_p, DEFAULT_VISION_LLM.top_p),
+        top_k: readNumber(next.top_k, DEFAULT_VISION_LLM.top_k),
+        context_window: readNumber(next.context_window, DEFAULT_VISION_LLM.context_window),
+        max_tokens: readNumber(next.max_tokens, DEFAULT_VISION_LLM.max_tokens),
+        min_p: readNumber(next.min_p, DEFAULT_VISION_LLM.min_p),
+        presence_penalty: readNumber(next.presence_penalty, DEFAULT_VISION_LLM.presence_penalty)
+    };
+};
+
 const normalizeSettings = (cfg = {}, preferredSelectedLlm = '') => {
     const llms = cloneLlmEntries(cfg.llms);
     return {
@@ -170,12 +219,7 @@ const normalizeSettings = (cfg = {}, preferredSelectedLlm = '') => {
         enableTooltips: typeof cfg.enableTooltips !== 'undefined' ? !!cfg.enableTooltips : DEFAULT_SETTINGS.enableTooltips,
         launchOnStartup: typeof cfg.launchOnStartup !== 'undefined' ? !!cfg.launchOnStartup : DEFAULT_SETTINGS.launchOnStartup,
         locale: typeof cfg.locale === 'string' ? cfg.locale : DEFAULT_SETTINGS.locale,
-        vlVisionModel: typeof cfg.vlVisionModel === 'string' && String(cfg.vlVisionModel).trim()
-            ? String(cfg.vlVisionModel)
-            : DEFAULT_SETTINGS.vlVisionModel,
-        vlVisionBaseUrl: typeof cfg.vlVisionBaseUrl === 'string' && String(cfg.vlVisionBaseUrl).trim()
-            ? String(cfg.vlVisionBaseUrl)
-            : DEFAULT_SETTINGS.vlVisionBaseUrl,
+        visionLlm: normalizeVisionLlm(cfg.visionLlm, cfg),
         llms,
         _selectedLlm: pickSelectedLlm(llms, cfg._selectedLlm || preferredSelectedLlm),
         ocrLanguages: normalizeLanguages(cfg.ocrLanguages),
@@ -210,12 +254,9 @@ const buildPersistedSettings = (settings = {}) => ({
     enableTooltips: !!settings.enableTooltips,
     launchOnStartup: !!settings.launchOnStartup,
     locale: typeof settings.locale === 'string' ? settings.locale : DEFAULT_SETTINGS.locale,
-    vlVisionModel: typeof settings.vlVisionModel === 'string' && String(settings.vlVisionModel).trim()
-        ? String(settings.vlVisionModel).trim()
-        : DEFAULT_SETTINGS.vlVisionModel,
-    vlVisionBaseUrl: typeof settings.vlVisionBaseUrl === 'string' && String(settings.vlVisionBaseUrl).trim()
-        ? String(settings.vlVisionBaseUrl).trim()
-        : DEFAULT_SETTINGS.vlVisionBaseUrl,
+    visionLlm: normalizeVisionLlm(settings.visionLlm, settings),
+    vlVisionModel: undefined,
+    vlVisionBaseUrl: undefined,
     llms: cloneLlmEntries(settings.llms),
     ocrLanguages: normalizeLanguages(settings.ocrLanguages),
     ocrTextLayout: { ...DEFAULT_OCR_TEXT_LAYOUT, ...(settings.ocrTextLayout || {}) },
@@ -419,6 +460,17 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                     ...((prev.llms || {})[name] || {}),
                     ...patch
                 }
+            }
+        }));
+    }, []);
+
+    const updateVisionLlm = useCallback((patch) => {
+        setSettings((prev) => ({
+            ...prev,
+            visionLlm: {
+                ...DEFAULT_VISION_LLM,
+                ...(prev.visionLlm || {}),
+                ...patch
             }
         }));
     }, []);
@@ -649,6 +701,8 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
     const llmEntries = Object.keys(settings.llms || {});
     const localeLabel = settings.locale === 'en' ? 'English' : '简体中文';
     const isExternalOcrModel = settings.ocrModelSource === 'paddleocr-vl-cli';
+    const visionLlm = normalizeVisionLlm(settings.visionLlm, settings);
+    const visionApiLabel = visionLlm.apitype === 'openapi' ? 'OpenAPI' : 'Ollama';
     const runtimeCommandDisplay = getCompactCommandLabel(settings.ocrVlCliCommand || 'paddleocr');
     const currentModelSourceLabel = settings.ocrModelSource === 'paddleocr-vl-cli'
         ? t('settings.ocr.modelSourcePaddleVlCli', 'PaddleOCR-VL (local CLI)')
@@ -690,9 +744,9 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
             ];
         }
         return [
-            { label: 'Entries', value: `${llmEntries.length}`, detail: '可用预设' },
-            { label: 'Current', value: currentLlmName || 'None', detail: '当前编辑项' },
-            { label: 'Trigger', value: currentLlmEntry?.triggerType || 'text', detail: currentLlmEntry?.model || '未设置模型' }
+            { label: 'VLM', value: visionLlm.model || 'Unset', detail: `${visionApiLabel} / 图片动作` },
+            { label: 'Entries', value: `${llmEntries.length}`, detail: '通用预设' },
+            { label: 'Current', value: currentLlmName || 'None', detail: currentLlmEntry?.triggerType || 'text' }
         ];
     })();
 
@@ -969,29 +1023,6 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                 </section>
 
                                 <section className="ocr-tool-section">
-                                    <div className="ocr-tool-section-title">{t('settings.ocr.visualAssistantSection', 'Vision Assistant')}</div>
-                                    <div className="settings-tool-section-helper">{t('settings.ocr.visualAssistantHelp', 'Screenshot toolbar and OCR window quick actions reuse this visual model to run VL OCR, screenshot summaries, and richer image analysis prompts.')}</div>
-                                    <div className="ocr-tool-grid">
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.ocr.visualAssistantModel', 'Vision model')}</span>
-                                            <input type="text" value={settings.vlVisionModel || DEFAULT_SETTINGS.vlVisionModel} onChange={(e) => updateField('vlVisionModel', e.target.value)} placeholder="qwen3.6-vl:4b" />
-                                            <small>{t('settings.ocr.visualAssistantModelHelp', 'Use your local Ollama visual model name here, for example qwen3.6-vl:4b or qwen3.6-vl:latest.')}</small>
-                                        </label>
-
-                                        <label className="ocr-tool-field">
-                                            <span>{t('settings.ocr.visualAssistantBaseUrl', 'Vision endpoint')}</span>
-                                            <input type="text" value={settings.vlVisionBaseUrl || DEFAULT_SETTINGS.vlVisionBaseUrl} onChange={(e) => updateField('vlVisionBaseUrl', e.target.value)} placeholder="http://localhost:11434" />
-                                            <small>{t('settings.ocr.visualAssistantBaseUrlHelp', 'The screenshot toolbar and OCR window VL actions send image prompts to this Ollama-compatible endpoint.')}</small>
-                                        </label>
-                                    </div>
-                                    <div className="settings-tool-selected-language-row" aria-label={t('settings.ocr.visualAssistantActionsLabel', 'Built-in vision actions')}>
-                                        <span className="settings-tool-selected-language-chip">VL OCR</span>
-                                        <span className="settings-tool-selected-language-chip">截图总结</span>
-                                        <span className="settings-tool-selected-language-chip">智能分析</span>
-                                    </div>
-                                </section>
-
-                                <section className="ocr-tool-section">
                                     <div className="ocr-tool-section-title">{t('settings.ocr.runtimeSection', 'PaddleOCR-VL Runtime')}</div>
                                     <div className="ocr-tool-grid">
                                         <label className="ocr-tool-field">
@@ -1099,7 +1130,69 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                         {activeTab === 'llm' && (
                             <>
                                 <section className="ocr-tool-section">
-                                    <div className="ocr-tool-section-title">{t('settings.llm.title', 'LLM')}</div>
+                                    <div className="ocr-tool-section-title">{t('settings.llm.visionSection', 'Vision LLM / VLM')}</div>
+                                    <div className="settings-tool-section-helper">{t('settings.llm.visionHelp', 'OCR 窗口和截图工具栏里的图片动作会统一复用这组视觉模型配置，不再混在 OCR 引擎参数里。')}</div>
+                                    <div className="ocr-tool-grid">
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.apiTypeLabel', 'API type')}</span>
+                                            <select value={visionLlm.apitype || 'ollama'} onChange={(e) => updateVisionLlm({ apitype: e.target.value })}>
+                                                <option value="ollama">{t('settings.llm.apiTypeOptions.ollama', 'Ollama')}</option>
+                                                <option value="openapi">{t('settings.llm.apiTypeOptions.openapi', 'OpenAPI')}</option>
+                                            </select>
+                                        </label>
+
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.modelLabel', 'Model')}</span>
+                                            <input type="text" value={visionLlm.model || DEFAULT_VISION_LLM.model} onChange={(e) => updateVisionLlm({ model: e.target.value })} placeholder="qwen3.6-vl:4b" />
+                                        </label>
+
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.baseUrlLabel', 'Base URL')}</span>
+                                            <input type="text" value={visionLlm.baseurl || DEFAULT_VISION_LLM.baseurl} placeholder="http://localhost:11434" onChange={(e) => updateVisionLlm({ baseurl: e.target.value })} />
+                                        </label>
+
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.apiKeyLabel', 'API Key')}</span>
+                                            <input type="password" value={visionLlm.apikey || ''} onChange={(e) => updateVisionLlm({ apikey: e.target.value })} />
+                                        </label>
+                                    </div>
+                                    <div className="ocr-tool-grid">
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.temperature', 'Temperature')}</span>
+                                            <input type="number" min="0" max="2" step="0.01" value={visionLlm.temperature} onChange={(e) => updateVisionLlm({ temperature: parseFloat(e.target.value) || 0 })} />
+                                        </label>
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.topP', 'Top P')}</span>
+                                            <input type="number" min="0" max="1" step="0.01" value={visionLlm.top_p} onChange={(e) => updateVisionLlm({ top_p: parseFloat(e.target.value) || 0 })} />
+                                        </label>
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.topK', 'Top K')}</span>
+                                            <input type="number" min="0" step="1" value={visionLlm.top_k} onChange={(e) => updateVisionLlm({ top_k: parseFloat(e.target.value) || 0 })} />
+                                        </label>
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.contextWindow', 'Context window')}</span>
+                                            <input type="number" min="0" step="1" value={visionLlm.context_window} onChange={(e) => updateVisionLlm({ context_window: parseInt(e.target.value, 10) || 0 })} />
+                                        </label>
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.maxTokens', 'Max tokens')}</span>
+                                            <input type="number" min="0" step="1" value={visionLlm.max_tokens} onChange={(e) => updateVisionLlm({ max_tokens: parseInt(e.target.value, 10) || 0 })} />
+                                        </label>
+                                        <label className="ocr-tool-field">
+                                            <span>{t('settings.llm.presencePenalty', 'Presence penalty')}</span>
+                                            <input type="number" min="-2" max="2" step="0.1" value={visionLlm.presence_penalty} onChange={(e) => updateVisionLlm({ presence_penalty: parseFloat(e.target.value) || 0 })} />
+                                        </label>
+                                    </div>
+                                    <div className="settings-tool-selected-language-row" aria-label={t('settings.llm.visionBuiltinActions', 'Built-in vision actions')}>
+                                        <span className="settings-tool-selected-language-chip">{t('history.vlDescribe', '解析图片')}</span>
+                                        <span className="settings-tool-selected-language-chip">{t('history.vlOcr', '图片转文字')}</span>
+                                        <span className="settings-tool-selected-language-chip">{t('history.vlSummary', '总结图片')}</span>
+                                        <span className="settings-tool-selected-language-chip">{t('history.vlAnalyze', '智能分析')}</span>
+                                    </div>
+                                    <div className="settings-tool-section-helper">{t('settings.llm.visionActionHint', '这些内置图片动作会直接用上面的视觉模型配置，不需要再单独给 OCR 页配置一套。')}</div>
+                                </section>
+
+                                <section className="ocr-tool-section">
+                                    <div className="ocr-tool-section-title">{t('settings.llm.entriesSection', 'Named LLM entries')}</div>
                                     <div className="ocr-tool-grid ocr-tool-grid-single">
                                         <label className="ocr-tool-field">
                                             <span>{t('settings.llm.entryName.label', 'Entry name')}</span>
@@ -1145,7 +1238,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                     {t('settings.llm.addButton', 'Add')}
                                                 </button>
                                             </div>
-                                            <small>{t('settings.llm.description', 'Manage named LLM presets and their shortcuts from one place.')}</small>
+                                            <small>{t('settings.llm.entriesHelp', '通用文本/图片 LLM 条目仍然放在这里管理；上面的 VLM 图片按钮不会跟这里混用。')}</small>
                                         </label>
                                     </div>
                                 </section>

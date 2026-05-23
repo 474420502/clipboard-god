@@ -75,15 +75,34 @@ const OCR_LANGUAGE_SHORT_LABELS = {
   pol: 'Polski'
 };
 
-const DEFAULT_VISION_MODEL = 'qwen3.6-vl:4b';
-const DEFAULT_VISION_BASE_URL = 'http://localhost:11434';
+const DEFAULT_VISION_LLM_CONFIG = {
+  apitype: 'ollama',
+  model: 'qwen3.6-vl:4b',
+  baseurl: 'http://localhost:11434',
+  apikey: '',
+  temperature: 0.3,
+  top_p: 0.92,
+  top_k: 40,
+  context_window: 32768,
+  max_tokens: 32768,
+  presence_penalty: 1.0
+};
 
 const VISION_ACTION_PRESETS = {
+  'vl-describe': {
+    windowName: '解析图片',
+    buildPrompt: () => [
+      '请解析这张图片的主要内容。',
+      '输出结构：',
+      '1. 这是什么画面、页面或场景。',
+      '2. 3 到 5 条最重要的信息。',
+      '3. 如果图中有明显按钮、状态、错误、数字或关键文字，请单独列出。',
+      '4. 如果适合进一步追问，也给出 2 到 3 个建议方向。',
+      '请直接输出结果，不要写多余寒暄。'
+    ].join('\n')
+  },
   'vl-ocr': {
-    windowName: 'VL OCR',
-    temperature: 0.1,
-    top_p: 0.9,
-    top_k: 32,
+    windowName: '图片转文字',
     buildPrompt: ({ languageHint }) => [
       '你是一名严格的视觉 OCR 与版面理解助手。',
       languageHint ? `当前图片里优先留意这些语言：${languageHint}。` : '如果图片里有多语言文本，请按原语言原样保留。',
@@ -97,9 +116,6 @@ const VISION_ACTION_PRESETS = {
   },
   'vl-summary': {
     windowName: '截图总结',
-    temperature: 0.3,
-    top_p: 0.92,
-    top_k: 40,
     buildPrompt: () => [
       '请总结这张截图/图片的主要内容。',
       '输出格式：',
@@ -111,9 +127,6 @@ const VISION_ACTION_PRESETS = {
   },
   'vl-analyze': {
     windowName: '智能分析',
-    temperature: 0.35,
-    top_p: 0.94,
-    top_k: 48,
     buildPrompt: () => [
       '请把这张图片当作当前用户正在处理的截图来做智能解析。',
       '输出结构：',
@@ -801,17 +814,45 @@ class MainProcess {
 
   getVisionAssistantConfig() {
     const config = Config.getAll() || {};
-    const model = typeof config.vlVisionModel === 'string' && String(config.vlVisionModel).trim()
+    const rawVisionConfig = config.visionLlm && typeof config.visionLlm === 'object'
+      ? config.visionLlm
+      : {};
+    const legacyModel = typeof config.vlVisionModel === 'string' && String(config.vlVisionModel).trim()
       ? String(config.vlVisionModel).trim()
-      : DEFAULT_VISION_MODEL;
-    const baseUrl = typeof config.vlVisionBaseUrl === 'string' && String(config.vlVisionBaseUrl).trim()
+      : '';
+    const legacyBaseUrl = typeof config.vlVisionBaseUrl === 'string' && String(config.vlVisionBaseUrl).trim()
       ? String(config.vlVisionBaseUrl).trim()
-      : DEFAULT_VISION_BASE_URL;
+      : '';
+    const model = typeof rawVisionConfig.model === 'string' && String(rawVisionConfig.model).trim()
+      ? String(rawVisionConfig.model).trim()
+      : (legacyModel || DEFAULT_VISION_LLM_CONFIG.model);
+    const baseurl = typeof rawVisionConfig.baseurl === 'string' && String(rawVisionConfig.baseurl).trim()
+      ? String(rawVisionConfig.baseurl).trim()
+      : (typeof rawVisionConfig.baseUrl === 'string' && String(rawVisionConfig.baseUrl).trim()
+        ? String(rawVisionConfig.baseUrl).trim()
+        : (legacyBaseUrl || DEFAULT_VISION_LLM_CONFIG.baseurl));
+    const apitype = String(rawVisionConfig.apitype || DEFAULT_VISION_LLM_CONFIG.apitype).trim().toLowerCase() === 'openapi'
+      ? 'openapi'
+      : 'ollama';
+
+    const readNumber = (value, fallback) => {
+      const next = Number(value);
+      return Number.isFinite(next) ? next : fallback;
+    };
 
     return {
+      apitype,
       model,
-      baseUrl,
-      apitype: 'ollama'
+      baseurl,
+      apikey: typeof rawVisionConfig.apikey === 'string'
+        ? rawVisionConfig.apikey
+        : (typeof rawVisionConfig.apiKey === 'string' ? rawVisionConfig.apiKey : DEFAULT_VISION_LLM_CONFIG.apikey),
+      temperature: readNumber(rawVisionConfig.temperature, DEFAULT_VISION_LLM_CONFIG.temperature),
+      top_p: readNumber(rawVisionConfig.top_p, DEFAULT_VISION_LLM_CONFIG.top_p),
+      top_k: readNumber(rawVisionConfig.top_k, DEFAULT_VISION_LLM_CONFIG.top_k),
+      context_window: readNumber(rawVisionConfig.context_window, DEFAULT_VISION_LLM_CONFIG.context_window),
+      max_tokens: readNumber(rawVisionConfig.max_tokens, DEFAULT_VISION_LLM_CONFIG.max_tokens),
+      presence_penalty: readNumber(rawVisionConfig.presence_penalty, DEFAULT_VISION_LLM_CONFIG.presence_penalty)
     };
   }
 
@@ -887,8 +928,8 @@ class MainProcess {
   }
 
   openVisionChatWindow(payload = {}) {
-    const actionId = String(payload && payload.actionId ? payload.actionId : 'vl-analyze').trim().toLowerCase();
-    const preset = VISION_ACTION_PRESETS[actionId] || VISION_ACTION_PRESETS['vl-analyze'];
+    const actionId = String(payload && payload.actionId ? payload.actionId : 'vl-describe').trim().toLowerCase();
+    const preset = VISION_ACTION_PRESETS[actionId] || VISION_ACTION_PRESETS['vl-describe'];
     const imagePayload = this.resolveVisionImagePayload(payload);
     const assistantConfig = this.getVisionAssistantConfig();
     const customPrompt = typeof payload.prompt === 'string' ? String(payload.prompt).trim() : '';
@@ -899,15 +940,16 @@ class MainProcess {
     return this.openLlmChatWindow(preset.windowName, {
       apitype: assistantConfig.apitype,
       model: assistantConfig.model,
-      baseurl: assistantConfig.baseUrl,
+      baseurl: assistantConfig.baseurl,
+      apikey: assistantConfig.apikey,
       prompt,
       initialImages: [imagePayload],
-      temperature: preset.temperature,
-      top_p: preset.top_p,
-      top_k: preset.top_k,
-      context_window: 32768,
-      max_tokens: 32768,
-      presence_penalty: 1.0
+      temperature: assistantConfig.temperature,
+      top_p: assistantConfig.top_p,
+      top_k: assistantConfig.top_k,
+      context_window: assistantConfig.context_window,
+      max_tokens: assistantConfig.max_tokens,
+      presence_penalty: assistantConfig.presence_penalty
     });
   }
 

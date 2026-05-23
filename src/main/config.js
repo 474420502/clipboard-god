@@ -64,8 +64,19 @@ const DEFAULT_CONFIG = {
   // OCR 模型与预处理
   ocrModelSource: 'builtin',
   ocrModelLanguage: 'chinese',
-  vlVisionModel: 'qwen3.6-vl:4b',
-  vlVisionBaseUrl: 'http://localhost:11434',
+  visionLlm: {
+    apitype: 'ollama',
+    model: 'qwen3.6-vl:4b',
+    baseurl: 'http://localhost:11434',
+    apikey: '',
+    temperature: 0.3,
+    top_p: 0.92,
+    top_k: 40,
+    context_window: 32768,
+    max_tokens: 32768,
+    min_p: 0.05,
+    presence_penalty: 1.0
+  },
   ocrVlCliCommand: 'paddleocr',
   ocrVlDevice: '',
   ocrVlCpuThreads: DEFAULT_OCR_VL_CPU_THREADS,
