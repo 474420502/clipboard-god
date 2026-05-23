@@ -139,6 +139,8 @@ const VISION_ACTION_PRESETS = {
   }
 };
 
+const AI_WINDOW_PAGES = new Set(['chatPage.html', 'visionPage.html']);
+
 class MainProcess {
   constructor() {
     this.mainWindow = null;
@@ -708,20 +710,42 @@ class MainProcess {
   }
 
   // Open a dedicated chat window for a named LLM entry, injecting config
-  openLlmChatWindow(llmName, llmEntry) {
+  openLlmChatWindow(llmName, llmEntry = {}) {
     try {
-      // Create a small BrowserWindow for chat UI
-      const initialTitle = `Chat Window (${llmName})`;
-      const chatWin = new BrowserWindow({
-        width: 640,
-        height: 600,
+      const rawPageName = typeof llmEntry.page === 'string' ? String(llmEntry.page).trim() : '';
+      const pageName = AI_WINDOW_PAGES.has(rawPageName) ? rawPageName : 'chatPage.html';
+      const isVisionPage = pageName === 'visionPage.html';
+      const windowOptions = llmEntry.windowOptions && typeof llmEntry.windowOptions === 'object'
+        ? llmEntry.windowOptions
+        : {};
+      const readWindowSize = (key, fallback) => {
+        const value = Number(windowOptions[key]);
+        return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
+      };
+      const initialTitle = typeof llmEntry.windowTitle === 'string' && String(llmEntry.windowTitle).trim()
+        ? String(llmEntry.windowTitle).trim()
+        : (isVisionPage ? `Vision Window (${llmName})` : `Chat Window (${llmName})`);
+
+      const browserWindowOptions = {
+        width: readWindowSize('width', isVisionPage ? 1240 : 640),
+        height: readWindowSize('height', isVisionPage ? 820 : 600),
+        minWidth: readWindowSize('minWidth', isVisionPage ? 960 : 480),
+        minHeight: readWindowSize('minHeight', isVisionPage ? 680 : 420),
         show: true,
         title: initialTitle,
         webPreferences: {
           contextIsolation: true,
           preload: path.join(__dirname, '../preload/ai-preload.js')
         }
-      });
+      };
+
+      if (typeof windowOptions.backgroundColor === 'string' && String(windowOptions.backgroundColor).trim()) {
+        browserWindowOptions.backgroundColor = String(windowOptions.backgroundColor).trim();
+      } else if (isVisionPage) {
+        browserWindowOptions.backgroundColor = '#0f1722';
+      }
+
+      const chatWin = new BrowserWindow(browserWindowOptions);
 
       // 注册X11相关资源到资源管理器
       if (resourceManager) {
@@ -733,8 +757,8 @@ class MainProcess {
 
       // Do not open devtools by default
 
-      // Set native window title to include the LLM key (e.g., "Chat Window (测试)")
-      try { chatWin.setTitle(`Chat Window (${llmName})`); } catch (e) { /* ignore */ }
+      // Set native window title after window creation in case the page overrides it later.
+      try { chatWin.setTitle(initialTitle); } catch (e) { /* ignore */ }
 
       // Build chatConfig object expected by chatPage.html
       // Do not rely on an injected title; instead provide llmKey so the page
@@ -764,9 +788,18 @@ class MainProcess {
       if (llmEntry && Array.isArray(llmEntry.initialImages) && llmEntry.initialImages.length > 0) {
         try { chatConfig.initialImages = llmEntry.initialImages.slice(); } catch (e) { /* ignore */ }
       }
+      if (llmEntry && typeof llmEntry.actionId === 'string' && String(llmEntry.actionId).trim()) {
+        chatConfig.actionId = String(llmEntry.actionId).trim();
+      }
+      if (llmEntry && llmEntry.ui && typeof llmEntry.ui === 'object') {
+        chatConfig.ui = Object.assign({}, llmEntry.ui);
+      }
+      if (typeof llmEntry.windowTitle === 'string' && String(llmEntry.windowTitle).trim()) {
+        chatConfig.windowTitle = String(llmEntry.windowTitle).trim();
+      }
 
       // Load chat page and then send the chatConfig via a secure IPC channel
-      const fileUrl = `file://${path.join(__dirname, 'ai', 'chatPage.html')}`;
+      const fileUrl = `file://${path.join(__dirname, 'ai', pageName)}`;
       chatWin.loadURL(fileUrl);
 
       // Store config keyed by webContents id so that renderer can request it via invoke
@@ -778,7 +811,7 @@ class MainProcess {
       // After the page finishes loading, re-apply the title to guard against page overrides
       chatWin.webContents.once('did-finish-load', () => {
         try {
-          const fullTitle = `Chat Window (${llmName})`;
+          const fullTitle = initialTitle;
           try { chatWin.setTitle(fullTitle); } catch (e) { /* ignore */ }
           try { chatWin.webContents.executeJavaScript(`document.title = ${JSON.stringify(fullTitle)}`); } catch (e) { /* ignore */ }
           // Also proactively push the injected chat config to the renderer via an IPC message
@@ -938,6 +971,21 @@ class MainProcess {
     });
 
     return this.openLlmChatWindow(preset.windowName, {
+      page: 'visionPage.html',
+      windowTitle: `Clipboard God - ${preset.windowName}`,
+      windowOptions: {
+        width: 1240,
+        height: 820,
+        minWidth: 960,
+        minHeight: 680,
+        backgroundColor: '#0f1722'
+      },
+      actionId,
+      ui: {
+        mode: 'vision-result',
+        allowFollowUp: true,
+        actionLabel: preset.windowName
+      },
       apitype: assistantConfig.apitype,
       model: assistantConfig.model,
       baseurl: assistantConfig.baseurl,

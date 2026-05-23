@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Vision Result</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src *; img-src data:;">
+  <style>
+    :root {
+      --bg: #0a1118;
+      --bg-elevated: rgba(14, 22, 32, 0.92);
+      --panel: rgba(17, 26, 39, 0.86);
+      --panel-strong: rgba(12, 19, 29, 0.98);
+      --panel-border: rgba(153, 185, 209, 0.12);
+      --line: rgba(255, 255, 255, 0.07);
+      --text: #edf3fb;
+      --muted: #8fa2b9;
+      --accent: #5fd0bd;
+      --accent-soft: rgba(95, 208, 189, 0.16);
+      --accent-strong: rgba(95, 208, 189, 0.3);
+      --warning: #f3b36a;
+      --error: #ff6d7a;
+      --shadow: 0 20px 44px rgba(3, 9, 17, 0.42);
+      --radius-xl: 24px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --font-sans: "IBM Plex Sans", "Noto Sans SC", "Segoe UI", sans-serif;
+      --font-mono: "IBM Plex Mono", "Sarasa Mono SC", "SFMono-Regular", monospace;
+    }
+
+    body[data-action="vl-ocr"] {
+      --accent: #7fd888;
+      --accent-soft: rgba(127, 216, 136, 0.16);
+      --accent-strong: rgba(127, 216, 136, 0.3);
+    }
+
+    body[data-action="vl-summary"] {
+      --accent: #f3b36a;
+      --accent-soft: rgba(243, 179, 106, 0.16);
+      --accent-strong: rgba(243, 179, 106, 0.28);
+    }
+
+    body[data-action="vl-analyze"] {
+      --accent: #7eb9ff;
+      --accent-soft: rgba(126, 185, 255, 0.16);
+      --accent-strong: rgba(126, 185, 255, 0.28);
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(95, 208, 189, 0.18), transparent 30%),
+        radial-gradient(circle at top right, rgba(243, 179, 106, 0.1), transparent 26%),
+        linear-gradient(165deg, #071018 0%, #0a1118 45%, #101925 100%);
+      color: var(--text);
+      font-family: var(--font-sans);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    button,
+    textarea,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.54;
+    }
+
+    .vision-shell {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 56px;
+      padding: 10px 16px;
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      background: linear-gradient(160deg, rgba(14, 22, 33, 0.94), rgba(11, 18, 27, 0.9));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .topbar-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .assistant-tag,
+    .meta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.045);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      backdrop-filter: blur(14px);
+    }
+
+    .assistant-tag {
+      border-color: var(--accent-strong);
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .page-title {
+      margin: 0;
+      font-size: clamp(18px, 2.5vw, 24px);
+      line-height: 1.1;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .page-subtitle,
+    .panel-caption:empty,
+    .result-caption:empty,
+    .stage-caption:empty {
+      display: none;
+    }
+
+    .topbar-meta {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-width: 50%;
+    }
+
+    .status-pill.busy {
+      border-color: rgba(243, 179, 106, 0.24);
+      background: rgba(243, 179, 106, 0.12);
+      color: var(--warning);
+    }
+
+    .status-pill.error {
+      border-color: rgba(255, 109, 122, 0.28);
+      background: rgba(255, 109, 122, 0.15);
+      color: #ffffff;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(340px, 0.82fr) minmax(460px, 1.18fr);
+      gap: 12px;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .panel {
+      min-height: 0;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-xl);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .panel-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .panel-caption {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .stage-panel {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      overflow: hidden;
+    }
+
+    .stage-viewport {
+      position: relative;
+      flex: 1;
+      min-height: 260px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0.04)),
+        linear-gradient(135deg, rgba(95, 208, 189, 0.04), transparent 40%),
+        linear-gradient(45deg, rgba(255, 255, 255, 0.025) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.025) 50%, rgba(255, 255, 255, 0.025) 75%, transparent 75%, transparent);
+      background-size: auto, auto, 18px 18px;
+      overflow: auto;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .stage-controls {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(8, 12, 18, 0.72);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
+    }
+
+    .stage-btn,
+    .action-btn,
+    .icon-btn,
+    .send-btn,
+    .brief-menu > summary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.045);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+    }
+
+    .stage-btn:hover:not(:disabled),
+    .action-btn:hover:not(:disabled),
+    .icon-btn:hover:not(:disabled),
+    .send-btn:hover:not(:disabled),
+    .brief-menu > summary:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.085);
+    }
+
+    .stage-btn.compact,
+    .icon-btn {
+      min-width: 34px;
+      padding: 0 10px;
+    }
+
+    .action-btn.primary,
+    .send-btn {
+      border-color: var(--accent-strong);
+      background: linear-gradient(135deg, var(--accent-soft), rgba(255, 255, 255, 0.04));
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .brief-menu {
+      position: relative;
+    }
+
+    .brief-menu > summary {
+      list-style: none;
+    }
+
+    .brief-menu > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .brief-popover {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: min(420px, 56vw);
+      padding: 14px;
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      background: rgba(11, 18, 28, 0.96);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(18px);
+      z-index: 6;
+    }
+
+    .brief-body {
+      max-height: 220px;
+      overflow-y: auto;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      padding-right: 4px;
+    }
+
+    .stage-canvas {
+      min-width: 100%;
+      min-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+    }
+
+    .stage-image {
+      display: none;
+      border-radius: 16px;
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+      cursor: zoom-in;
+      user-select: none;
+    }
+
+    .stage-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .thumbnail-strip,
+    .preview-strip {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .thumbnail-strip.hidden,
+    .preview-strip.hidden,
+    .result-text.hidden,
+    .result-placeholder.hidden,
+    .thread-section.hidden {
+      display: none;
+    }
+
+    .thumb-btn,
+    .preview-tile {
+      position: relative;
+      flex: 0 0 auto;
+      width: 78px;
+      height: 66px;
+      padding: 0;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .thumb-btn.active {
+      border-color: var(--accent-strong);
+      box-shadow: inset 0 0 0 1px var(--accent-strong);
+    }
+
+    .thumb-btn img,
+    .preview-tile img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .preview-remove {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border-radius: 999px;
+      background: rgba(4, 8, 14, 0.78);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .result-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .result-panel.generating .result-text {
+      opacity: 0.96;
+    }
+
+    .result-toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 16, 24, 0.48);
+    }
+
+    .result-toolbar-copy {
+      min-width: 0;
+    }
+
+    .analysis-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 22px 24px 0;
+    }
+
+    .result-placeholder {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+      min-height: 220px;
+    }
+
+    .placeholder-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .placeholder-text {
+      color: var(--muted);
+      line-height: 1.62;
+      max-width: 680px;
+    }
+
+    .placeholder-lines {
+      display: grid;
+      gap: 10px;
+    }
+
+    .placeholder-line {
+      height: 11px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
+      background-size: 220% 100%;
+      animation: shimmer 1.6s linear infinite;
+    }
+
+    .placeholder-line:nth-child(1) {
+      width: 92%;
+    }
+
+    .placeholder-line:nth-child(2) {
+      width: 84%;
+    }
+
+    .placeholder-line:nth-child(3) {
+      width: 88%;
+    }
+
+    .placeholder-line:nth-child(4) {
+      width: 66%;
+    }
+
+    @keyframes shimmer {
+      from {
+        background-position: 200% 0;
+      }
+
+      to {
+        background-position: -30% 0;
+      }
+    }
+
+    .markdown-body {
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.78;
+      word-break: break-word;
+    }
+
+    .markdown-body > :first-child {
+      margin-top: 0;
+    }
+
+    .markdown-body > :last-child {
+      margin-bottom: 0;
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      margin: 1.35em 0 0.55em;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+
+    .markdown-body h1 {
+      font-size: 26px;
+    }
+
+    .markdown-body h2 {
+      font-size: 21px;
+    }
+
+    .markdown-body h3 {
+      font-size: 17px;
+    }
+
+    .markdown-body p,
+    .markdown-body ul,
+    .markdown-body ol,
+    .markdown-body pre,
+    .markdown-body blockquote,
+    .markdown-body hr,
+    .markdown-body table {
+      margin: 0 0 1.05em;
+    }
+
+    .markdown-body ul,
+    .markdown-body ol {
+      padding-left: 1.5em;
+    }
+
+    .markdown-body li + li {
+      margin-top: 0.3em;
+    }
+
+    .markdown-body strong {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .markdown-body code {
+      padding: 0.15em 0.45em;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #c6ecff;
+      font-family: var(--font-mono);
+      font-size: 0.92em;
+    }
+
+    .markdown-body pre {
+      overflow-x: auto;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      background: rgba(8, 13, 20, 0.72);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    }
+
+    .markdown-body pre code {
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #dbe7f7;
+      font-size: 0.92em;
+    }
+
+    .markdown-body blockquote {
+      padding: 12px 14px;
+      border-left: 3px solid var(--accent);
+      border-radius: 0 14px 14px 0;
+      background: rgba(255, 255, 255, 0.04);
+      color: #d6e1ee;
+    }
+
+    .markdown-body hr {
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .result-text {
+      padding-bottom: 18px;
+    }
+
+    .thread-section {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .thread-head {
+      margin-bottom: 12px;
+    }
+
+    .thread-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-bottom: 18px;
+    }
+
+    .thread-turn {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .thread-entry {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .thread-entry.assistant {
+      background: rgba(13, 22, 33, 0.86);
+    }
+
+    .thread-entry.error {
+      border: 1px solid rgba(255, 109, 122, 0.34);
+      background: rgba(255, 109, 122, 0.08);
+    }
+
+    .thread-role {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .thread-body {
+      font-size: 13px;
+      line-height: 1.68;
+    }
+
+    .thread-body h1 {
+      font-size: 18px;
+    }
+
+    .thread-body h2 {
+      font-size: 16px;
+    }
+
+    .thread-body h3,
+    .thread-body h4 {
+      font-size: 14px;
+    }
+
+    .thread-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .thread-images img {
+      width: 76px;
+      height: 76px;
+      object-fit: cover;
+      border-radius: 12px;
+      cursor: zoom-in;
+    }
+
+    .followup-panel {
+      border-top: 1px solid var(--line);
+      background: rgba(10, 16, 24, 0.56);
+      backdrop-filter: blur(16px);
+      padding: 12px 16px 14px;
+    }
+
+    .followup-panel.composer-disabled {
+      opacity: 0.72;
+    }
+
+    .followup-form {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 10px;
+    }
+
+    .followup-input {
+      min-height: 54px;
+      max-height: 180px;
+      resize: none;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      padding: 14px 16px;
+      line-height: 1.58;
+      outline: none;
+    }
+
+    .followup-input:focus {
+      border-color: var(--accent-strong);
+      box-shadow: inset 0 0 0 1px var(--accent-strong);
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(4, 8, 14, 0.88);
+      z-index: 20;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal img {
+      max-width: min(92vw, 1600px);
+      max-height: 92vh;
+      border-radius: 18px;
+      box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55);
+    }
+
+    @media (max-width: 1120px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .topbar-meta {
+        max-width: none;
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .vision-shell {
+        padding: 10px;
+      }
+
+      .topbar {
+        padding: 10px 12px;
+      }
+
+      .topbar-main {
+        flex-wrap: wrap;
+      }
+
+      .page-title {
+        white-space: normal;
+      }
+
+      .stage-controls {
+        top: 10px;
+        right: 10px;
+        gap: 6px;
+        padding: 6px;
+      }
+
+      .result-toolbar {
+        flex-direction: column;
+      }
+
+      .analysis-actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .result-scroll {
+        padding: 18px 18px 0;
+      }
+
+      .followup-form {
+        grid-template-columns: 1fr;
+      }
+
+      .brief-popover {
+        left: 0;
+        right: auto;
+        width: min(92vw, 420px);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="vision-shell">
+    <header class="topbar">
+      <div class="topbar-main">
+        <span class="assistant-tag" data-i18n="visionWindow.assistantTag">AI Vision Assistant</span>
+        <h1 class="page-title" id="page-title">Vision Result</h1>
+        <p class="page-subtitle" id="page-subtitle"></p>
+      </div>
+      <div class="topbar-meta">
+        <span class="meta-pill" id="model-pill"></span>
+        <span class="meta-pill" id="count-pill"></span>
+        <span class="meta-pill status-pill" id="status-bar" data-i18n="status.ready">Ready</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel stage-panel">
+        <div>
+          <div class="panel-label" data-i18n="visionWindow.stageLabel">Source Image</div>
+          <p class="panel-caption stage-caption" id="stage-caption"></p>
+        </div>
+
+        <div class="stage-viewport" id="stage-viewport">
+          <div class="stage-controls">
+            <button type="button" class="stage-btn compact" id="zoom-out-btn" data-i18n-title="visionWindow.zoomOut" title="Zoom out">-</button>
+            <button type="button" class="stage-btn compact" id="zoom-in-btn" data-i18n-title="visionWindow.zoomIn" title="Zoom in">+</button>
+            <button type="button" class="stage-btn" id="fit-btn" data-i18n="visionWindow.zoomFit">Fit</button>
+            <button type="button" class="stage-btn" id="actual-btn" data-i18n="visionWindow.zoomActual">100%</button>
+          </div>
+          <div class="stage-canvas" id="stage-canvas">
+            <img class="stage-image" id="stage-image" alt="Vision source" />
+          </div>
+          <div class="stage-empty" id="stage-empty" data-i18n="visionWindow.noImage">No image to display.</div>
+        </div>
+
+        <div class="thumbnail-strip hidden" id="thumbnail-strip"></div>
+      </section>
+
+      <section class="panel result-panel" id="result-card">
+        <header class="result-toolbar">
+          <div class="result-toolbar-copy">
+            <div class="panel-label" data-i18n="visionWindow.resultLabel">Analysis Result</div>
+            <p class="panel-caption result-caption" id="result-caption"></p>
+          </div>
+          <div class="analysis-actions">
+            <details class="brief-menu" id="brief-card">
+              <summary data-i18n="visionWindow.briefTitle">Task Brief</summary>
+              <div class="brief-popover">
+                <div class="brief-body" id="brief-body"></div>
+              </div>
+            </details>
+            <button type="button" class="action-btn" id="copy-result-btn" data-i18n="visionWindow.copyResult">Copy Result</button>
+            <button type="button" class="action-btn primary" id="retry-btn" data-i18n="visionWindow.rerun">Re-run</button>
+          </div>
+        </header>
+
+        <div class="result-scroll" id="result-scroll">
+          <div class="result-placeholder" id="result-placeholder">
+            <div class="placeholder-title" id="placeholder-title"></div>
+            <div class="placeholder-text" id="placeholder-text"></div>
+            <div class="placeholder-lines" id="placeholder-lines">
+              <div class="placeholder-line"></div>
+              <div class="placeholder-line"></div>
+              <div class="placeholder-line"></div>
+              <div class="placeholder-line"></div>
+            </div>
+          </div>
+
+          <article class="result-text markdown-body hidden" id="result-text"></article>
+
+          <section class="thread-section hidden" id="thread-section">
+            <div class="thread-head">
+              <div class="panel-label" data-i18n="visionWindow.threadTitle">Conversation Trail</div>
+              <p class="panel-caption" data-i18n="visionWindow.threadHint">Only follow-up exchanges appear here.</p>
+            </div>
+            <div class="thread-list" id="thread-list"></div>
+          </section>
+        </div>
+
+        <section class="followup-panel" id="followup-panel">
+          <div class="preview-strip hidden" id="preview-strip"></div>
+          <form class="followup-form" id="followup-form">
+            <input type="file" id="image-input" accept="image/*" multiple style="display: none;" />
+            <button type="button" class="icon-btn" id="attach-btn" data-i18n-title="visionWindow.attachImage" data-i18n-aria-label="visionWindow.attachImage" title="Attach image" aria-label="Attach image">+</button>
+            <textarea class="followup-input" id="followup-input" rows="1" data-i18n-placeholder="visionWindow.followupPlaceholder" placeholder="Ask a focused follow-up..."></textarea>
+            <button type="submit" class="send-btn" id="send-btn" data-i18n="visionWindow.followupSend">Send Follow-up</button>
+          </form>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal" id="image-modal"></div>
+
+  <script>
+    const defaultConfig = {
+      llmKey: '',
+      actionId: '',
+      api: {
+        type: 'ollama',
+        model: '',
+        baseUrl: '',
+        apiKey: ''
+      },
+      initialPrompt: '',
+      initialImages: [],
+      llmParams: {
+        temperature: 0.7,
+        top_p: 0.95,
+        top_k: 0.9,
+        context_window: 32768,
+        max_tokens: 32768,
+        presence_penalty: 1.0
+      },
+      ui: {}
+    };
+
+    const ACTION_LABEL_KEYS = {
+      'vl-describe': 'visionWindow.actions.describe',
+      'vl-ocr': 'visionWindow.actions.ocr',
+      'vl-summary': 'visionWindow.actions.summary',
+      'vl-analyze': 'visionWindow.actions.analyze'
+    };
+
+    const ACTION_LABEL_FALLBACKS = {
+      'vl-describe': 'Analyze Image',
+      'vl-ocr': 'Image to Text',
+      'vl-summary': 'Screenshot Summary',
+      'vl-analyze': 'Smart Analysis'
+    };
+
+    const IMAGE_MIME_FALLBACK = 'image/png';
+
+    const chatConfig = {
+      llmKey: defaultConfig.llmKey,
+      actionId: defaultConfig.actionId,
+      api: Object.assign({}, defaultConfig.api),
+      initialPrompt: defaultConfig.initialPrompt,
+      initialImages: defaultConfig.initialImages.slice(),
+      llmParams: Object.assign({}, defaultConfig.llmParams),
+      ui: Object.assign({}, defaultConfig.ui)
+    };
+
+    const state = {
+      sourceImages: [],
+      activeImageIndex: 0,
+      stagedImages: [],
+      conversationHistory: [],
+      primaryResult: '',
+      isGenerating: false,
+      fitToViewport: true,
+      imageScale: 1,
+      configApplied: false
+    };
+
+    const pageTitleEl = document.getElementById('page-title');
+    const pageSubtitleEl = document.getElementById('page-subtitle');
+    const modelPillEl = document.getElementById('model-pill');
+    const countPillEl = document.getElementById('count-pill');
+    const stageCaptionEl = document.getElementById('stage-caption');
+    const resultCaptionEl = document.getElementById('result-caption');
+    const briefBodyEl = document.getElementById('brief-body');
+    const briefCardEl = document.getElementById('brief-card');
+    const resultCardEl = document.getElementById('result-card');
+    const resultScrollEl = document.getElementById('result-scroll');
+    const placeholderEl = document.getElementById('result-placeholder');
+    const placeholderTitleEl = document.getElementById('placeholder-title');
+    const placeholderTextEl = document.getElementById('placeholder-text');
+    const placeholderLinesEl = document.getElementById('placeholder-lines');
+    const resultTextEl = document.getElementById('result-text');
+    const statusBarEl = document.getElementById('status-bar');
+    const stageViewportEl = document.getElementById('stage-viewport');
+    const stageImageEl = document.getElementById('stage-image');
+    const stageEmptyEl = document.getElementById('stage-empty');
+    const thumbnailStripEl = document.getElementById('thumbnail-strip');
+    const zoomOutBtn = document.getElementById('zoom-out-btn');
+    const zoomInBtn = document.getElementById('zoom-in-btn');
+    const fitBtn = document.getElementById('fit-btn');
+    const actualBtn = document.getElementById('actual-btn');
+    const copyResultBtn = document.getElementById('copy-result-btn');
+    const retryBtn = document.getElementById('retry-btn');
+    const followupPanelEl = document.getElementById('followup-panel');
+    const followupFormEl = document.getElementById('followup-form');
+    const followupInputEl = document.getElementById('followup-input');
+    const sendBtn = document.getElementById('send-btn');
+    const attachBtn = document.getElementById('attach-btn');
+    const imageInputEl = document.getElementById('image-input');
+    const previewStripEl = document.getElementById('preview-strip');
+    const threadSectionEl = document.getElementById('thread-section');
+    const threadListEl = document.getElementById('thread-list');
+    const imageModalEl = document.getElementById('image-modal');
+
+    const translate = (key, fallback = '', values) => {
+      if (window.i18nDom && typeof window.i18nDom.t === 'function') {
+        const result = window.i18nDom.t(key, values);
+        if (result != null && result !== '') {
+          return result;
+        }
+      }
+      return fallback;
+    };
+
+    function escapeHtml(value = '') {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderInlineMarkdown(text = '') {
+      let html = escapeHtml(text);
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+      return html;
+    }
+
+    function renderMarkdown(source = '') {
+      const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+      const html = [];
+      let paragraph = [];
+      let listType = null;
+      let listItems = [];
+      let quoteLines = [];
+      let codeFence = null;
+      let codeLines = [];
+
+      const flushParagraph = () => {
+        if (!paragraph.length) return;
+        html.push(`<p>${paragraph.map(renderInlineMarkdown).join('<br>')}</p>`);
+        paragraph = [];
+      };
+
+      const flushList = () => {
+        if (!listType) return;
+        html.push(`<${listType}>${listItems.join('')}</${listType}>`);
+        listType = null;
+        listItems = [];
+      };
+
+      const flushQuote = () => {
+        if (!quoteLines.length) return;
+        html.push(`<blockquote>${quoteLines.map((line) => `<p>${renderInlineMarkdown(line)}</p>`).join('')}</blockquote>`);
+        quoteLines = [];
+      };
+
+      const flushCode = () => {
+        if (codeFence === null) return;
+        const langAttr = codeFence ? ` data-lang="${escapeHtml(codeFence)}"` : '';
+        html.push(`<pre class="md-code"><code${langAttr}>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        codeFence = null;
+        codeLines = [];
+      };
+
+      lines.forEach((line) => {
+        const trimmed = line.trim();
+
+        if (codeFence !== null) {
+          if (/^```/.test(trimmed)) {
+            flushCode();
+          } else {
+            codeLines.push(line);
+          }
+          return;
+        }
+
+        if (/^```/.test(trimmed)) {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          codeFence = trimmed.slice(3).trim();
+          codeLines = [];
+          return;
+        }
+
+        if (!trimmed) {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          return;
+        }
+
+        if (/^---+$/.test(trimmed)) {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          html.push('<hr />');
+          return;
+        }
+
+        const headingMatch = /^(#{1,6})\s+(.*)$/.exec(line);
+        if (headingMatch) {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          const level = Math.min(4, headingMatch[1].length);
+          html.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
+          return;
+        }
+
+        const quoteMatch = /^>\s?(.*)$/.exec(line);
+        if (quoteMatch) {
+          flushParagraph();
+          flushList();
+          quoteLines.push(quoteMatch[1]);
+          return;
+        }
+
+        const orderedMatch = /^\d+\.\s+(.*)$/.exec(line);
+        if (orderedMatch) {
+          flushParagraph();
+          flushQuote();
+          if (listType && listType !== 'ol') {
+            flushList();
+          }
+          listType = 'ol';
+          listItems.push(`<li>${renderInlineMarkdown(orderedMatch[1])}</li>`);
+          return;
+        }
+
+        const bulletMatch = /^[-*]\s+(.*)$/.exec(line);
+        if (bulletMatch) {
+          flushParagraph();
+          flushQuote();
+          if (listType && listType !== 'ul') {
+            flushList();
+          }
+          listType = 'ul';
+          listItems.push(`<li>${renderInlineMarkdown(bulletMatch[1])}</li>`);
+          return;
+        }
+
+        paragraph.push(line);
+      });
+
+      flushParagraph();
+      flushList();
+      flushQuote();
+      flushCode();
+      return html.join('');
+    }
+
+    function renderMarkdownInto(element, text) {
+      element.innerHTML = renderMarkdown(text || '');
+    }
+
+    function extractMimeTypeFromDataUrl(dataUrl) {
+      const match = /^data:([^;]+);base64,/i.exec(dataUrl || '');
+      return match ? match[1] : '';
+    }
+
+    function ensureUiImageShape(image) {
+      if (!image) return null;
+      if (typeof image === 'string') {
+        const cleanRaw = image.replace(/^data:[^,]+,/, '');
+        const dataUrl = image.startsWith('data:') ? image : `data:${IMAGE_MIME_FALLBACK};base64,${cleanRaw}`;
+        return {
+          id: `${Date.now()}-${Math.random()}`,
+          base64Full: dataUrl,
+          base64Raw: cleanRaw,
+          mimeType: extractMimeTypeFromDataUrl(dataUrl) || IMAGE_MIME_FALLBACK
+        };
+      }
+      const base64Full = image.base64Full || (image.base64Raw ? `data:${image.mimeType || IMAGE_MIME_FALLBACK};base64,${image.base64Raw}` : '');
+      if (!base64Full) return null;
+      return {
+        id: image.id || `${Date.now()}-${Math.random()}`,
+        base64Full,
+        base64Raw: image.base64Raw || base64Full.replace(/^data:[^,]+,/, ''),
+        mimeType: image.mimeType || extractMimeTypeFromDataUrl(base64Full) || IMAGE_MIME_FALLBACK
+      };
+    }
+
+    function normalizeImageForHistory(image) {
+      if (!image) return null;
+      if (typeof image === 'string') {
+        return image ? { base64Raw: image, mimeType: '' } : null;
+      }
+      if (!image.base64Raw) return null;
+      return {
+        base64Raw: image.base64Raw,
+        mimeType: image.mimeType || extractMimeTypeFromDataUrl(image.base64Full) || IMAGE_MIME_FALLBACK
+      };
+    }
+
+    function setStatus(text, isError = false) {
+      statusBarEl.textContent = text;
+      statusBarEl.classList.toggle('error', isError);
+      statusBarEl.classList.toggle('busy', !isError && state.isGenerating);
+    }
+
+    function getActionLabel() {
+      const key = ACTION_LABEL_KEYS[chatConfig.actionId];
+      const fallback = chatConfig.ui.actionLabel || chatConfig.llmKey || ACTION_LABEL_FALLBACKS[chatConfig.actionId] || 'Vision Result';
+      return key ? translate(key, fallback) : fallback;
+    }
+
+    function getImageCountLabel() {
+      return translate('visionWindow.imageCount', 'Images: {{count}}', { count: state.sourceImages.length });
+    }
+
+    function refreshDynamicText() {
+      document.body.dataset.action = chatConfig.actionId || 'vl-describe';
+      pageTitleEl.textContent = getActionLabel();
+      pageSubtitleEl.textContent = '';
+      modelPillEl.textContent = chatConfig.api.model || translate('visionWindow.modelMissing', 'Model not configured');
+      countPillEl.textContent = getImageCountLabel();
+      stageCaptionEl.textContent = '';
+      resultCaptionEl.textContent = state.isGenerating
+        ? translate('visionWindow.streamingHint', 'Streaming result...')
+        : '';
+      briefBodyEl.textContent = chatConfig.initialPrompt || translate('visionWindow.briefEmpty', 'No task brief was provided.');
+      briefCardEl.hidden = !chatConfig.initialPrompt;
+
+      if (!state.primaryResult) {
+        showResultPlaceholder(state.isGenerating ? 'generating' : 'idle');
+      }
+    }
+
+    function showResultPlaceholder(mode, errorMessage = '') {
+      resultTextEl.classList.add('hidden');
+      placeholderEl.classList.remove('hidden');
+      placeholderLinesEl.classList.toggle('hidden', mode === 'error');
+
+      if (mode === 'generating') {
+        resultCardEl.classList.add('generating');
+        placeholderTitleEl.textContent = translate('visionWindow.generatingTitle', 'Analyzing image...');
+        placeholderTextEl.textContent = translate('visionWindow.generatingHint', 'Reading the image and organizing the main result.');
+        return;
+      }
+
+      resultCardEl.classList.remove('generating');
+
+      if (mode === 'error') {
+        placeholderTitleEl.textContent = translate('visionWindow.errorTitle', 'Analysis failed');
+        placeholderTextEl.textContent = errorMessage || translate('visionWindow.errorHint', 'The request did not complete successfully. Check the endpoint, model, and runtime state, then retry.');
+        return;
+      }
+
+      placeholderTitleEl.textContent = translate('visionWindow.readyTitle', 'Ready for analysis');
+      placeholderTextEl.textContent = translate('visionWindow.readyHint', 'The main result will appear here as a continuous, readable report.');
+    }
+
+    function showPrimaryResult(text) {
+      state.primaryResult = String(text || '');
+      resultCardEl.classList.remove('generating');
+      renderMarkdownInto(resultTextEl, state.primaryResult);
+      resultTextEl.classList.toggle('hidden', !state.primaryResult);
+      placeholderEl.classList.toggle('hidden', !!state.primaryResult);
+      refreshDynamicText();
+    }
+
+    function updateActionButtons() {
+      const hasPrimaryResult = !!state.primaryResult.trim();
+      const canFollowUp = hasPrimaryResult && !state.isGenerating;
+      copyResultBtn.disabled = state.isGenerating || !hasPrimaryResult;
+      retryBtn.disabled = state.isGenerating || state.sourceImages.length === 0;
+      attachBtn.disabled = !canFollowUp;
+      sendBtn.disabled = !canFollowUp;
+      followupInputEl.disabled = !canFollowUp;
+      followupPanelEl.classList.toggle('composer-disabled', !hasPrimaryResult);
+      statusBarEl.classList.toggle('busy', !statusBarEl.classList.contains('error') && state.isGenerating);
+    }
+
+    function autoResizeTextarea() {
+      followupInputEl.style.height = 'auto';
+      followupInputEl.style.height = `${Math.min(followupInputEl.scrollHeight, 180)}px`;
+    }
+
+    function renderStageImage() {
+      const active = state.sourceImages[state.activeImageIndex];
+      if (!active) {
+        stageImageEl.style.display = 'none';
+        stageImageEl.removeAttribute('src');
+        stageEmptyEl.style.display = 'flex';
+        return;
+      }
+
+      stageEmptyEl.style.display = 'none';
+      if (stageImageEl.src !== active.base64Full) {
+        stageImageEl.src = active.base64Full;
+      }
+      stageImageEl.style.display = 'block';
+      stageImageEl.alt = getActionLabel();
+    }
+
+    function applyStageScale() {
+      if (!stageImageEl.naturalWidth || !stageImageEl.naturalHeight) return;
+      const width = Math.max(1, Math.round(stageImageEl.naturalWidth * state.imageScale));
+      const height = Math.max(1, Math.round(stageImageEl.naturalHeight * state.imageScale));
+      stageImageEl.style.width = `${width}px`;
+      stageImageEl.style.height = `${height}px`;
+    }
+
+    function fitStageImage() {
+      if (!stageImageEl.naturalWidth || !stageImageEl.naturalHeight) return;
+      const availableWidth = Math.max(stageViewportEl.clientWidth - 44, 120);
+      const availableHeight = Math.max(stageViewportEl.clientHeight - 44, 120);
+      const nextScale = Math.min(availableWidth / stageImageEl.naturalWidth, availableHeight / stageImageEl.naturalHeight, 1);
+      state.imageScale = Number.isFinite(nextScale) && nextScale > 0 ? nextScale : 1;
+      state.fitToViewport = true;
+      applyStageScale();
+    }
+
+    function setActualSize() {
+      state.fitToViewport = false;
+      state.imageScale = 1;
+      applyStageScale();
+    }
+
+    function zoomBy(delta) {
+      state.fitToViewport = false;
+      const nextScale = Math.min(5, Math.max(0.2, state.imageScale + delta));
+      state.imageScale = Number(nextScale.toFixed(2));
+      applyStageScale();
+    }
+
+    function renderThumbnails() {
+      thumbnailStripEl.innerHTML = '';
+      thumbnailStripEl.classList.toggle('hidden', state.sourceImages.length <= 1);
+
+      state.sourceImages.forEach((image, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `thumb-btn${index === state.activeImageIndex ? ' active' : ''}`;
+        button.onclick = () => {
+          state.activeImageIndex = index;
+          renderThumbnails();
+          renderStageImage();
+          if (state.fitToViewport) {
+            requestAnimationFrame(fitStageImage);
+          } else {
+            applyStageScale();
+          }
+        };
+
+        const img = document.createElement('img');
+        img.src = image.base64Full;
+        img.alt = `${getActionLabel()} ${index + 1}`;
+        button.appendChild(img);
+        thumbnailStripEl.appendChild(button);
+      });
+    }
+
+    function renderSourceImages(images) {
+      state.sourceImages = Array.isArray(images) ? images.map(ensureUiImageShape).filter(Boolean) : [];
+      state.activeImageIndex = 0;
+      renderStageImage();
+      renderThumbnails();
+      refreshDynamicText();
+      if (state.sourceImages.length > 0) {
+        requestAnimationFrame(fitStageImage);
+      }
+      updateActionButtons();
+    }
+
+    function openImageModal(src) {
+      if (!src) return;
+      imageModalEl.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = src;
+      imageModalEl.appendChild(img);
+      imageModalEl.classList.add('open');
+    }
+
+    function closeImageModal() {
+      imageModalEl.classList.remove('open');
+      imageModalEl.innerHTML = '';
+    }
+
+    function renderStagedPreviews() {
+      previewStripEl.innerHTML = '';
+      previewStripEl.classList.toggle('hidden', state.stagedImages.length === 0);
+
+      state.stagedImages.forEach((image) => {
+        const tile = document.createElement('div');
+        tile.className = 'preview-tile';
+
+        const img = document.createElement('img');
+        img.src = image.base64Full;
+        img.alt = translate('visionWindow.attachImage', 'Attach image');
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'preview-remove';
+        remove.textContent = '×';
+        remove.onclick = () => {
+          state.stagedImages = state.stagedImages.filter((item) => item.id !== image.id);
+          renderStagedPreviews();
+        };
+
+        tile.appendChild(img);
+        tile.appendChild(remove);
+        previewStripEl.appendChild(tile);
+      });
+    }
+
+    function clearStagedImages() {
+      state.stagedImages = [];
+      renderStagedPreviews();
+    }
+
+    function handleImageSelection(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      Array.from(files).forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (readerEvent) => {
+          const base64Full = String(readerEvent.target.result || '');
+          if (!base64Full) return;
+          state.stagedImages.push({
+            id: `${Date.now()}-${Math.random()}`,
+            base64Full,
+            base64Raw: base64Full.replace(/^data:[^,]+,/, ''),
+            mimeType: file.type || extractMimeTypeFromDataUrl(base64Full) || IMAGE_MIME_FALLBACK
+          });
+          renderStagedPreviews();
+        };
+        reader.readAsDataURL(file);
+      });
+
+      imageInputEl.value = '';
+    }
+
+    function createThreadEntry(role, label, text, images) {
+      const entry = document.createElement('div');
+      entry.className = `thread-entry ${role}`;
+
+      const roleEl = document.createElement('div');
+      roleEl.className = 'thread-role';
+      roleEl.textContent = label;
+
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'thread-body markdown-body';
+      renderMarkdownInto(bodyEl, text || '');
+
+      entry.appendChild(roleEl);
+      entry.appendChild(bodyEl);
+
+      if (Array.isArray(images) && images.length > 0) {
+        const imagesEl = document.createElement('div');
+        imagesEl.className = 'thread-images';
+        images.forEach((image) => {
+          const img = document.createElement('img');
+          img.src = image.base64Full;
+          img.alt = label;
+          imagesEl.appendChild(img);
+        });
+        entry.appendChild(imagesEl);
+      }
+
+      return { entry, bodyEl };
+    }
+
+    function appendFollowupTurn(userMessage) {
+      threadSectionEl.classList.remove('hidden');
+      const turnEl = document.createElement('article');
+      turnEl.className = 'thread-turn';
+
+      const userEntry = createThreadEntry(
+        'user',
+        translate('visionWindow.userLabel', 'You'),
+        userMessage.content,
+        userMessage.images
+      );
+      const assistantEntry = createThreadEntry(
+        'assistant',
+        translate('visionWindow.assistantLabel', 'Assistant'),
+        translate('visionWindow.generatingTitle', 'Analyzing image...'),
+        []
+      );
+
+      turnEl.appendChild(userEntry.entry);
+      turnEl.appendChild(assistantEntry.entry);
+      threadListEl.appendChild(turnEl);
+      turnEl.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      return assistantEntry;
+    }
+
+    function fallbackCopyText(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', 'readonly');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.pointerEvents = 'none';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+
+    async function copyPrimaryResult() {
+      if (!state.primaryResult.trim()) return;
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(state.primaryResult);
+        } else {
+          fallbackCopyText(state.primaryResult);
+        }
+        setStatus(translate('visionWindow.copySuccess', 'Result copied.'));
+      } catch (_error) {
+        setStatus(`${translate('error.prefix', 'Error: ')}${translate('visionWindow.copyFailed', 'Copy failed.')}`, true);
+      }
+    }
+
+    function buildOllamaMessages(history) {
+      return history.map((msg) => {
+        const payload = { role: msg.role, content: msg.content || '' };
+        if (Array.isArray(msg.images) && msg.images.length > 0) {
+          const imagePayload = msg.images
+            .map((img) => {
+              if (typeof img === 'string') return img;
+              if (img && typeof img.base64Raw === 'string') return img.base64Raw;
+              return '';
+            })
+            .filter(Boolean);
+          if (imagePayload.length > 0) payload.images = imagePayload;
+        }
+        return payload;
+      });
+    }
+
+    function buildOpenApiMessages(history) {
+      return history.map((msg) => {
+        if (msg.role !== 'user') {
+          return { role: msg.role, content: msg.content || '' };
+        }
+
+        const parts = [];
+        if (msg.content) {
+          parts.push({ type: 'text', text: msg.content });
+        }
+
+        if (Array.isArray(msg.images)) {
+          msg.images.forEach((img) => {
+            if (!img) return;
+            const base64Raw = typeof img === 'string' ? img : (img.base64Raw || '');
+            const mimeType = typeof img === 'string' ? '' : (img.mimeType || extractMimeTypeFromDataUrl(img.base64Full));
+            if (!base64Raw) return;
+            parts.push({
+              type: 'image_url',
+              image_url: { url: `data:${mimeType || IMAGE_MIME_FALLBACK};base64,${base64Raw}` }
+            });
+          });
+        }
+
+        if (parts.length === 0) return { role: 'user', content: '' };
+        if (parts.length === 1 && parts[0].type === 'text') {
+          return { role: 'user', content: parts[0].text };
+        }
+        return { role: 'user', content: parts };
+      });
+    }
+
+    function resolveOpenApiUrl(rawBaseUrl) {
+      const trimmed = String(rawBaseUrl || '').trim();
+      if (!trimmed) throw new Error('API base URL is not configured.');
+      let parsed;
+      try {
+        parsed = new URL(trimmed);
+      } catch (_error) {
+        throw new Error('Invalid API base URL');
+      }
+
+      const lowerPath = parsed.pathname.toLowerCase();
+      if (lowerPath.includes('/chat/completions')) return parsed.toString();
+      if (/\/v\d+\/?$/.test(lowerPath)) {
+        parsed.pathname = parsed.pathname.replace(/\/?$/, '') + '/chat/completions';
+        return parsed.toString();
+      }
+      if (lowerPath === '/' || lowerPath === '') {
+        parsed.pathname = parsed.pathname.replace(/\/?$/, '') + '/v1/chat/completions';
+        return parsed.toString();
+      }
+      parsed.pathname = parsed.pathname.replace(/\/?$/, '') + '/chat/completions';
+      return parsed.toString();
+    }
+
+    function sanitizeOpenApiParams(params) {
+      if (!params || typeof params !== 'object') return {};
+      const sanitized = {};
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === null || typeof value === 'undefined') return;
+        if (key === 'context_window' || key === 'top_k' || key === 'min_p') return;
+        sanitized[key] = value;
+      });
+      return sanitized;
+    }
+
+    function extractTextFromOpenAiDelta(delta) {
+      if (!delta) return '';
+      if (typeof delta === 'string') return delta;
+      if (Array.isArray(delta)) return delta.map(extractTextFromOpenAiDelta).join('');
+      if (typeof delta === 'object') {
+        if (Array.isArray(delta.content)) {
+          return delta.content.map((part) => {
+            if (typeof part === 'string') return part;
+            if (!part || typeof part !== 'object') return '';
+            if ((part.type === 'text' || part.type === 'output_text') && typeof part.text === 'string') return part.text;
+            if (typeof part.text === 'string') return part.text;
+            if (part.text) return extractTextFromOpenAiDelta(part.text);
+            if (part.content) return extractTextFromOpenAiDelta(part.content);
+            return '';
+          }).join('');
+        }
+        if (typeof delta.text === 'string') return delta.text;
+        if (Array.isArray(delta.text)) return delta.text.map(extractTextFromOpenAiDelta).join('');
+        if (typeof delta.content === 'string') return delta.content;
+        if (delta.delta) return extractTextFromOpenAiDelta(delta.delta);
+        if (delta.message) return extractTextFromOpenAiDelta(delta.message);
+        if (delta.content) return extractTextFromOpenAiDelta(delta.content);
+      }
+      return '';
+    }
+
+    function getChunkTextFromOpenApi(parsed) {
+      if (!parsed || typeof parsed !== 'object') return '';
+      let collected = '';
+      if (Array.isArray(parsed.choices)) {
+        parsed.choices.forEach((choice) => {
+          if (choice.delta) collected += extractTextFromOpenAiDelta(choice.delta);
+          else if (choice.message) collected += extractTextFromOpenAiDelta(choice.message);
+        });
+      }
+      if (!collected && parsed.delta) collected += extractTextFromOpenAiDelta(parsed.delta);
+      if (!collected && parsed.message) collected += extractTextFromOpenAiDelta(parsed.message);
+      if (!collected && parsed.content) collected += extractTextFromOpenAiDelta(parsed.content);
+      return collected;
+    }
+
+    function getChunkTextFromOllama(parsed) {
+      if (!parsed || typeof parsed !== 'object') return '';
+      if (parsed.message && parsed.message.content) return parsed.message.content;
+      if (typeof parsed.content === 'string') return parsed.content;
+      return '';
+    }
+
+    async function fetchAIResponse(options = {}) {
+      if (state.isGenerating) return false;
+
+      const {
+        onStart,
+        onChunk,
+        onSuccess,
+        onError,
+        onFinally,
+        rollbackUserOnError = false
+      } = options;
+
+      const errorPrefix = translate('error.prefix', 'Error: ');
+      const apiConfig = chatConfig.api || {};
+      const apiType = String(apiConfig.type || 'ollama').toLowerCase();
+      let fullResponse = '';
+
+      state.isGenerating = true;
+      updateActionButtons();
+      setStatus(translate('status.generating', 'Generating...'));
+      if (typeof onStart === 'function') onStart();
+
+      try {
+        const { baseUrl = '', model = '', apiKey = '' } = apiConfig;
+        if (!model) throw new Error('Model is not configured.');
+        if (!baseUrl) throw new Error('API base URL is not configured.');
+
+        const llmParams = chatConfig.llmParams || {};
+        const headers = { 'Content-Type': 'application/json' };
+        let url = '';
+        let body = {};
+
+        if (apiType === 'openapi') {
+          url = resolveOpenApiUrl(baseUrl);
+          if (apiKey) {
+            if (/\.azure\./i.test(url)) headers['api-key'] = apiKey;
+            else headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+          body = Object.assign({
+            model,
+            messages: buildOpenApiMessages(state.conversationHistory),
+            stream: true
+          }, sanitizeOpenApiParams(llmParams));
+        } else {
+          url = new URL('/api/chat', baseUrl).toString();
+          if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+          body = {
+            model,
+            messages: buildOllamaMessages(state.conversationHistory),
+            stream: true,
+            options: llmParams
+          };
+        }
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        if (!response.body) throw new Error('Empty response body.');
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let partialLine = '';
+        let streamClosed = false;
+
+        while (!streamClosed) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = (partialLine + chunk).split(/\r?\n/);
+          partialLine = lines.pop() || '';
+
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            if (line.startsWith('event:')) continue;
+
+            let dataLine = line;
+            if (line.startsWith('data:')) {
+              dataLine = line.slice(5).trim();
+              if (!dataLine) continue;
+              if (dataLine === '[DONE]') {
+                streamClosed = true;
+                break;
+              }
+            }
+
+            try {
+              const parsed = JSON.parse(dataLine);
+              if (parsed.error || (parsed.message && parsed.message.error)) {
+                throw new Error(parsed.error || (parsed.message && parsed.message.error) || JSON.stringify(parsed));
+              }
+
+              const chunkText = apiType === 'openapi'
+                ? getChunkTextFromOpenApi(parsed)
+                : getChunkTextFromOllama(parsed);
+
+              if (chunkText) {
+                fullResponse += chunkText;
+                if (typeof onChunk === 'function') onChunk(chunkText, fullResponse);
+              }
+            } catch (_parseError) {
+              const lower = String(dataLine || line).toLowerCase();
+              if (lower.includes('error') || lower.includes('failed') || lower.includes('this model is missing data')) {
+                throw new Error(String(dataLine || line));
+              }
+            }
+          }
+        }
+
+        if (!streamClosed && partialLine.trim()) {
+          try {
+            const parsed = JSON.parse(partialLine.trim());
+            if (parsed.error || (parsed.message && parsed.message.error)) {
+              throw new Error(parsed.error || (parsed.message && parsed.message.error) || JSON.stringify(parsed));
+            }
+            const chunkText = apiType === 'openapi'
+              ? getChunkTextFromOpenApi(parsed)
+              : getChunkTextFromOllama(parsed);
+            if (chunkText) {
+              fullResponse += chunkText;
+              if (typeof onChunk === 'function') onChunk(chunkText, fullResponse);
+            }
+          } catch (_error) {
+          }
+        }
+
+        state.conversationHistory.push({ role: 'assistant', content: fullResponse });
+        setStatus(translate('status.ready', 'Ready'));
+        if (typeof onSuccess === 'function') onSuccess(fullResponse);
+        return true;
+      } catch (error) {
+        if (rollbackUserOnError && state.conversationHistory.length && state.conversationHistory[state.conversationHistory.length - 1].role === 'user') {
+          state.conversationHistory.pop();
+        }
+        setStatus(`${errorPrefix}${error.message}`, true);
+        if (typeof onError === 'function') onError(error);
+        return false;
+      } finally {
+        state.isGenerating = false;
+        updateActionButtons();
+        if (typeof onFinally === 'function') onFinally();
+      }
+    }
+
+    async function runPrimaryAnalysis() {
+      if (state.sourceImages.length === 0) return;
+
+      state.primaryResult = '';
+      threadListEl.innerHTML = '';
+      threadSectionEl.classList.add('hidden');
+      clearStagedImages();
+      followupInputEl.value = '';
+      autoResizeTextarea();
+      briefCardEl.open = false;
+      resultScrollEl.scrollTop = 0;
+      showPrimaryResult('');
+      showResultPlaceholder('generating');
+
+      state.conversationHistory = [{
+        role: 'user',
+        content: chatConfig.initialPrompt || '',
+        images: state.sourceImages.map(normalizeImageForHistory).filter(Boolean)
+      }];
+
+      await fetchAIResponse({
+        onStart: () => {
+          showResultPlaceholder('generating');
+        },
+        onChunk: (_chunk, fullText) => {
+          resultTextEl.classList.remove('hidden');
+          placeholderEl.classList.add('hidden');
+          resultCardEl.classList.add('generating');
+          renderMarkdownInto(resultTextEl, fullText);
+        },
+        onSuccess: (fullText) => {
+          showPrimaryResult(fullText || translate('visionWindow.emptyResult', 'The model returned an empty response.'));
+        },
+        onError: (error) => {
+          showPrimaryResult('');
+          showResultPlaceholder('error', error.message);
+        },
+        onFinally: () => {
+          resultCardEl.classList.remove('generating');
+          refreshDynamicText();
+        }
+      });
+    }
+
+    async function handleFollowupSubmit(event) {
+      event.preventDefault();
+      if (state.isGenerating) return;
+
+      const text = String(followupInputEl.value || '').trim();
+      if (!text && state.stagedImages.length === 0) return;
+
+      const userMessage = {
+        role: 'user',
+        content: text,
+        images: state.stagedImages.map((image) => Object.assign({}, image))
+      };
+
+      const assistantEntry = appendFollowupTurn(userMessage);
+      state.conversationHistory.push({
+        role: 'user',
+        content: text,
+        images: userMessage.images.map(normalizeImageForHistory).filter(Boolean)
+      });
+
+      followupInputEl.value = '';
+      autoResizeTextarea();
+      clearStagedImages();
+
+      await fetchAIResponse({
+        rollbackUserOnError: true,
+        onChunk: (_chunk, fullText) => {
+          assistantEntry.entry.classList.remove('error');
+          renderMarkdownInto(assistantEntry.bodyEl, fullText);
+          assistantEntry.entry.scrollIntoView({ block: 'end', behavior: 'smooth' });
+        },
+        onSuccess: (fullText) => {
+          renderMarkdownInto(assistantEntry.bodyEl, fullText || translate('visionWindow.emptyResult', 'The model returned an empty response.'));
+        },
+        onError: (error) => {
+          assistantEntry.entry.classList.add('error');
+          assistantEntry.bodyEl.textContent = `${translate('error.prefix', 'Error: ')}${error.message}`;
+        }
+      });
+    }
+
+    function applyInjectedConfig(cfg) {
+      if (!cfg || typeof cfg !== 'object') return;
+
+      if (cfg.api && typeof cfg.api === 'object') {
+        chatConfig.api = Object.assign({}, chatConfig.api, cfg.api);
+      }
+      if (cfg.llmParams && typeof cfg.llmParams === 'object') {
+        chatConfig.llmParams = Object.assign({}, chatConfig.llmParams, cfg.llmParams);
+      }
+      if (cfg.ui && typeof cfg.ui === 'object') {
+        chatConfig.ui = Object.assign({}, chatConfig.ui, cfg.ui);
+      }
+      if (typeof cfg.initialPrompt !== 'undefined') chatConfig.initialPrompt = String(cfg.initialPrompt || '');
+      if (typeof cfg.llmKey === 'string') chatConfig.llmKey = cfg.llmKey;
+      if (typeof cfg.actionId === 'string') chatConfig.actionId = cfg.actionId;
+      if (Array.isArray(cfg.initialImages)) chatConfig.initialImages = cfg.initialImages.slice();
+
+      briefCardEl.open = false;
+      renderSourceImages(chatConfig.initialImages);
+      refreshDynamicText();
+
+      if (state.sourceImages.length > 0 && !state.configApplied) {
+        state.configApplied = true;
+        runPrimaryAnalysis();
+      }
+    }
+
+    async function initializePage() {
+      followupInputEl.addEventListener('input', autoResizeTextarea);
+      followupInputEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          handleFollowupSubmit(event);
+        }
+      });
+      followupFormEl.addEventListener('submit', handleFollowupSubmit);
+      attachBtn.addEventListener('click', () => imageInputEl.click());
+      imageInputEl.addEventListener('change', handleImageSelection);
+      copyResultBtn.addEventListener('click', copyPrimaryResult);
+      retryBtn.addEventListener('click', runPrimaryAnalysis);
+      zoomInBtn.addEventListener('click', () => zoomBy(0.2));
+      zoomOutBtn.addEventListener('click', () => zoomBy(-0.2));
+      fitBtn.addEventListener('click', fitStageImage);
+      actualBtn.addEventListener('click', setActualSize);
+      imageModalEl.addEventListener('click', closeImageModal);
+      stageImageEl.addEventListener('click', () => openImageModal(stageImageEl.src));
+      stageImageEl.addEventListener('load', () => {
+        if (state.fitToViewport) fitStageImage();
+        else applyStageScale();
+      });
+      threadListEl.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target && target.tagName === 'IMG') {
+          openImageModal(target.src);
+        }
+      });
+      window.addEventListener('resize', () => {
+        if (state.fitToViewport) fitStageImage();
+      });
+
+      refreshDynamicText();
+      showResultPlaceholder('idle');
+      updateActionButtons();
+      autoResizeTextarea();
+
+      try {
+        if (window.aiAPI && typeof window.aiAPI.onInjectedConfig === 'function') {
+          window.aiAPI.onInjectedConfig((cfg) => {
+            if (state.configApplied) return;
+            applyInjectedConfig(cfg);
+          });
+        }
+      } catch (_error) {
+      }
+
+      try {
+        if (window.localeAPI && typeof window.localeAPI.onLocaleChanged === 'function') {
+          window.localeAPI.onLocaleChanged(() => {
+            requestAnimationFrame(refreshDynamicText);
+          });
+        }
+      } catch (_error) {
+      }
+
+      try {
+        if (window.aiAPI && typeof window.aiAPI.getConfig === 'function') {
+          const injected = await window.aiAPI.getConfig();
+          if (injected && typeof injected === 'object' && !state.configApplied) {
+            applyInjectedConfig(injected);
+          }
+        }
+      } catch (_error) {
+      }
+    }
+
+    window.__visionRefreshTranslations = refreshDynamicText;
+    initializePage();
+  </script>
+  <script src="./i18n-dom.js"></script>
+  <script>
+    (async function () {
+      if (!window.i18nDom || typeof window.i18nDom.init !== 'function') return;
+      const docLang = (document.documentElement && document.documentElement.lang) ? document.documentElement.lang : 'en';
+      try {
+        if (window.localeAPI && typeof window.localeAPI.getLocale === 'function') {
+          const persisted = await window.localeAPI.getLocale();
+          await window.i18nDom.init(persisted || docLang || 'en');
+        } else {
+          await window.i18nDom.init(docLang || 'en');
+        }
+      } catch (_error) {
+        await window.i18nDom.init(docLang || 'en');
+      }
+
+      if (typeof window.__visionRefreshTranslations === 'function') {
+        window.__visionRefreshTranslations();
+      }
+    })();
+  </script>
+</body>
+
+</html>
