@@ -1,4 +1,5 @@
 const { clipboard } = require('electron');
+const crypto = require('crypto');
 const fs = require('fs');
 const SqliteStorage = require('./storage/sqliteStorage');
 
@@ -12,8 +13,8 @@ class ClipboardManager {
     this._suppressedChange = null;
     this._flushDelayMs = typeof options.flushDelayMs === 'number' ? options.flushDelayMs : 120;
 
-    // 最大历史条目数，默认 100000
-    this.maxHistory = typeof options.maxHistory === 'number' ? options.maxHistory : 100000;
+    // 最大历史条目数，默认与配置保持一致
+    this.maxHistory = typeof options.maxHistory === 'number' ? options.maxHistory : 500;
 
     // 初始化存储后端：使用 SqliteStorage
     this.storageBackend = new SqliteStorage({ maxHistory: this.maxHistory });
@@ -21,7 +22,7 @@ class ClipboardManager {
     const rows = this.storageBackend.getHistory(this.maxHistory, 0);
     // convert to expected in-memory format and keep db row id in _dbId
     this.history = rows.map(r => {
-      if (r.type === 'text') return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'text', content: r.content, timestamp: new Date(r.timestamp), pinned: r.pinned ? 1 : 0 };
+      if (r.type === 'text') return { id: r.id || Date.now(), _dbId: r._dbId || null, type: 'text', content: r.content, timestamp: new Date(r.timestamp), pinned: r.pinned ? 1 : 0, hash: r.hash || null };
       return this._normalizeImagePaths({
         id: r.id || Date.now(),
         _dbId: r._dbId || null,
@@ -30,7 +31,8 @@ class ClipboardManager {
         timestamp: new Date(r.timestamp),
         image_path: r.image_path,
         image_thumb: r.image_thumb,
-        pinned: r.pinned ? 1 : 0
+        pinned: r.pinned ? 1 : 0,
+        hash: r.hash || null
       });
     });
   }
@@ -62,6 +64,79 @@ class ClipboardManager {
     return text ? text.replace(/\r\n/g, '\n').replace(/\r/g, '\n') : '';
   }
 
+  _hashBuffer(buffer) {
+    return crypto.createHash('sha256').update(buffer).digest('hex');
+  }
+
+  _getTextIdentity(content = '') {
+    const normalized = this._normalizeText(content);
+    return normalized ? `text:${normalized}` : '';
+  }
+
+  _getImageIdentity(hash = '') {
+    const normalized = String(hash || '').trim();
+    return normalized ? `image:${normalized}` : '';
+  }
+
+  _resolveImageIdentity(item = null) {
+    if (!item || item.type !== 'image') return '';
+
+    if (item.imageHash || item.hash) {
+      return this._getImageIdentity(item.imageHash || item.hash);
+    }
+
+    if (Buffer.isBuffer(item.imageBuffer) && item.imageBuffer.length) {
+      return this._getImageIdentity(this._hashBuffer(item.imageBuffer));
+    }
+
+    const raw = item.imageDataUrl || item.content || '';
+    if (!raw || typeof raw !== 'string') return '';
+    if (raw.startsWith('image:')) return raw;
+    if (!raw.startsWith('data:')) return '';
+
+    const match = raw.match(/^data:(.*?);base64,(.*)$/);
+    if (!match || !match[2]) return '';
+
+    try {
+      return this._getImageIdentity(this._hashBuffer(Buffer.from(match[2], 'base64')));
+    } catch (error) {
+      return '';
+    }
+  }
+
+  _getItemIdentity(item = null) {
+    if (!item || !item.type) return '';
+    if (item.type === 'text') {
+      return this._getTextIdentity(item.content || '');
+    }
+    if (item.type === 'image') {
+      return this._resolveImageIdentity(item)
+        || this._getImageIdentity(item.hash || '')
+        || (item.image_path ? this._getImageIdentity(item.image_path) : '');
+    }
+    return '';
+  }
+
+  _createImagePayload(image) {
+    if (!image || image.isEmpty()) return null;
+
+    try {
+      const imageBuffer = image.toPNG();
+      if (!Buffer.isBuffer(imageBuffer) || !imageBuffer.length) {
+        return null;
+      }
+      const hash = this._hashBuffer(imageBuffer);
+      return {
+        imageBuffer,
+        hash,
+        identity: this._getImageIdentity(hash)
+      };
+    } catch (error) {
+      console.error('生成剪贴板图片摘要失败:', error);
+      return null;
+    }
+  }
+
   suppressNextChange(item = null) {
     if (!item || !item.type) {
       this._suppressedChange = null;
@@ -76,23 +151,23 @@ class ClipboardManager {
       }
       this._suppressedChange = {
         type: 'text',
-        content
+        content: this._getTextIdentity(content)
       };
       this.previousText = content;
       return;
     }
 
     if (item.type === 'image') {
-      const content = item.imageDataUrl || item.content || '';
-      if (!content) {
+      const identity = this._resolveImageIdentity(item);
+      if (!identity) {
         this._suppressedChange = null;
         return;
       }
       this._suppressedChange = {
         type: 'image',
-        content
+        content: identity
       };
-      this.previousImage = content;
+      this.previousImage = identity;
       return;
     }
 
@@ -122,20 +197,22 @@ class ClipboardManager {
     this._monitoring = true;
     // 优先使用 watch API
     if (clipboard.watch) {
-      this.previousText = clipboard.readText();
-      this.previousImage = clipboard.readImage().toDataURL();
+      this.previousText = this._normalizeText(clipboard.readText());
+      const initialImagePayload = this._createImagePayload(clipboard.readImage());
+      this.previousImage = initialImagePayload ? initialImagePayload.identity : '';
 
       clipboard.watch((type) => {
         if (type === 'text') {
-          const currentText = clipboard.readText();
+          const currentText = this._normalizeText(clipboard.readText());
           if (currentText !== this.previousText) {
             this.previousText = currentText;
             this.checkClipboard();
           }
         } else if (type === 'image') {
-          const currentImage = clipboard.readImage().toDataURL();
-          if (currentImage !== this.previousImage) {
-            this.previousImage = currentImage;
+          const currentImagePayload = this._createImagePayload(clipboard.readImage());
+          const currentImageIdentity = currentImagePayload ? currentImagePayload.identity : '';
+          if (currentImageIdentity !== this.previousImage) {
+            this.previousImage = currentImageIdentity;
             this.checkClipboard();
           }
         }
@@ -174,13 +251,14 @@ class ClipboardManager {
     try {
       let newItem = null;
       const normalizedText = this._normalizeText(clipboard.readText());
+      const textIdentity = this._getTextIdentity(normalizedText);
 
       // 检查是否有文本内容
       if (normalizedText) {
-        if (this._shouldSuppressClipboardItem('text', normalizedText)) {
+        if (this._shouldSuppressClipboardItem('text', textIdentity)) {
           return false;
         }
-        if (normalizedText && (!this.history.length || this.history[0].type !== 'text' || this.history[0].content !== normalizedText)) {
+        if (textIdentity && (!this.history.length || this._getItemIdentity(this.history[0]) !== textIdentity)) {
           newItem = {
             id: Date.now(),
             type: 'text',
@@ -193,18 +271,23 @@ class ClipboardManager {
       else {
         const image = clipboard.readImage();
         if (!image.isEmpty()) {
-          const imageData = image.toDataURL();
-          if (this._shouldSuppressClipboardItem('image', imageData)) {
+          const imagePayload = this._createImagePayload(image);
+          const imageIdentity = imagePayload ? imagePayload.identity : '';
+          if (this._shouldSuppressClipboardItem('image', imageIdentity)) {
             return false;
           }
-          if (!this.history.length || this.history[0].type !== 'image' || this.history[0].content !== imageData) {
+          if (imagePayload && (!this.history.length || this._getItemIdentity(this.history[0]) !== imageIdentity)) {
             newItem = {
               id: Date.now(),
               type: 'image',
-              content: imageData,
+              content: imageIdentity,
+              imageBuffer: imagePayload.imageBuffer,
+              hash: imagePayload.hash,
               timestamp: new Date()
             };
           }
+        } else {
+          this.previousImage = '';
         }
       }
 
@@ -265,12 +348,13 @@ class ClipboardManager {
   // 添加一项到历史，并负责裁剪、通知与持久化
   addItem(item) {
     try {
+      const itemIdentity = this._getItemIdentity(item);
       // 简单防重复：如果与第一个相同则不插入
       const lastPending = this._pendingItems.length ? this._pendingItems[this._pendingItems.length - 1] : null;
-      if (lastPending && lastPending.type === item.type && lastPending.content === item.content) {
+      if (itemIdentity && lastPending && this._getItemIdentity(lastPending) === itemIdentity) {
         return false;
       }
-      if (this.history.length && this.history[0].type === item.type && this.history[0].content === item.content) {
+      if (itemIdentity && this.history.length && this._getItemIdentity(this.history[0]) === itemIdentity) {
         return false;
       }
 
@@ -321,11 +405,12 @@ class ClipboardManager {
           id: result.id,
           _dbId: result.id,
           type: item.type,
-          content: item.type === 'text' ? item.content : (result.image_path || item.content),
+          content: item.type === 'text' ? item.content : (result.image_path || item.image_path || null),
           timestamp: this._normalizeTimestamp(item.timestamp),
           image_path: result.image_path,
           image_thumb: result.image_thumb,
-          pinned: result.pinned ? 1 : 0
+          pinned: result.pinned ? 1 : 0,
+          hash: result.hash || item.hash || null
         };
 
         // 如果是更新时间戳，则找到旧项，移到最前面
@@ -400,7 +485,8 @@ class ClipboardManager {
               type: 'text',
               content: r.content,
               timestamp: new Date(r.timestamp),
-              pinned: r.pinned ? 1 : 0
+              pinned: r.pinned ? 1 : 0,
+              hash: r.hash || null
             };
           }
           return this._normalizeImagePaths({
@@ -411,7 +497,8 @@ class ClipboardManager {
             timestamp: new Date(r.timestamp),
             image_path: r.image_path,
             image_thumb: r.image_thumb,
-            pinned: r.pinned ? 1 : 0
+            pinned: r.pinned ? 1 : 0,
+            hash: r.hash || null
           });
         });
         this.notifyListeners();
@@ -455,7 +542,8 @@ class ClipboardManager {
               type: 'text',
               content: r.content,
               timestamp: new Date(r.timestamp),
-              pinned: r.pinned ? 1 : 0
+              pinned: r.pinned ? 1 : 0,
+              hash: r.hash || null
             };
           }
           return this._normalizeImagePaths({
@@ -466,7 +554,8 @@ class ClipboardManager {
             timestamp: new Date(r.timestamp),
             image_path: r.image_path,
             image_thumb: r.image_thumb,
-            pinned: r.pinned ? 1 : 0
+            pinned: r.pinned ? 1 : 0,
+            hash: r.hash || null
           });
         });
         this.notifyListeners();

@@ -447,7 +447,19 @@ function App() {
   useEffect(() => {
     if (!window.electronAPI) return;
 
-    const handler = () => {
+    const handler = (payload) => {
+      if (payload && payload.action === 'activate-selection') {
+        const pasted = handleKeyboardSelect(selectedIndexRef.current);
+        if (!pasted) {
+          try {
+            window.electronAPI.hideWindow();
+          } catch (err) {
+            // ignore
+          }
+        }
+        return;
+      }
+
       resetPanelUiState({
         suppressMouseHover: true,
         resetSearch: true,
@@ -891,18 +903,22 @@ function App() {
 
   const handleKeyboardSelect = (index) => {
     const list = filteredHistoryRef.current || [];
-    if (index >= 0 && index < list.length) {
-      const selectedItem = list[index];
-      try {
-        if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
-          window.electronAPI.pasteItem(selectedItem);
-        }
-      } catch (err) {
-        console.error('Failed to paste selected item:', err);
+    if (!list.length) return false;
+
+    const maxIndex = list.length - 1;
+    const safeIndex = Math.max(0, Math.min(Number.isInteger(index) ? index : 0, maxIndex));
+    const selectedItem = list[safeIndex];
+    try {
+      if (window.electronAPI && typeof window.electronAPI.pasteItem === 'function') {
+        window.electronAPI.pasteItem(selectedItem);
       }
-      // Keep keyboard navigation enabled; after paste we can reset selection to first item
-      setSelectedIndex(0);
+    } catch (err) {
+      console.error('Failed to paste selected item:', err);
+      return false;
     }
+    // Keep keyboard navigation enabled; after paste we can reset selection to first item
+    setSelectedIndex(0);
+    return true;
   };
 
   const handlePageNavigate = (direction) => {

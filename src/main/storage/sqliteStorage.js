@@ -14,7 +14,7 @@ try {
 
 class SqliteStorage {
     constructor(options = {}) {
-        this.maxHistory = options.maxHistory || 100000;
+        this.maxHistory = options.maxHistory || 500;
         this.cleanupDelayMs = typeof options.cleanupDelayMs === 'number' ? options.cleanupDelayMs : 3000;
         this._cleanupTimer = null;
         this._cleanupInProgress = false;

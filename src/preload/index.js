@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('history-data', listener);
   },
   onGlobalShortcut: (callback) => {
-    const listener = (...args) => callback(...args);
+    const listener = (_event, value) => callback(value);
     ipcRenderer.on('global-shortcut', listener);
     return () => ipcRenderer.removeListener('global-shortcut', listener);
   },

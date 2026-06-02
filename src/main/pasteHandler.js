@@ -48,6 +48,7 @@ class PasteHandler {
         }
       } else if (item.type === 'image') {
         let image = null;
+        let suppressImageBuffer = null;
         try {
           // If content is a data URL (stored inline), create from data URL
           if (typeof item.content === 'string' && item.content.startsWith('data:')) {
@@ -75,7 +76,16 @@ class PasteHandler {
         }
 
         if (clipboardManager && typeof clipboardManager.suppressNextChange === 'function') {
-          clipboardManager.suppressNextChange({ type: 'image', imageDataUrl: image.toDataURL() });
+          try {
+            suppressImageBuffer = image.toPNG();
+          } catch (error) {
+            suppressImageBuffer = null;
+          }
+          clipboardManager.suppressNextChange(
+            suppressImageBuffer
+              ? { type: 'image', imageBuffer: suppressImageBuffer }
+              : { type: 'image', imageDataUrl: image.toDataURL() }
+          );
         }
         clipboard.writeImage(image);
       }

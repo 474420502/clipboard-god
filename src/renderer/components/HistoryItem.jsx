@@ -382,8 +382,8 @@ function HistoryItem({ item, index, previewLength = 120, showShortcuts = true, e
       style={style}
       onClick={handlePaste}
       onContextMenu={handleContextMenu}
-      onMouseEnter={setSelectedIndex ? (e) => {
-        if (e && e.isTrusted && typeof setSelectedIndex === 'function') { // only allow user mouse, skip synthetic
+      onMouseMove={setSelectedIndex ? (e) => {
+        if (e && e.isTrusted && typeof setSelectedIndex === 'function' && !isSelected) { // only react to active pointer movement
           // check for global suppression flag via dataset on body
           try {
             const sup = window.__suppressMouseHover;

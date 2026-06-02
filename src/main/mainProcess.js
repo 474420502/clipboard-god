@@ -515,7 +515,13 @@ class MainProcess {
       safeConsole.log(`全局快捷键 ${shortcut} 被触发`);
       if (this.mainWindow) {
         if (this.mainWindow.isVisible()) {
-          this.mainWindow.hide();
+          try {
+            if (this.mainWindow.webContents) {
+              this.mainWindow.webContents.send('global-shortcut', { action: 'activate-selection' });
+            }
+          } catch (err) {
+            safeConsole.warn('Failed to request paste for current selection:', err);
+          }
         } else {
           this.captureActiveWindowId('global-shortcut');
           this.mainWindow.show();
@@ -523,7 +529,7 @@ class MainProcess {
           // can reset state (clear search and hide search input) and not inherit previous data.
           try {
             if (this.mainWindow.webContents) {
-              this.mainWindow.webContents.send('global-shortcut');
+              this.mainWindow.webContents.send('global-shortcut', { action: 'open-panel' });
             }
           } catch (err) {
             safeConsole.warn('Failed to notify renderer about global shortcut:', err);
