@@ -178,7 +178,7 @@ OCR 窗口快捷键：
 ## 故障排除
 
 - 应用无法启动：确认 Node.js >= 20，然后执行 `git submodule update --init --recursive && pnpm install` 重新安装依赖。
-- 截图功能异常：Linux 安装 `libxss1`、`libgconf-2-4`；macOS 授予屏幕录制权限。
+- 截图功能异常：Linux 安装 `libxss1`；macOS 授予屏幕录制权限。
 - 数据库损坏：删除配置目录，会自动重建 `config.json` 与历史数据库。
 - AI 请求失败：检查 API Key、模型地址是否正确，本地服务需保持运行可访问。
 

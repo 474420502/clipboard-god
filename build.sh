@@ -357,8 +357,8 @@ EOF
 
 	echo "Built $DEB_FILE"
 	echo "Updated latest alias: $LATEST_DEB_FILE"
-	echo "You can install it with: sudo dpkg -i $DEB_FILE"
-	echo "Or safer (always newest): sudo dpkg -i $LATEST_DEB_FILE"
+	echo "You can install it with: sudo apt install ./$DEB_FILE"
+	echo "Or safer (always newest): sudo apt install ./$LATEST_DEB_FILE"
 
 	# Also copy .deb into dist-electron for convenience (group release artifacts together)
 	if [ -d dist-electron ]; then

@@ -23,9 +23,10 @@ SKIP_DEB=1 bash build.sh 1.1.0
 3. Install the generated package:
 
 ```bash
-sudo dpkg -i dist/clipboard-god_1.1.0_amd64.deb
-sudo apt-get install -f # if dependencies are missing
+sudo apt install ./dist/clipboard-god_1.1.0_amd64.deb
 ```
+
+If you still prefer `dpkg -i`, follow it with `sudo apt-get install -f` to resolve any missing runtime dependencies automatically.
 
 Notes:
 - The script places application files under `/opt/clipboard-god` and provides a wrapper at `/usr/bin/clipboard-god`.

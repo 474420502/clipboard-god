@@ -11,7 +11,7 @@ Architecture: amd64
 # Use alternation (|) for indicator libraries because different Ubuntu/derivs
 # provide either libappindicator3-1 or libayatana-appindicator3-1.
 # The package manager will accept either one.
-Depends: libc6 (>= 2.17), libgtk-3-0, libnotify4, libnss3, libx11-6, libxss1, libgconf-2-4, libasound2, libxkbfile1, libsecret-1-0, libappindicator3-1 | libayatana-appindicator3-1
+Depends: libc6 (>= 2.17), libgtk-3-0, libnotify4, libnss3, libx11-6, libxss1, libasound2, libxkbfile1, libsecret-1-0, libappindicator3-1 | libayatana-appindicator3-1
 # indicator-application improves tray integration on some desktops (Recommends
 # kept so minimal systems can still install the app without extra packages)
 Recommends: indicator-application

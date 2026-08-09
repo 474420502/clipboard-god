@@ -183,7 +183,7 @@ OCR window shortcuts:
 ## Troubleshooting & Support
 
 - App fails to start: verify Node.js >= 20, then reinstall dependencies with `git submodule update --init --recursive && pnpm install`.
-- Screenshots on Linux: install `libxss1` and `libgconf-2-4`; on macOS ensure Screen Recording permission.
+- Screenshots on Linux: install `libxss1`; on macOS ensure Screen Recording permission.
 - Database corruption: remove the config directory to recreate `config.json` and history database.
 - AI requests failing: double-check API keys, base URLs, and that local servers are reachable.
 
