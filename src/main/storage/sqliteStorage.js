@@ -54,12 +54,31 @@ class SqliteStorage {
         `);
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC);');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_history_hash ON history(hash);');
-        // FTS table for text search
+        // 去重迁移：同一 (type, hash) 只保留一行（优先保留置顶、其次最新），
+        // 之后建立 UNIQUE 索引，防止再次产生重复 hash 行（如编辑内容与已有条目碰撞）。
         try {
-            this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS history_fts USING fts5(content, tokenize="unicode61");`);
+            const migration = this.db.prepare(`
+                DELETE FROM history
+                WHERE hash IS NOT NULL AND hash != '' AND id NOT IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY type, hash
+                            ORDER BY pinned DESC, timestamp DESC, id DESC
+                        ) AS rn
+                        FROM history
+                        WHERE hash IS NOT NULL AND hash != ''
+                    ) WHERE rn = 1
+                );
+            `);
+            const migrationResult = migration.run();
+            if (migrationResult && migrationResult.changes > 0) {
+                // 被删除的重复行可能持有图片文件，安排孤儿清理
+                this._scheduleOrphanCleanup();
+            }
+            this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_history_type_hash ON history(type, hash);');
         } catch (e) {
-            // if FTS5 not available, ignore (search will not be available)
-            console.warn('FTS5 not available in SQLite build, search disabled');
+            // 迁移或索引创建失败时降级：继续使用先查后插的去重路径
+            console.warn('历史去重迁移失败:', e && e.message ? e.message : e);
         }
         // ensure image_thumb and pinned columns exist for older DBs
         this._ensureColumn('history', 'image_thumb', 'TEXT');
@@ -163,14 +182,6 @@ class SqliteStorage {
             }
             const stmt = this.db.prepare('INSERT INTO history (item_id, type, content, hash, timestamp, meta) VALUES (?, ?, ?, ?, ?, ?)');
             const info = stmt.run(item.id || null, 'text', item.content || '', hash, timestamp, null);
-            // insert into FTS if available
-            try {
-                if (this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) {
-                    this.db.prepare('INSERT INTO history_fts(rowid, content) VALUES (?, ?)').run(info.lastInsertRowid, item.content || '');
-                }
-            } catch (e) {
-                // ignore fts errors
-            }
             if (!skipPrune) this._pruneIfNeeded();
             return { id: info.lastInsertRowid, existed: false, hash };
         }
@@ -266,42 +277,48 @@ class SqliteStorage {
             if (ids.length) {
                 const placeholders = ids.map(() => '?').join(',');
                 const deleteStmt = this.db.prepare(`DELETE FROM history WHERE id IN (${placeholders})`);
-                const tx = this.db.transaction((ids) => {
-                    deleteStmt.run(...ids);
-                    try {
-                        // if FTS exists, delete related rows
-                        if (this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) {
-                            const deleteFtsStmt = this.db.prepare(`DELETE FROM history_fts WHERE rowid IN (${placeholders})`);
-                            deleteFtsStmt.run(...ids);
-                        }
-                    } catch (e) { }
-                });
-                tx(ids);
+                deleteStmt.run(...ids);
                 this._scheduleOrphanCleanup();
             }
         }
     }
 
-    // Update text content for an existing row (also update hash, FTS and timestamp)
+    // Update text content for an existing row (also update hash and timestamp)
     updateTextItemByDbId(dbId, newContent) {
         try {
             const now = Date.now();
             const hash = crypto.createHash('sha256').update(String(newContent || '')).digest('hex');
             let changedRows = 0;
+            let merged = false;
             const tx = this.db.transaction((dbId, content, hash, now) => {
+                // 被编辑的行可能已被裁剪（编辑弹窗打开期间），此时不产生任何变更
+                const current = this.db.prepare('SELECT pinned FROM history WHERE id = ?').get(dbId);
+                if (!current) return;
+                // 若目标内容已存在于另一行，则合并：保留置顶优先的一行，删除另一行，避免重复 hash
+                const existing = this.db.prepare('SELECT id, pinned FROM history WHERE type = ? AND hash = ? AND id != ?').get('text', hash, dbId);
+                if (existing) {
+                    merged = true;
+                    if (current.pinned && !existing.pinned) {
+                        // 被编辑行是置顶的：保留它，删除已有行
+                        this.db.prepare('UPDATE history SET content = ?, hash = ?, timestamp = ? WHERE id = ?').run(content, hash, now, dbId);
+                        const info = this.db.prepare('DELETE FROM history WHERE id = ?').run(existing.id);
+                        changedRows = info && typeof info.changes === 'number' ? info.changes : 0;
+                    } else {
+                        // 保留已有行（置顶优先，其次时间更新），删除被编辑行
+                        this.db.prepare('UPDATE history SET timestamp = ? WHERE id = ?').run(now, existing.id);
+                        const info = this.db.prepare('DELETE FROM history WHERE id = ?').run(dbId);
+                        changedRows = info && typeof info.changes === 'number' ? info.changes : 0;
+                    }
+                    return;
+                }
                 const info = this.db.prepare('UPDATE history SET content = ?, hash = ?, timestamp = ? WHERE id = ?').run(content, hash, now, dbId);
                 changedRows = info && typeof info.changes === 'number' ? info.changes : 0;
-                try {
-                    if (changedRows > 0 && this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) {
-                        this.db.prepare('UPDATE history_fts SET content = ? WHERE rowid = ?').run(content, dbId);
-                    }
-                } catch (e) { }
             });
             tx(dbId, newContent, hash, now);
             if (!changedRows) {
                 return { success: false, error: 'not-found' };
             }
-            return { success: true, hash, timestamp: now };
+            return { success: true, hash, timestamp: now, merged };
         } catch (e) {
             return { success: false, error: e.message };
         }
@@ -317,21 +334,6 @@ class SqliteStorage {
             return { success: true };
         } catch (e) {
             return { success: false, error: e.message };
-        }
-    }
-
-    // full-text search (requires FTS5 support)
-    search(query, limit = 100) {
-        try {
-            // ensure FTS exists
-            if (!this.db.prepare('SELECT name FROM sqlite_master WHERE type = "table" AND name = "history_fts"').get()) return [];
-            const stmt = this.db.prepare(`SELECT h.item_id as id, h.type, h.content, h.image_path, h.hash, h.timestamp
-                FROM history h JOIN history_fts f ON f.rowid = h.id
-                WHERE f MATCH ? ORDER BY h.timestamp DESC LIMIT ?`);
-            return stmt.all(query, limit).map(r => ({ id: r.id || null, type: r.type, content: r.content, image_path: r.image_path, hash: r.hash, timestamp: r.timestamp }));
-        } catch (e) {
-            console.warn('search failed or FTS5 unavailable', e);
-            return [];
         }
     }
 

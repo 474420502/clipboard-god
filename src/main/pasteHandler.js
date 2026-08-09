@@ -48,7 +48,6 @@ class PasteHandler {
         }
       } else if (item.type === 'image') {
         let image = null;
-        let suppressImageBuffer = null;
         try {
           // If content is a data URL (stored inline), create from data URL
           if (typeof item.content === 'string' && item.content.startsWith('data:')) {
@@ -75,19 +74,27 @@ class PasteHandler {
           throw new Error('无法解析图像数据用于写入剪贴板');
         }
 
-        if (clipboardManager && typeof clipboardManager.suppressNextChange === 'function') {
-          try {
-            suppressImageBuffer = image.toPNG();
-          } catch (error) {
-            suppressImageBuffer = null;
-          }
-          clipboardManager.suppressNextChange(
-            suppressImageBuffer
-              ? { type: 'image', imageBuffer: suppressImageBuffer }
-              : { type: 'image', imageDataUrl: image.toDataURL() }
-          );
-        }
         clipboard.writeImage(image);
+        // 写入后以系统实际持有的图片字节为准计算抑制快照：
+        // write/read 之间若存在重编码（Wayland/X11 部分合成器），原 buffer 的 hash
+        // 会与 watch 回调里 readImage().toPNG() 的结果不一致，导致抑制失效、图片被重复入库。
+        // 因此同时保留原 buffer 与读回 buffer 两个候选，覆盖读回滞后/不可用的情况。
+        if (clipboardManager && typeof clipboardManager.suppressNextChange === 'function') {
+          const candidates = [];
+          try {
+            const originalBuffer = image.toPNG();
+            if (originalBuffer && originalBuffer.length) candidates.push(originalBuffer);
+          } catch (error) { /* ignore */ }
+          try {
+            const readBackBuffer = clipboard.readImage().toPNG();
+            if (readBackBuffer && readBackBuffer.length) candidates.push(readBackBuffer);
+          } catch (error) { /* ignore */ }
+          if (candidates.length) {
+            clipboardManager.suppressNextChange({ type: 'image', imageBuffers: candidates });
+          } else {
+            clipboardManager.suppressNextChange({ type: 'image', imageDataUrl: image.toDataURL() });
+          }
+        }
       }
       return true;
     } catch (error) {

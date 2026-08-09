@@ -80,7 +80,7 @@ function App() {
     theme: 'light',
     enableTooltips: true,
     launchOnStartup: false,
-    locale: 'zh-CN',
+    locale: 'en',
     ocrLanguages: ['chi_sim', 'eng'],
     ocrLangSelectorExpanded: false,
     ocrTextLayout: {
@@ -253,44 +253,38 @@ function App() {
       console.error('Failed to get history:', error);
     }
 
-    // Maintain a set of the front-N ids/hashes to detect when a truly new item arrives.
-    const FRONT_N = 20;
-    const prevFrontSetRef = { current: new Set() };
+    // Track the identity of the item at the front of the list. When a genuinely new
+    // copy (or a re-copied item promoted to the top) changes the front item, the
+    // selection should reset to the first position so the newest entry stays selected.
+    const prevFirstItemRef = { current: null };
 
-    const takeFrontIdsOrHashes = (arr) => {
-      const s = new Set();
-      if (!arr || !arr.length) return s;
-      for (let i = 0; i < Math.min(FRONT_N, arr.length); i++) {
-        const it = arr[i];
-        if (!it) continue;
-        if (typeof it.id !== 'undefined' && it.id !== null) s.add(String(it.id));
-        else if (typeof it.hash !== 'undefined' && it.hash !== null) s.add(`hash:${String(it.hash)}`);
-        else if (it.timestamp) s.add(`ts:${String(it.timestamp)}`); // last-resort
-      }
-      return s;
+    const itemKey = (item) => {
+      if (!item) return null;
+      // _dbId 是数据库行 id，跨重载稳定；id 在内存条目(rowid)与重载条目(item_id)之间会变化
+      if (typeof item._dbId !== 'undefined' && item._dbId !== null) return `db:${String(item._dbId)}`;
+      if (typeof item.id !== 'undefined' && item.id !== null) return `id:${String(item.id)}`;
+      if (typeof item.hash !== 'undefined' && item.hash !== null) return `hash:${String(item.hash)}`;
+      if (item.timestamp) return `ts:${String(item.timestamp)}`; // last-resort
+      return null;
     };
 
     const handleHistoryData = (_history) => {
       setHistory(_history);
       setSelectedIndex(0);
-      prevFrontSetRef.current = takeFrontIdsOrHashes(_history);
+      prevFirstItemRef.current = (_history && _history[0]) || null;
     };
 
     const handleUpdate = (updatedHistory) => {
       setHistory(updatedHistory);
 
       try {
-        const newFrontSet = takeFrontIdsOrHashes(updatedHistory);
+        const newFirstItem = (updatedHistory && updatedHistory[0]) || null;
+        const newKey = itemKey(newFirstItem);
+        const prevKey = itemKey(prevFirstItemRef.current);
 
-        // If none of the current front ids/hashes exist in the previous front set,
-        // we likely have a genuinely new item(s) inserted at the front -> reset selection.
-        let hasOverlap = false;
-        for (const v of newFrontSet) {
-          if (prevFrontSetRef.current.has(v)) { hasOverlap = true; break; }
-        }
-
-        if (!hasOverlap && newFrontSet.size > 0) {
-          // new items have arrived at the front
+        if (newKey && newKey !== prevKey) {
+          // A different item now sits at the front (new clipboard content, or an
+          // existing item re-copied and promoted) -> reset selection to the first item.
           setSelectedIndex(0);
         } else {
           // preserve current selection but clamp to bounds
@@ -300,8 +294,8 @@ function App() {
           });
         }
 
-        // update prev set for next comparison
-        prevFrontSetRef.current = newFrontSet;
+        // update previous front item for next comparison
+        prevFirstItemRef.current = newFirstItem;
       } catch (err) {
         setSelectedIndex((prev) => (updatedHistory && updatedHistory.length > 0 ? Math.min(prev, updatedHistory.length - 1) : 0));
       }

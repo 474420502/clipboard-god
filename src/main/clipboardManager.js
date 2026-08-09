@@ -19,6 +19,10 @@ class ClipboardManager {
     // 初始化存储后端：使用 SqliteStorage
     this.storageBackend = new SqliteStorage({ maxHistory: this.maxHistory });
     // load history from db
+    this._reloadHistoryFromStorage();
+  }
+
+  _reloadHistoryFromStorage() {
     const rows = this.storageBackend.getHistory(this.maxHistory, 0);
     // convert to expected in-memory format and keep db row id in _dbId
     this.history = rows.map(r => {
@@ -158,16 +162,27 @@ class ClipboardManager {
     }
 
     if (item.type === 'image') {
-      const identity = this._resolveImageIdentity(item);
-      if (!identity) {
+      const identities = [];
+      if (Array.isArray(item.imageBuffers)) {
+        for (const buf of item.imageBuffers) {
+          if (Buffer.isBuffer(buf) && buf.length) {
+            identities.push(this._getImageIdentity(this._hashBuffer(buf)));
+          }
+        }
+      } else {
+        const identity = this._resolveImageIdentity(item);
+        if (identity) identities.push(identity);
+      }
+      if (!identities.length) {
         this._suppressedChange = null;
         return;
       }
       this._suppressedChange = {
         type: 'image',
-        content: identity
+        content: identities
       };
-      this.previousImage = identity;
+      // 以最后写入的候选（通常是读回字节）作为剪贴板当前快照
+      this.previousImage = identities[identities.length - 1];
       return;
     }
 
@@ -183,7 +198,11 @@ class ClipboardManager {
       return false;
     }
 
-    if (suppressedChange.content === content) {
+    const matches = Array.isArray(suppressedChange.content)
+      ? suppressedChange.content.includes(content)
+      : suppressedChange.content === content;
+
+    if (matches) {
       return true;
     }
 
@@ -206,6 +225,8 @@ class ClipboardManager {
           const currentText = this._normalizeText(clipboard.readText());
           if (currentText !== this.previousText) {
             this.previousText = currentText;
+            // 剪贴板现在持有文本，清空图片快照，避免旧图片重复复制时被误判为未变化
+            this.previousImage = '';
             this.checkClipboard();
           }
         } else if (type === 'image') {
@@ -213,6 +234,8 @@ class ClipboardManager {
           const currentImageIdentity = currentImagePayload ? currentImagePayload.identity : '';
           if (currentImageIdentity !== this.previousImage) {
             this.previousImage = currentImageIdentity;
+            // 剪贴板现在持有图片，清空文本快照
+            this.previousText = '';
             this.checkClipboard();
           }
         }
@@ -457,6 +480,12 @@ class ClipboardManager {
     try {
       const res = this.storageBackend.updateTextItemByDbId(dbId, newContent);
       if (!res || !res.success) return false;
+      if (res.merged) {
+        // 编辑内容与已有条目合并：被编辑的行已在存储层删除，重新加载以保持一致
+        this._reloadHistoryFromStorage();
+        this.notifyListeners();
+        return true;
+      }
       const normalizedId = (dbId === null || typeof dbId === 'undefined') ? null : String(dbId);
       const idx = this.history.findIndex(h => {
         if (!h) return false;
@@ -476,31 +505,7 @@ class ClipboardManager {
         this.history.unshift(item);
         this.notifyListeners();
       } else {
-        const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-        this.history = rows.map(r => {
-          if (r.type === 'text') {
-            return {
-              id: r.id || Date.now(),
-              _dbId: r._dbId || null,
-              type: 'text',
-              content: r.content,
-              timestamp: new Date(r.timestamp),
-              pinned: r.pinned ? 1 : 0,
-              hash: r.hash || null
-            };
-          }
-          return this._normalizeImagePaths({
-            id: r.id || Date.now(),
-            _dbId: r._dbId || null,
-            type: 'image',
-            content: r.image_path || null,
-            timestamp: new Date(r.timestamp),
-            image_path: r.image_path,
-            image_thumb: r.image_thumb,
-            pinned: r.pinned ? 1 : 0,
-            hash: r.hash || null
-          });
-        });
+        this._reloadHistoryFromStorage();
         this.notifyListeners();
       }
       return true;
@@ -533,31 +538,7 @@ class ClipboardManager {
         this.notifyListeners();
       } else {
         // Fallback: keep in-memory history consistent with DB even if lookup misses.
-        const rows = this.storageBackend.getHistory(this.maxHistory, 0);
-        this.history = rows.map(r => {
-          if (r.type === 'text') {
-            return {
-              id: r.id || Date.now(),
-              _dbId: r._dbId || null,
-              type: 'text',
-              content: r.content,
-              timestamp: new Date(r.timestamp),
-              pinned: r.pinned ? 1 : 0,
-              hash: r.hash || null
-            };
-          }
-          return this._normalizeImagePaths({
-            id: r.id || Date.now(),
-            _dbId: r._dbId || null,
-            type: 'image',
-            content: r.image_path || null,
-            timestamp: new Date(r.timestamp),
-            image_path: r.image_path,
-            image_thumb: r.image_thumb,
-            pinned: r.pinned ? 1 : 0,
-            hash: r.hash || null
-          });
-        });
+        this._reloadHistoryFromStorage();
         this.notifyListeners();
       }
       return true;

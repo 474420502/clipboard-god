@@ -163,7 +163,7 @@ class TrayManager {
       {
         label: '退出',
         click: () => {
-          this.ClickQuit = true;
+          this.clickQuit = true;
           require('electron').app.quit();
         }
       }
