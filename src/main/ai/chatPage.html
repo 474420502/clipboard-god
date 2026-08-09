@@ -366,14 +366,7 @@
       },
       initialPrompt: '',
   initialImages: [],
-      llmParams: {
-        temperature: 0.7,
-        top_p: 0.95,
-        top_k: 0.9,
-        context_window: 32768,
-        max_tokens: 32768,
-        presence_penalty: 1.0
-      }
+      llmParams: {}
     };
 
   // Fetch injected config during initialization via aiAPI.getConfig();
@@ -411,6 +404,8 @@
       // Conversation history and state
       let conversationHistory = [];
       let isGenerating = false;
+      let abortController = null;
+      let stoppedByUser = false;
       // 新增: 用于存储待发送图片的数组
       let stagedImages = []; // 存储 { id, base64Full, base64Raw, mimeType }
 
@@ -694,14 +689,31 @@
         statusBar.classList.toggle('error', isError);
       }
 
+      function stopGenerating() {
+        if (abortController) {
+          abortController.abort();
+        }
+      }
+
       function toggleInput(enabled) {
         isGenerating = !enabled;
         inputEl.disabled = !enabled;
-        sendBtn.disabled = !enabled;
+        sendBtn.disabled = false;
         attachBtn.disabled = !enabled;
+        if (sendLabelEl) {
+          const labelText = enabled
+            ? translate('chat.send', 'Send')
+            : translate('chat.stop', 'Stop');
+          sendLabelEl.textContent = labelText;
+          sendBtn.setAttribute('title', labelText);
+          sendBtn.setAttribute('aria-label', labelText);
+        }
         if (enabled) {
           inputEl.focus();
-          setStatus(translate('status.ready', 'Ready'));
+          if (!stoppedByUser) {
+            setStatus(translate('status.ready', 'Ready'));
+          }
+          stoppedByUser = false;
         } else {
           setStatus(translate('status.generating', 'Generating...'));
         }
@@ -710,7 +722,10 @@
       // --- Event Handlers ---
       function handleFormSubmit(event) {
         event.preventDefault();
-        if (isGenerating) return;
+        if (isGenerating) {
+          stopGenerating();
+          return;
+        }
 
         const userInput = inputEl.value.trim();
         if (!userInput && stagedImages.length === 0) return;
@@ -795,6 +810,7 @@
       // --- API Call ---
       async function fetchAIResponse() {
         toggleInput(false);
+        abortController = new AbortController();
         const assistantMsgContainer = createAssistantMessageContainer();
         let fullResponse = '';
         const errorPrefix = translate('error.prefix', 'Error: ');
@@ -936,6 +952,20 @@
           return sanitized;
         };
 
+        const sanitizeOllamaOptions = (params) => {
+          if (!params || typeof params !== 'object') return {};
+          const opts = {};
+          for (const [key, value] of Object.entries(params)) {
+            if (value === null || typeof value === 'undefined') continue;
+            if (key === 'context_window' || key === 'frequency_penalty') continue;
+            if (key === 'max_tokens') { opts.num_predict = value; continue; }
+            if (key === 'presence_penalty') { opts.repeat_penalty = value; continue; }
+            if (key === 'top_k' && typeof value === 'number' && value < 1) continue;
+            opts[key] = value;
+          }
+          return opts;
+        };
+
         try {
           const { baseUrl = '', model = '', apiKey = '' } = apiConfig;
           if (!model) {
@@ -973,7 +1003,7 @@
               model,
               messages: buildOllamaMessages(conversationHistory),
               stream: true,
-              options: llmParams
+              options: sanitizeOllamaOptions(llmParams)
             };
           }
 
@@ -1023,7 +1053,8 @@
           const response = await fetch(url, {
             method: 'POST',
             headers,
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: abortController ? abortController.signal : undefined
           });
 
           if (!response.ok) {
@@ -1079,6 +1110,11 @@
                   fullResponse += chunkText;
                   updateAssistantMessage(assistantMsgContainer, chunkText);
                 }
+
+                if (apiType !== 'openapi' && parsed.done === true) {
+                  streamClosed = true;
+                  break;
+                }
               } catch (parseError) {
                 try {
                   const lower = String(dataLine || line).toLowerCase();
@@ -1111,12 +1147,24 @@
                 fullResponse += chunkText;
                 updateAssistantMessage(assistantMsgContainer, chunkText);
               }
+              if (apiType !== 'openapi' && parsed.done === true) {
+                streamClosed = true;
+              }
             } catch (_) { }
           }
 
           conversationHistory.push({ role: 'assistant', content: fullResponse });
 
         } catch (error) {
+          if (error.name === 'AbortError') {
+            stoppedByUser = true;
+            setStatus(translate('status.stopped', 'Stopped'));
+            if (fullResponse) {
+              conversationHistory.push({ role: 'assistant', content: fullResponse });
+            }
+            updateAssistantMessage(assistantMsgContainer, '', true);
+            return;
+          }
           console.error('Fetch error:', error);
           const errorMessage = `${errorPrefix}${error.message}`;
           updateAssistantMessage(assistantMsgContainer, errorMessage, true);
@@ -1126,6 +1174,7 @@
           }
           return;
         } finally {
+          abortController = null;
           toggleInput(true);
           updateAssistantMessage(assistantMsgContainer, '', true);
         }

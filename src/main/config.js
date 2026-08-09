@@ -72,14 +72,7 @@ const DEFAULT_CONFIG = {
     apitype: 'ollama',
     model: 'qwen3.6-vl:4b',
     baseurl: 'http://localhost:11434',
-    apikey: '',
-    temperature: 1,
-    top_p: 0.95,
-    top_k: 20,
-    context_window: 131072,
-    max_tokens: 32768,
-    min_p: 0.05,
-    presence_penalty: 1.0
+    apikey: ''
   },
   visionActions: toPersistedVisionActions(getDefaultVisionActions()),
   ocrVlCliCommand: 'paddleocr',
@@ -102,14 +95,10 @@ const DEFAULT_CONFIG = {
   //   triggerType: 'text', // 'text' | 'image'
   //   baseurl: '',
   //   apikey: '',
-  //   prompt: '',
-  //   temperature: 0.7,
-  //   top_p: 0.95,
-  //   top_k: 0.9,
-  //   context_window: 32768,
-  //   max_tokens: 32768,
-  //   min_p: 0.05,
-  //   presence_penalty: 1.1
+  //   prompt: ''
+  //   // temperature, top_p, top_k, context_window, max_tokens, min_p,
+  //   // presence_penalty: null by default (model uses its own defaults);
+  //   // only stored when explicitly set by user
   // },
 
   // 多个 LLM 条目，键为用户备注名 -> { model, prompt, baseurl, apikey, params..., llmShortcut }

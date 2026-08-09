@@ -2,11 +2,13 @@
     "chat": {
         "attachImage": "Attach image",
         "placeholder": "Type a message... (Shift+Enter for newline)",
-        "send": "Send"
+        "send": "Send",
+        "stop": "Stop"
     },
     "status": {
         "ready": "Ready",
-        "generating": "Generating..."
+        "generating": "Generating...",
+        "stopped": "Stopped"
     },
     "toggle": {
         "collapseTitle": "Collapse/Expand"
@@ -45,6 +47,7 @@
         "copyCodeFailed": "Code copy failed.",
         "codeBlock": "Code",
         "rerun": "Re-run",
+        "stop": "Stop",
         "openFollowup": "Continue Asking",
         "closeFollowup": "Hide Follow-up",
         "followupTitle": "Follow-up",
@@ -222,6 +225,7 @@
             "maxTokens": "Max tokens",
             "minP": "Min P",
             "presencePenalty": "Presence penalty",
+            "paramPlaceholder": "Model Default",
             "deleteConfirm": "Delete entry \"{{name}}\"?",
             "delete": "Delete",
             "saveNote": "All entries are written back to config on save."

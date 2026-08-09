@@ -45,13 +45,13 @@ const DEFAULT_VISION_LLM = {
     model: 'qwen3.6-vl:4b',
     baseurl: OLLAMA_DEFAULT_BASE_URL,
     apikey: '',
-    temperature: 1,
-    top_p: 0.95,
-    top_k: 20,
-    context_window: 131072,
-    max_tokens: 32768,
-    min_p: 0.05,
-    presence_penalty: 1.0
+    temperature: null,
+    top_p: null,
+    top_k: null,
+    context_window: null,
+    max_tokens: null,
+    min_p: null,
+    presence_penalty: null
 };
 
 const DEFAULT_SETTINGS = {
@@ -63,7 +63,7 @@ const DEFAULT_SETTINGS = {
     theme: 'light',
     enableTooltips: true,
     launchOnStartup: false,
-    locale: 'zh-CN',
+    locale: 'en',
     visionLlm: { ...DEFAULT_VISION_LLM },
     visionActions: toPersistedVisionActions(getDefaultVisionActions())
 };
@@ -75,13 +75,13 @@ const createDefaultLlmEntry = (triggerType = 'text') => ({
     triggerType,
     baseurl: OLLAMA_DEFAULT_BASE_URL,
     apikey: '',
-    temperature: 0.7,
-    top_p: 0.95,
-    top_k: 0.9,
-    context_window: 32768,
-    max_tokens: 32768,
-    min_p: 0.05,
-    presence_penalty: 1.1,
+    temperature: null,
+    top_p: null,
+    top_k: null,
+    context_window: null,
+    max_tokens: null,
+    min_p: null,
+    presence_penalty: null,
     llmShortcut: ''
 });
 
@@ -245,7 +245,7 @@ const EXPLICIT_VISION_MODEL_RULES = [
     { family: 'Gemma 3', pattern: /gemma[-_.:]?3[-_.:]?(?:vision|it|multimodal)?/i },
     { family: 'Janus', pattern: /janus/i },
     { family: 'Granite Vision', pattern: /granite[-_.:]?(?:vision|3\.2[-_.:]?vision)/i },
-    { family: 'Vision', pattern: /(?:^|[-_.:])(vl|vision|4v|multimodal)(?:$|[-_.:])/i }
+    { family: 'Vision', pattern: /(?:^|[-_.:])(vl|vision|4v|multimodal|ocr)(?:$|[-_.:])/i }
 ];
 
 const POSSIBLE_VISION_MODEL_RULES = [
@@ -342,6 +342,7 @@ const normalizeVisionLlm = (visionLlm = {}, legacyConfig = {}) => {
         ? String(legacyConfig.vlVisionBaseUrl).trim()
         : '';
     const readNumber = (value, fallback) => {
+        if (value === null || typeof value === 'undefined' || value === '') return fallback;
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
     };
@@ -1166,7 +1167,7 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                 <div className="ocr-tool-grid">
                                     <label className="ocr-tool-field">
                                         <span>{t('settings.general.locale.label', 'Language')}</span>
-                                        <select value={settings.locale || 'zh-CN'} onChange={(e) => updateField('locale', e.target.value)}>
+                                        <select value={settings.locale || 'en'} onChange={(e) => updateField('locale', e.target.value)}>
                                             <option value="zh-CN">Chinese (Simplified)</option>
                                             <option value="en">English</option>
                                         </select>
@@ -1576,27 +1577,27 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                         <div className="ocr-tool-grid">
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.temperature', 'Temperature')}</span>
-                                                <input type="number" min="0" max="2" step="0.01" value={visionLlm.temperature} onChange={(e) => updateVisionLlm({ temperature: parseFloat(e.target.value) || 0 })} />
+                                                <input type="number" min="0" max="2" step="0.01" value={visionLlm.temperature != null ? visionLlm.temperature : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateVisionLlm({ temperature: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                             </label>
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.topP', 'Top P')}</span>
-                                                <input type="number" min="0" max="1" step="0.01" value={visionLlm.top_p} onChange={(e) => updateVisionLlm({ top_p: parseFloat(e.target.value) || 0 })} />
+                                                <input type="number" min="0" max="1" step="0.01" value={visionLlm.top_p != null ? visionLlm.top_p : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateVisionLlm({ top_p: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                             </label>
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.topK', 'Top K')}</span>
-                                                <input type="number" min="0" step="1" value={visionLlm.top_k} onChange={(e) => updateVisionLlm({ top_k: parseFloat(e.target.value) || 0 })} />
+                                                <input type="number" min="0" step="1" value={visionLlm.top_k != null ? visionLlm.top_k : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateVisionLlm({ top_k: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                             </label>
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.contextWindow', 'Context window')}</span>
-                                                <input type="number" min="0" step="1" value={visionLlm.context_window} onChange={(e) => updateVisionLlm({ context_window: parseInt(e.target.value, 10) || 0 })} />
+                                                <input type="number" min="0" step="1" value={visionLlm.context_window != null ? visionLlm.context_window : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateVisionLlm({ context_window: e.target.value === '' ? null : (parseInt(e.target.value, 10) || 0) })} />
                                             </label>
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.maxTokens', 'Max tokens')}</span>
-                                                <input type="number" min="0" step="1" value={visionLlm.max_tokens} onChange={(e) => updateVisionLlm({ max_tokens: parseInt(e.target.value, 10) || 0 })} />
+                                                <input type="number" min="0" step="1" value={visionLlm.max_tokens != null ? visionLlm.max_tokens : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateVisionLlm({ max_tokens: e.target.value === '' ? null : (parseInt(e.target.value, 10) || 0) })} />
                                             </label>
                                             <label className="ocr-tool-field">
                                                 <span>{t('settings.llm.presencePenalty', 'Presence penalty')}</span>
-                                                <input type="number" min="-2" max="2" step="0.1" value={visionLlm.presence_penalty} onChange={(e) => updateVisionLlm({ presence_penalty: parseFloat(e.target.value) || 0 })} />
+                                                <input type="number" min="-2" max="2" step="0.1" value={visionLlm.presence_penalty != null ? visionLlm.presence_penalty : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateVisionLlm({ presence_penalty: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                             </label>
                                         </div>
                                         <div className="settings-tool-section-header settings-tool-section-header-compact">
@@ -1900,31 +1901,31 @@ function SettingsToolWindow({ defaultTab = 'general' }) {
                                                     <div className="ocr-tool-grid">
                                                         <label className="ocr-tool-field">
                                                             <span>{t('settings.llm.temperature', 'Temperature')}</span>
-                                                            <input type="number" min="0" max="2" step="0.01" value={typeof currentLlmEntry.temperature !== 'undefined' ? currentLlmEntry.temperature : 0.7} onChange={(e) => updateLlmEntry(currentLlmName, { temperature: parseFloat(e.target.value) || 0 })} />
+                                                            <input type="number" min="0" max="2" step="0.01" value={currentLlmEntry.temperature != null ? currentLlmEntry.temperature : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateLlmEntry(currentLlmName, { temperature: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                                         </label>
                                                         <label className="ocr-tool-field">
                                                             <span>{t('settings.llm.topP', 'Top P')}</span>
-                                                            <input type="number" min="0" max="1" step="0.01" value={typeof currentLlmEntry.top_p !== 'undefined' ? currentLlmEntry.top_p : 0.95} onChange={(e) => updateLlmEntry(currentLlmName, { top_p: parseFloat(e.target.value) || 0 })} />
+                                                            <input type="number" min="0" max="1" step="0.01" value={currentLlmEntry.top_p != null ? currentLlmEntry.top_p : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateLlmEntry(currentLlmName, { top_p: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                                         </label>
                                                         <label className="ocr-tool-field">
                                                             <span>{t('settings.llm.topK', 'Top K')}</span>
-                                                            <input type="number" min="0" step="1" value={typeof currentLlmEntry.top_k !== 'undefined' ? currentLlmEntry.top_k : 0.9} onChange={(e) => updateLlmEntry(currentLlmName, { top_k: parseFloat(e.target.value) || 0 })} />
+                                                            <input type="number" min="0" step="1" value={currentLlmEntry.top_k != null ? currentLlmEntry.top_k : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateLlmEntry(currentLlmName, { top_k: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                                         </label>
                                                         <label className="ocr-tool-field">
                                                             <span>{t('settings.llm.contextWindow', 'Context window')}</span>
-                                                            <input type="number" min="0" step="1" value={typeof currentLlmEntry.context_window !== 'undefined' ? currentLlmEntry.context_window : 32768} onChange={(e) => updateLlmEntry(currentLlmName, { context_window: parseInt(e.target.value, 10) || 0 })} />
+                                                            <input type="number" min="0" step="1" value={currentLlmEntry.context_window != null ? currentLlmEntry.context_window : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateLlmEntry(currentLlmName, { context_window: e.target.value === '' ? null : (parseInt(e.target.value, 10) || 0) })} />
                                                         </label>
                                                         <label className="ocr-tool-field">
                                                             <span>{t('settings.llm.maxTokens', 'Max tokens')}</span>
-                                                            <input type="number" min="0" step="1" value={typeof currentLlmEntry.max_tokens !== 'undefined' ? currentLlmEntry.max_tokens : 32768} onChange={(e) => updateLlmEntry(currentLlmName, { max_tokens: parseInt(e.target.value, 10) || 0 })} />
+                                                            <input type="number" min="0" step="1" value={currentLlmEntry.max_tokens != null ? currentLlmEntry.max_tokens : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateLlmEntry(currentLlmName, { max_tokens: e.target.value === '' ? null : (parseInt(e.target.value, 10) || 0) })} />
                                                         </label>
                                                         <label className="ocr-tool-field">
                                                             <span>{t('settings.llm.minP', 'Min P')}</span>
-                                                            <input type="number" min="0" max="1" step="0.01" value={typeof currentLlmEntry.min_p !== 'undefined' ? currentLlmEntry.min_p : 0.05} onChange={(e) => updateLlmEntry(currentLlmName, { min_p: parseFloat(e.target.value) || 0 })} />
+                                                            <input type="number" min="0" max="1" step="0.01" value={currentLlmEntry.min_p != null ? currentLlmEntry.min_p : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateLlmEntry(currentLlmName, { min_p: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                                         </label>
                                                         <label className="ocr-tool-field">
                                                             <span>{t('settings.llm.presencePenalty', 'Presence penalty')}</span>
-                                                            <input type="number" min="-2" max="2" step="0.1" value={typeof currentLlmEntry.presence_penalty !== 'undefined' ? currentLlmEntry.presence_penalty : 1.1} onChange={(e) => updateLlmEntry(currentLlmName, { presence_penalty: parseFloat(e.target.value) || 0 })} />
+                                                            <input type="number" min="-2" max="2" step="0.1" value={currentLlmEntry.presence_penalty != null ? currentLlmEntry.presence_penalty : ''} placeholder={t('settings.llm.paramPlaceholder', 'Model Default')} onChange={(e) => updateLlmEntry(currentLlmName, { presence_penalty: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} />
                                                         </label>
                                                     </div>
                                                 ) : (

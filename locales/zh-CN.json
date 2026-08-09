@@ -2,11 +2,13 @@
     "chat": {
         "attachImage": "附加图片",
         "placeholder": "输入消息... (Shift+Enter 换行)",
-        "send": "发送"
+        "send": "发送",
+        "stop": "停止"
     },
     "status": {
         "ready": "准备就绪",
-        "generating": "正在生成..."
+        "generating": "正在生成...",
+        "stopped": "已停止"
     },
     "toggle": {
         "collapseTitle": "折叠/展开"
@@ -45,6 +47,7 @@
         "copyCodeFailed": "复制代码失败。",
         "codeBlock": "代码",
         "rerun": "重新分析",
+        "stop": "停止",
         "openFollowup": "继续追问",
         "closeFollowup": "收起追问",
         "followupTitle": "继续追问",
@@ -222,6 +225,7 @@
             "maxTokens": "最大 tokens",
             "minP": "Min P",
             "presencePenalty": "Presence penalty",
+            "paramPlaceholder": "模型默认",
             "deleteConfirm": "删除条目 \"{{name}}\" ?",
             "delete": "删除",
             "saveNote": "保存时会把所有条目写回配置文件。"

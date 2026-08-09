@@ -83,13 +83,7 @@ const DEFAULT_VISION_LLM_CONFIG = {
   apitype: 'ollama',
   model: 'qwen3.6-vl:4b',
   baseurl: 'http://localhost:11434',
-  apikey: '',
-  temperature: 1,
-  top_p: 0.95,
-  top_k: 20,
-  context_window: 131072,
-  max_tokens: 32768,
-  presence_penalty: 1.0
+  apikey: ''
 };
 
 const AI_WINDOW_PAGES = new Set(['chatPage.html', 'visionPage.html']);
@@ -434,7 +428,7 @@ class MainProcess {
     // 当用户点击关闭按钮时，隐藏窗口而不是退出应用
     this.mainWindow.on('close', (event) => {
       // 阻止默认的关闭行为
-      if (!this.trayManager.ClickQuit) {
+      if (!this.trayManager.clickQuit) {
         event.preventDefault();
         this.mainWindow.hide();
         safeConsole.log('主窗口已隐藏 (close 事件)');
@@ -471,8 +465,8 @@ class MainProcess {
         // 如果正在执行粘贴操作，不要隐藏（以避免干扰粘贴流程）
         if (this._isPasting) return;
 
-        // 如果用户已通过托盘请求退出（ClickQuit），不要干预
-        if (this.trayManager && this.trayManager.ClickQuit) return;
+        // 如果用户已通过托盘请求退出（clickQuit），不要干预
+        if (this.trayManager && this.trayManager.clickQuit) return;
 
         try {
           if (this.mainWindow && this.mainWindow.isVisible()) this.mainWindow.hide();
@@ -732,12 +726,12 @@ class MainProcess {
         },
         initialPrompt: llmEntry.prompt || '',
         llmParams: {
-          temperature: typeof llmEntry.temperature !== 'undefined' ? llmEntry.temperature : 0.7,
-          top_p: typeof llmEntry.top_p !== 'undefined' ? llmEntry.top_p : 0.95,
-          top_k: typeof llmEntry.top_k !== 'undefined' ? llmEntry.top_k : 0.9,
-          context_window: typeof llmEntry.context_window !== 'undefined' ? llmEntry.context_window : 32768,
-          max_tokens: typeof llmEntry.max_tokens !== 'undefined' ? llmEntry.max_tokens : 32768,
-          presence_penalty: typeof llmEntry.presence_penalty !== 'undefined' ? llmEntry.presence_penalty : 1.0
+          temperature: llmEntry.temperature ?? null,
+          top_p: llmEntry.top_p ?? null,
+          top_k: llmEntry.top_k ?? null,
+          context_window: llmEntry.context_window ?? null,
+          max_tokens: llmEntry.max_tokens ?? null,
+          presence_penalty: llmEntry.presence_penalty ?? null
         }
       };
 
@@ -828,6 +822,7 @@ class MainProcess {
       : 'ollama';
 
     const readNumber = (value, fallback) => {
+      if (value === null || typeof value === 'undefined' || value === '') return fallback;
       const next = Number(value);
       return Number.isFinite(next) ? next : fallback;
     };
@@ -839,12 +834,12 @@ class MainProcess {
       apikey: typeof rawVisionConfig.apikey === 'string'
         ? rawVisionConfig.apikey
         : (typeof rawVisionConfig.apiKey === 'string' ? rawVisionConfig.apiKey : DEFAULT_VISION_LLM_CONFIG.apikey),
-      temperature: readNumber(rawVisionConfig.temperature, DEFAULT_VISION_LLM_CONFIG.temperature),
-      top_p: readNumber(rawVisionConfig.top_p, DEFAULT_VISION_LLM_CONFIG.top_p),
-      top_k: readNumber(rawVisionConfig.top_k, DEFAULT_VISION_LLM_CONFIG.top_k),
-      context_window: readNumber(rawVisionConfig.context_window, DEFAULT_VISION_LLM_CONFIG.context_window),
-      max_tokens: readNumber(rawVisionConfig.max_tokens, DEFAULT_VISION_LLM_CONFIG.max_tokens),
-      presence_penalty: readNumber(rawVisionConfig.presence_penalty, DEFAULT_VISION_LLM_CONFIG.presence_penalty)
+      temperature: readNumber(rawVisionConfig.temperature, null),
+      top_p: readNumber(rawVisionConfig.top_p, null),
+      top_k: readNumber(rawVisionConfig.top_k, null),
+      context_window: readNumber(rawVisionConfig.context_window, null),
+      max_tokens: readNumber(rawVisionConfig.max_tokens, null),
+      presence_penalty: readNumber(rawVisionConfig.presence_penalty, null)
     };
   }
 
@@ -2568,11 +2563,6 @@ class MainProcess {
         } catch (error) {
           safeConsole.warn('资源管理器清理时出错:', error);
         }
-      }
-
-      // 清理 IPC 管理器（如果使用）
-      if (this.ipcManager && typeof this.ipcManager.cleanup === 'function') {
-        try { this.ipcManager.cleanup(this.clipboardManager); } catch (_) { }
       }
 
       // 第七步：最后关闭主窗口（确保X11连接正确释放）
