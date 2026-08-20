@@ -369,6 +369,12 @@ class ClipboardManager {
   }
 
   // 添加一项到历史，并负责裁剪、通知与持久化
+  //
+  // 关键设计：addItem 收到新条目时，会先在内存中 unshift 一个"临时条目"
+  // （_dbId=null、id 使用 Date.now() 占位），并立即 notifyListeners()，
+  // 让渲染进程在 _flushDelayMs（默认 120ms）防抖窗口内就能看到 index 0 是最新条目，
+  // 避免"复制后立即按全局快捷键粘贴，panel 拿到的是旧条目"的竞态。
+  // _flushPendingItems 拿到数据库真实 _dbId 之后会再做"临时 → 最终"的原地替换。
   addItem(item) {
     try {
       const itemIdentity = this._getItemIdentity(item);
@@ -381,7 +387,32 @@ class ClipboardManager {
         return false;
       }
 
+      // 构造临时条目：使用 Date.now() 占位 id，_dbId 留空，等待 _flushPendingItems
+      // 用数据库真实 rowid 替换。content/imageBuffer 等先按输入拷贝，图片的 image_path/
+      // image_thumb 在 flush 后回填。
+      const provisional = {
+        id: item.id || Date.now(),
+        _dbId: null,
+        type: item.type,
+        content: item.type === 'text'
+          ? item.content
+          : (item.image_path || null),
+        timestamp: this._normalizeTimestamp(item.timestamp),
+        image_path: item.image_path || null,
+        image_thumb: item.image_thumb || null,
+        pinned: item.pinned ? 1 : 0,
+        hash: item.hash || null,
+        _provisional: true
+      };
+
       this._pendingItems.push(item);
+
+      // 立即 unshift 到 history，并立刻广播，让 renderer 在防抖窗口内也能看到新条目
+      this.history.unshift(provisional);
+      try { this.notifyListeners(); } catch (notifyErr) {
+        console.error('addItem 即时广播失败:', notifyErr);
+      }
+
       if (!this._flushTimer) {
         this._flushTimer = setTimeout(() => this._flushPendingItems(), this._flushDelayMs);
       }
@@ -422,7 +453,14 @@ class ClipboardManager {
       for (let i = 0; i < batch.length; i++) {
         const item = batch[i];
         const result = results[i];
-        if (!result) continue;
+        if (!result) {
+          // 落库失败：把刚刚 addItem 推进去的临时条目撤掉，避免幽灵条目
+          if (item && item.id !== null && typeof item.id !== 'undefined') {
+            const ghostIdx = this.history.findIndex(h => h.id === item.id && h._provisional);
+            if (ghostIdx > -1) this.history.splice(ghostIdx, 1);
+          }
+          continue;
+        }
 
         const newItem = {
           id: result.id,
@@ -436,13 +474,22 @@ class ClipboardManager {
           hash: result.hash || item.hash || null
         };
 
-        // 如果是更新时间戳，则找到旧项，移到最前面
+        // 1) 替换 addItem 时立刻 unshift 进去的"临时条目"(通过 addItem 传入的 id 配对)
+        if (item.id !== null && typeof item.id !== 'undefined') {
+          const provisionalIdx = this.history.findIndex(h => h.id === item.id && h._provisional);
+          if (provisionalIdx > -1) {
+            this.history.splice(provisionalIdx, 1);
+          }
+        }
+
+        // 2) 如果数据库返回的是已有条目（重新复制旧条目，hash 已存在），
+        //    把更早位置的同 _dbId 老条目也清掉，避免重复
         const existingIndex = this.history.findIndex(h => h._dbId === result.id || h.id === result.id);
         if (existingIndex > -1) {
           this.history.splice(existingIndex, 1);
         }
 
-        // 插入到最前面
+        // 插入到最前面（最终条目）
         this.history.unshift(newItem);
       }
 

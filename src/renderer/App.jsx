@@ -253,52 +253,16 @@ function App() {
       console.error('Failed to get history:', error);
     }
 
-    // Track the identity of the item at the front of the list. When a genuinely new
-    // copy (or a re-copied item promoted to the top) changes the front item, the
-    // selection should reset to the first position so the newest entry stays selected.
-    const prevFirstItemRef = { current: null };
-
-    const itemKey = (item) => {
-      if (!item) return null;
-      // _dbId 是数据库行 id，跨重载稳定；id 在内存条目(rowid)与重载条目(item_id)之间会变化
-      if (typeof item._dbId !== 'undefined' && item._dbId !== null) return `db:${String(item._dbId)}`;
-      if (typeof item.id !== 'undefined' && item.id !== null) return `id:${String(item.id)}`;
-      if (typeof item.hash !== 'undefined' && item.hash !== null) return `hash:${String(item.hash)}`;
-      if (item.timestamp) return `ts:${String(item.timestamp)}`; // last-resort
-      return null;
-    };
-
+    // 收到主进程的 history 推送时（初次加载或任意后续更新），无条件把选中项归零，
+    // 让最新/置顶的条目保持选中。
     const handleHistoryData = (_history) => {
       setHistory(_history);
       setSelectedIndex(0);
-      prevFirstItemRef.current = (_history && _history[0]) || null;
     };
 
     const handleUpdate = (updatedHistory) => {
       setHistory(updatedHistory);
-
-      try {
-        const newFirstItem = (updatedHistory && updatedHistory[0]) || null;
-        const newKey = itemKey(newFirstItem);
-        const prevKey = itemKey(prevFirstItemRef.current);
-
-        if (newKey && newKey !== prevKey) {
-          // A different item now sits at the front (new clipboard content, or an
-          // existing item re-copied and promoted) -> reset selection to the first item.
-          setSelectedIndex(0);
-        } else {
-          // preserve current selection but clamp to bounds
-          setSelectedIndex((prev) => {
-            if (!updatedHistory || updatedHistory.length === 0) return 0;
-            return Math.max(0, Math.min(prev, updatedHistory.length - 1));
-          });
-        }
-
-        // update previous front item for next comparison
-        prevFirstItemRef.current = newFirstItem;
-      } catch (err) {
-        setSelectedIndex((prev) => (updatedHistory && updatedHistory.length > 0 ? Math.min(prev, updatedHistory.length - 1) : 0));
-      }
+      setSelectedIndex(0);
     };
 
     const handleError = (error) => {
